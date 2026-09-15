@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <meta name="theme-color" content="#28493f" />
+    <meta
+      name="description"
+      content="A little place to slow down. Explore the living storybook village of Willowmere."
+    />
+    <title>Willowmere · A little place to slow down</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%232d5042'/%3E%3Cpath d='M20 32V15M20 24C7 25 7 9 7 9s14 0 13 15M20 20C20 7 33 6 33 6s1 14-13 14' fill='%23dce9b5' stroke='%23dce9b5'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <main id="game" aria-label="Willowmere village game">
+      <canvas
+        id="scene"
+        aria-label="Interactive village. Move with WASD or arrow keys, interact with E."
+        tabindex="0"
+      ></canvas>
+      <div class="vignette"></div>
+      <header class="topbar">
+        <div class="wordmark">
+          <span class="brand-leaf">❧</span>
+          <div>Willowmere<small>A LITTLE PLACE TO SLOW DOWN</small></div>
+        </div>
+        <div class="day-card">
+          <span id="weather-icon">☼</span>
+          <div>
+            <b>Monday, 1st of Bloom</b
+            ><span id="time-label">4:30 PM <i>·</i> Golden afternoon</span>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button
+            id="sound"
+            class="icon-button"
+            aria-label="Enable ambient audio"
+            title="Ambient sound"
+          >
+            ♫<span class="sound-slash"></span></button
+          ><button
+            id="settings"
+            class="icon-button"
+            aria-label="Open settings"
+            title="Settings"
+          >
+            ⚙
+          </button>
+        </div>
+      </header>
+      <aside class="quest-card">
+        <div class="eyebrow">
+          <span class="tiny-spark">✧</span> THE LITTLE THINGS
+          <span id="quest-count">0 / 3</span>
+        </div>
+        <h2>A warm welcome</h2>
+        <p>A new place. A few familiar joys.</p>
+        <ul id="quest-list">
+          <li data-quest="mabel">
+            <span class="check"></span>Say hello to Mabel
+          </li>
+          <li data-quest="flower">
+            <span class="check"></span>Gather three wildflowers
+            <small id="flower-count">0/3</small>
+          </li>
+          <li data-quest="plant">
+            <span class="check"></span>Plant something of your own
+          </li>
+        </ul>
+        <div class="quest-footer">Take your time. There’s no hurry.</div>
+      </aside>
+      <div id="location">
+        <span>⌖</span> <span id="location-name">The village green</span>
+      </div>
+      <div id="interaction" hidden><kbd>E</kbd><span>Say hello</span></div>
+      <div id="toast" role="status"></div>
+      <div class="bottom-left">
+        <button id="journal-button" class="soft-button">
+          <span>▤</span> Journal <kbd>J</kbd></button
+        ><button
+          id="photo-button"
+          class="soft-button"
+          title="Hide interface for a scenic view"
+        >
+          <span>▧</span> Photo <kbd>P</kbd>
+        </button>
+      </div>
+      <nav class="toolbar" aria-label="Tools">
+        <button
+          class="tool active"
+          data-tool="hand"
+          title="Explore (1)"
+          aria-label="Explore"
+        >
+          <span class="slot">1</span><span class="tool-art">✋</span
+          ><span class="tool-name">Explore</span></button
+        ><button
+          class="tool"
+          data-tool="flowers"
+          title="Wildflowers (2)"
+          aria-label="Wildflowers"
+        >
+          <span class="slot">2</span><span class="tool-art">🌼</span
+          ><span class="tool-name">Gather</span
+          ><b id="inventory-flower">0</b></button
+        ><button
+          class="tool"
+          data-tool="seeds"
+          title="Plant seeds (3)"
+          aria-label="Plant seeds"
+        >
+          <span class="slot">3</span><span class="tool-art">🌱</span
+          ><span class="tool-name">Plant</span
+          ><b id="inventory-seed">5</b></button
+        ><button
+          class="tool"
+          data-tool="water"
+          title="Water garden (4)"
+          aria-label="Water garden"
+        >
+          <span class="slot">4</span><span class="tool-art">💧</span
+          ><span class="tool-name">Water</span>
+        </button>
+        <div class="toolbar-separator"></div>
+        <div class="coins"><span>✦</span><b id="coin-count">120</b></div>
+      </nav>
+      <div class="bottom-right">
+        <span class="save-indicator"
+          ><i></i> <span id="save-status">Your little world, saved</span></span
+        >
+        <div class="controls">
+          <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> wander</span
+          ><span><kbd>E</kbd> interact</span>
+        </div>
+      </div>
+      <div id="intro" class="welcome">
+        <div class="eyebrow">WELCOME HOME</div>
+        <h1>Make yourself<br />a little happy.</h1>
+        <p>
+          Wander down a quiet lane. Meet someone new.<br />There’s a little life
+          waiting for you here.
+        </p>
+        <button id="start">Let’s take a wander <span>↗</span></button
+        ><small>WASD to move · Click a path to wander</small>
+      </div>
+      <div
+        id="dialogue"
+        class="dialogue"
+        hidden
+        role="dialog"
+        aria-modal="true"
+        aria-label="Conversation"
+      >
+        <div class="portrait">✿</div>
+        <div>
+          <span id="speaker" class="eyebrow">MABEL · THE FLORIST</span>
+          <p id="dialogue-text"></p>
+        </div>
+        <button id="dialogue-next" aria-label="Continue conversation">
+          Continue <span>→</span>
+        </button>
+      </div>
+      <dialog id="journal">
+        <button class="close-modal" aria-label="Close journal">×</button
+        ><span class="eyebrow">YOUR DAYS IN WILLOWMERE</span>
+        <h2>A pocketful of little things.</h2>
+        <p class="journal-intro">The best days don’t need a grand plan.</p>
+        <div id="journal-content"></div>
+        <div class="journal-note">
+          “Leave a little room in your day for something that doesn’t need
+          doing.”<small>A note tucked inside your journal</small>
+        </div>
+      </dialog>
+      <dialog id="settings-dialog">
+        <button class="close-modal" aria-label="Close settings">×</button
+        ><span class="eyebrow">SETTLE IN</span>
+        <h2>Your kind of quiet.</h2>
+        <label
+          >Time of day<select id="day-select">
+            <option value="day">Golden afternoon</option>
+            <option value="dusk">Blue hour</option>
+          </select></label
+        ><label
+          >Visual quality<select id="quality">
+            <option value="high">High</option>
+            <option value="balanced">Balanced</option>
+            <option value="performance">Performance</option>
+          </select></label
+        ><label
+          >Ambient volume<input
+            id="volume"
+            type="range"
+            min="0"
+            max="100"
+            value="35" /></label
+        ><label
+          >Motion<input id="motion" type="checkbox" checked /> Gentle world
+          animations</label
+        >
+        <p>
+          WASD / arrows to walk · Shift to run<br />E to interact · 1–4 tools ·
+          J journal<br />P photo mode · Esc close · Scroll to zoom
+        </p>
+        <button id="reset-position" class="soft-button">
+          Return to the village green
+        </button>
+      </dialog>
+      <div id="photo-hint" hidden>
+        PHOTO MODE <span>Scroll to frame · Press P or Esc to return</span>
+      </div>
+      <div id="loading">
+        <span class="brand-leaf">❧</span>
+        <h2>A little world is waking up…</h2>
+      </div>
+      <div id="touch-controls">
+        <button data-key="ArrowUp" aria-label="Walk up">↑</button>
+        <div>
+          <button data-key="ArrowLeft" aria-label="Walk left">←</button
+          ><button data-key="ArrowDown" aria-label="Walk down">↓</button
+          ><button data-key="ArrowRight" aria-label="Walk right">→</button>
+        </div>
+        <button id="touch-interact">Interact</button>
+      </div>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
