@@ -4,7 +4,9 @@ A playable cozy village built with Three.js. The fixed orthographic camera prese
 
 ## Play
 
-Clone this repository and install its locked dependencies. Use Node.js 20.19+ or 22.12+ and a browser with WebGL 2 support.
+Play the deployed game at **[willowmere.bellbm.workers.dev](https://willowmere.bellbm.workers.dev)**.
+
+For local development, clone this repository and install its locked dependencies. Use Node.js 22.12+ and a browser with WebGL 2 support.
 
 ```sh
 git clone https://github.com/brian-bell/willowmere.git
@@ -14,6 +16,19 @@ npm run dev
 ```
 
 Open the local address printed by Vite. Build a production web version with `npm run build`. The result is in `dist/`.
+
+## Deploy to Cloudflare
+
+The `willowmere` Worker serves the production build through Cloudflare's static asset hosting. Its configuration is in `wrangler.jsonc`.
+
+Authenticate to the Cloudflare account that owns the Worker, then build and publish:
+
+```sh
+npx wrangler login
+npm run deploy
+```
+
+Deployments are made with Wrangler. GitHub pushes alone do not publish a new version. Credentials and local Wrangler state are excluded from Git.
 
 ## Controls
 
