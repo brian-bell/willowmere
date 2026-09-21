@@ -46,7 +46,7 @@ Deployments are made with Wrangler. GitHub pushes alone do not publish a new ver
 
 ## Your first afternoon
 
-Meet Mabel beside the fountain. Gather three of the wildflower bouquets marked by pale rings. Select seeds and plant in an open grassy patch, then select water and give the flowers a drink. Finn can replenish your seed pouch when it gets low.
+Meet Mabel beside the fountain. Gather three of the wildflower bouquets marked by pale rings. Select seeds and plant in an open grassy patch, then select water and give the flowers a drink. Finn can replenish your seed pouch when it gets low. On the lane east of the fountain, Lily walks her puppy Pip; wander over and say hello.
 
 The journal records the welcome objectives. Progress, collected flowers, planted flowers, seeds, and petal currency save to this browser on this device. Browser data clearing removes this save. Different browser origins have separate saves. In private browsing, persistence may be unavailable.
 
@@ -56,7 +56,7 @@ Settings include afternoon / blue hour, ambient audio volume, decorative motion,
 
 - Four cottages, bakery stall and extension, working mill, river bridge, fountain, garden, fences, foliage, flowers, and props.
 - Procedural surface textures, overlapping shingles, water shader, instanced leaves/grass, merged static geometry, shadow mapping, multisample rendering, and restrained bloom.
-- Traveler gait and turning; three resident conversations; wandering cats, birds, butterflies, and drifting motes.
+- Traveler gait and turning; four resident conversations, including Lily walking her puppy Pip; wandering cats, birds, butterflies, and drifting motes.
 - Acceleration and braking, circular and rectangular collision, grid-based route finding, bridge height following, gathering, planting, watering, rewards, and local save/load.
 - Responsive HUD, keyboard and touch input, reduced decorative motion, journal, time-of-day lighting, and photo mode.
 

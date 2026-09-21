@@ -295,6 +295,7 @@ export function createLife(THREE, scene) {
       legs,
       arms,
       scarf,
+      head,
       armPose: flowers ? [-0.48, -0.04] : apron ? [-0.14, 0.05] : [0, 0],
       seed: Math.random() * 6.28,
     };
@@ -368,6 +369,232 @@ export function createLife(THREE, scene) {
     scene.add(figure.root);
     return { ...def, group: figure.root, figure };
   });
+  // Lily and Pip take a quiet lap of the open lane east of the fountain.
+  const girl = person({
+    coat: 0xc77b9a,
+    hair: 0x613e2c,
+    skin: 0xe8b591,
+    hat: false,
+    size: 0.8,
+  });
+  girl.root.name = "Lily";
+  scene.add(girl.root);
+  const skirt = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.34, 0.32, 18),
+    mat(0xc77b9a),
+  );
+  skirt.position.y = 0.69;
+  skirt.castShadow = true;
+  girl.body.add(skirt);
+  // Soft pigtails and small cream bows give her a different silhouette from the adults.
+  const pigtails = [];
+  for (const side of [-1, 1]) {
+    const hair = new THREE.Group();
+    hair.position.set(side * 0.18, 0.06, -0.04);
+    girl.head.add(hair);
+    sphere(hair, 0x613e2c, side * 0.035, -0.015, -0.025, 0.075, 0.115, 0.075);
+    sphere(hair, 0x613e2c, side * 0.055, -0.1, -0.01, 0.06, 0.075, 0.06);
+    for (const z of [-0.035, 0.035])
+      sphere(hair, 0xf8dfad, side * 0.05, 0.035, z, 0.035, 0.04, 0.042);
+    pigtails.push(hair);
+  }
+  girl.armPose[1] = -0.45;
+  const leashHand = new THREE.Object3D();
+  leashHand.position.set(0.024, -0.3, 0.02);
+  girl.arms[1].add(leashHand);
+
+  const puppy = new THREE.Group(),
+    puppyBody = new THREE.Group();
+  puppy.name = "Pip the puppy";
+  puppy.add(puppyBody);
+  scene.add(puppy);
+  shadow(puppy, 0.4, 0.27);
+  const fur = 0xcfa168,
+    cream = 0xf4e2bb,
+    darkFur = 0x9c6a41;
+  sphere(puppyBody, fur, 0, 0.32, 0, 0.205, 0.23, 0.33);
+  sphere(puppyBody, cream, 0, 0.3, 0.25, 0.145, 0.18, 0.12);
+  const puppyHead = new THREE.Group();
+  puppyHead.position.set(0, 0.48, 0.24);
+  puppyBody.add(puppyHead);
+  sphere(puppyHead, fur, 0, 0.07, 0.02, 0.215, 0.21, 0.19);
+  sphere(puppyHead, cream, 0, -0.015, 0.18, 0.125, 0.09, 0.105);
+  sphere(puppyHead, 0x35312c, 0, 0.01, 0.275, 0.057, 0.039, 0.031);
+  sphere(puppyHead, cream, 0, 0.12, 0.185, 0.045, 0.1, 0.017);
+  const ears = [];
+  for (const side of [-1, 1]) {
+    sphere(
+      puppyHead,
+      0x352f28,
+      side * 0.092,
+      0.105,
+      0.186,
+      0.027,
+      0.035,
+      0.015,
+    );
+    sphere(
+      puppyHead,
+      0xfff6dc,
+      side * 0.092 - 0.007,
+      0.116,
+      0.198,
+      0.009,
+      0.011,
+      0.006,
+    );
+    const ear = new THREE.Group();
+    ear.position.set(side * 0.19, 0.13, -0.005);
+    puppyHead.add(ear);
+    sphere(ear, darkFur, side * 0.025, -0.12, -0.015, 0.075, 0.185, 0.105);
+    ears.push(ear);
+  }
+  const collar = new THREE.Mesh(
+    new THREE.TorusGeometry(0.15, 0.032, 6, 18),
+    mat(0x729aa0),
+  );
+  collar.position.set(0, 0.46, 0.22);
+  collar.rotation.x = Math.PI / 2;
+  puppyBody.add(collar);
+  sphere(puppyBody, 0xd8b05b, 0, 0.37, 0.365, 0.047, 0.053, 0.022);
+  const collarClip = new THREE.Object3D();
+  collarClip.position.set(0, 0.51, 0.16);
+  puppyBody.add(collarClip);
+  const paws = [];
+  for (const side of [-1, 1])
+    for (const z of [-0.2, 0.2]) {
+      const leg = new THREE.Group();
+      leg.position.set(side * 0.135, 0.26, z);
+      puppyBody.add(leg);
+      sphere(leg, fur, 0, -0.075, 0, 0.065, 0.12, 0.07);
+      sphere(leg, cream, 0, -0.19, 0.035, 0.083, 0.06, 0.11);
+      paws.push(leg);
+    }
+  const puppyTail = new THREE.Group();
+  puppyTail.position.set(0, 0.36, -0.29);
+  puppyBody.add(puppyTail);
+  const tailPath = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 0.13, -0.15),
+    new THREE.Vector3(0, 0.33, -0.23),
+    new THREE.Vector3(0, 0.39, -0.18),
+  ]);
+  const waggingTail = new THREE.Mesh(
+    new THREE.TubeGeometry(tailPath, 12, 0.045, 7, false),
+    mat(fur),
+  );
+  waggingTail.castShadow = true;
+  puppyTail.add(waggingTail);
+  sphere(puppyTail, cream, 0, 0.39, -0.18, 0.046, 0.057, 0.046);
+
+  const leash = new THREE.Group();
+  leash.name = "Lily and Pip leash";
+  scene.add(leash);
+  const leashGeometry = new THREE.CylinderGeometry(0.019, 0.019, 1, 6);
+  for (let i = 0; i < 12; i++) {
+    const segment = new THREE.Mesh(leashGeometry, mat(0x735671));
+    leash.add(segment);
+  }
+  const route = new THREE.CatmullRomCurve3(
+    Array.from({ length: 12 }, (_, i) => {
+      const angle = (i / 12) * Math.PI * 2;
+      return new THREE.Vector3(
+        6.3 + Math.cos(angle) * 1.4,
+        0.05,
+        3 + Math.sin(angle) * 0.65,
+      );
+    }),
+    true,
+    "centripetal",
+  );
+  const routeLength = route.getLength(),
+    up = new THREE.Vector3(0, 1, 0);
+  const position = new THREE.Vector3(),
+    tangent = new THREE.Vector3(),
+    right = new THREE.Vector3();
+  const handPosition = new THREE.Vector3(),
+    collarPosition = new THREE.Vector3();
+  const leashStart = new THREE.Vector3(),
+    leashEnd = new THREE.Vector3(),
+    segmentDirection = new THREE.Vector3();
+  const lily = {
+    id: "lily",
+    name: "Lily",
+    group: girl.root,
+    dialogue: [
+      "This is Pip! He thinks every walk is a very big adventure.",
+      "We’re taking the long way home. There are still so many things to sniff!",
+    ],
+  };
+  function updatePuppyWalk(time) {
+    const duration = 20,
+      ramp = 1,
+      t = time % 25;
+    const walkingTime = Math.min(t, duration);
+    const distance =
+      walkingTime < ramp
+        ? (walkingTime * walkingTime) / (2 * ramp)
+        : walkingTime > duration - ramp
+          ? duration - ramp - (duration - walkingTime) ** 2 / (2 * ramp)
+          : walkingTime - ramp / 2;
+    const u = (distance / (duration - ramp) + 0.28) % 1;
+    const blend =
+      t < duration
+        ? Math.min(walkingTime / ramp, (duration - walkingTime) / ramp, 1)
+        : 0;
+    route.getPointAt(u, position);
+    route.getTangentAt(u, tangent).normalize();
+    right.set(tangent.z, 0, -tangent.x);
+    girl.root.position.copy(position);
+    girl.root.rotation.y = Math.atan2(tangent.x, tangent.z);
+    const phase =
+      (((distance / (duration - ramp)) * routeLength) / 0.38) * Math.PI * 2;
+    animatePerson(girl, phase, blend, time);
+    girl.arms[1].rotation.x = -0.45;
+    pigtails.forEach(
+      (hair, i) =>
+        (hair.rotation.z = Math.sin(phase + i * Math.PI) * 0.12 * blend),
+    );
+    puppy.position
+      .copy(position)
+      .addScaledVector(right, 0.64)
+      .addScaledVector(tangent, 0.3);
+    puppy.rotation.y =
+      girl.root.rotation.y + Math.sin(time * 1.7) * 0.1 * (1 - blend);
+    puppyBody.position.y = Math.abs(Math.sin(phase * 1.4)) * 0.025 * blend;
+    paws.forEach(
+      (leg, i) =>
+        (leg.rotation.x =
+          Math.sin(phase * 1.4 + (i === 0 || i === 3 ? 0 : Math.PI)) *
+          0.43 *
+          blend),
+    );
+    ears.forEach(
+      (ear, i) => (ear.rotation.x = Math.sin(phase * 1.4 + i) * 0.14 * blend),
+    );
+    puppyTail.rotation.z = Math.sin(time * 8) * 0.42;
+    puppyHead.rotation.x = (1 - blend) * (0.35 + Math.sin(time * 2) * 0.1);
+    girl.root.updateMatrixWorld(true);
+    puppy.updateMatrixWorld(true);
+    leashHand.getWorldPosition(handPosition);
+    collarClip.getWorldPosition(collarPosition);
+    const sag = 0.13;
+    for (let i = 0; i < leash.children.length; i++) {
+      const a = i / leash.children.length,
+        b = (i + 1) / leash.children.length;
+      leashStart.lerpVectors(handPosition, collarPosition, a);
+      leashStart.y -= Math.sin(a * Math.PI) * sag;
+      leashEnd.lerpVectors(handPosition, collarPosition, b);
+      leashEnd.y -= Math.sin(b * Math.PI) * sag;
+      const segment = leash.children[i];
+      segment.position.copy(leashStart).add(leashEnd).multiplyScalar(0.5);
+      segmentDirection.subVectors(leashEnd, leashStart);
+      segment.scale.y = segmentDirection.length();
+      segment.quaternion.setFromUnitVectors(up, segmentDirection.normalize());
+    }
+  }
+  updatePuppyWalk(0);
+
   // Butterflies have two independently hinged wings, not billboard sprites.
   const butterflies = [];
   const wingShape = new THREE.Shape();
@@ -519,6 +746,7 @@ export function createLife(THREE, scene) {
       player.rotation.y += angle * (1 - Math.exp(-dt * 12));
     }
     animatePerson(traveler, walkPhase, walkBlend, time);
+    updatePuppyWalk(time);
     for (const npc of residents) {
       animatePerson(npc.figure, 0, 0, time);
       const distance = npc.group.position.distanceTo(player.position);
@@ -579,7 +807,7 @@ export function createLife(THREE, scene) {
   }
   return {
     player,
-    npcs: residents.map(({ figure, ...npc }) => npc),
+    npcs: [...residents.map(({ figure, ...npc }) => npc), lily],
     update,
     setPlayerMotion,
   };
