@@ -1,6 +1,7 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createTrees } from "./trees.js";
 import { createReeds } from "./reeds.js";
+import { createRiverbank } from "./riverbank.js";
 import { createWaterSystem, sampleWaterField } from "./water.js";
 export function createWorld(T, scene) {
   const initialChildren = new Set(scene.children);
@@ -324,8 +325,7 @@ export function createWorld(T, scene) {
     material.customProgramCacheKey = () => "river-wet-stone";
     return material;
   }
-  const wetBankStone = wetStone(stone),
-    wetRiverStone = wetStone(darkStone);
+  const wetRiverStone = wetStone(darkStone);
   for (const rock of riverConfig.obstacles) {
     orb(
       wetRiverStone,
@@ -357,21 +357,10 @@ export function createWorld(T, scene) {
     radius: 0.007,
     phase: 0.07,
   });
+  createRiverbank(scene);
+  // Keep downstream village placements stable after replacing the old bank stones.
   seed = riverLayoutSeed;
-  for (let side of [-1, 1])
-    for (let z = -20; z < 21; z += 1.6) {
-      orb(
-        wetBankStone,
-        12 + side * 2.1,
-        0.02,
-        z + range(-0.15, 0.15),
-        range(0.36, 0.65),
-        range(0.18, 0.34),
-        range(0.65, 0.95),
-      );
-    }
-  // Preserve the established village layout after retiring the 120 ripple strips.
-  for (let i = 0; i < 360; i++) rand();
+  for (let i = 0; i < 568; i++) rand();
   dum.rotation.set(0, 0, 0);
   colliders.push(
     { x: 12, z: -8.5, w: 4.3, d: 19.5 },
