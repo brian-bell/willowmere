@@ -19,6 +19,8 @@ Open the local address printed by Vite. Build a production web version with `npm
 
 During development, open `/tree-study.html` to inspect the broadleaf, amber, and weeping willow models. Drag to orbit, scroll to examine the bark and roots, and switch the lighting or pause the breeze.
 
+Open `/water-study.html` to examine the river, millrace, and fountain at close range. Orbit, switch lighting and quality, or tap the water to create ripples. All three village pools share the GPU shallow-water and optical model described in [Water rendering](docs/water.md).
+
 ## Deploy to Cloudflare
 
 The `willowmere` Worker serves the production build through Cloudflare's static asset hosting. Its configuration is in `wrangler.jsonc`.
@@ -80,7 +82,9 @@ This is a small playable prototype with a short welcome quest, free village expl
 ## Source map
 
 - `src/main.js`: renderer, camera, movement, collision, route finding, interactions, UI and save state.
-- `src/world.js`: environment, procedural materials, foliage, collision layout and water animation.
+- `src/world.js`: environment, procedural materials, foliage, collision layout and water placement.
+- `src/water.js` / `src/water-shaders.js`: shared shallow-water simulation, waves, reflections, refraction, foam, and fountain jets.
+- `src/water-study.js`: interactive close-up water study and diagnostics.
 - `src/trees.js`: branching tree geometry, bark and leaf materials, batched foliage, wind and canopy bounds.
 - `src/bakery.js`: procedural bakery architecture, materials, furnishings, pastries, lighting, and animation.
 - `src/interior.js` / `src/interior.css`: first-person camera, input, interactions, postprocessing, pause menu, and entry / exit lifecycle.

@@ -1,7 +1,9 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createTrees } from "./trees.js";
+import { createWaterSystem, sampleWaterField } from "./water.js";
 export function createWorld(T, scene) {
   const initialChildren = new Set(scene.children);
+  const water = createWaterSystem(scene);
   const colliders = [],
     interactables = [],
     animated = [];
@@ -162,8 +164,18 @@ export function createWorld(T, scene) {
     return new T.MeshStandardMaterial({ map: tx, roughness: 1 });
   }
   // Sculpted meadow base, its floating soil rim discreetly visible at the wooded margins.
-  box(soil, 0, -0.7, 0, 48, 1.3, 42);
-  box(grass, 0, -0.1, 0, 47.6, 0.3, 41.6);
+  // The channel is physically recessed, so refraction sees its bed rather than lawn.
+  box(soil, 0, -1.18, 0, 48, 0.34, 42);
+  for (const [left, right] of [
+    [-24, 9.7],
+    [14.3, 24],
+  ])
+    box(soil, (left + right) / 2, -0.58, 0, right - left, 1.06, 42);
+  for (const [left, right] of [
+    [-23.8, 9.7],
+    [14.3, 23.8],
+  ])
+    box(grass, (left + right) / 2, -0.1, 0, right - left, 0.3, 41.6);
   const groundH = (x, z) => 0.04;
   const shadowCanvas = document.createElement("canvas");
   shadowCanvas.width = shadowCanvas.height = 128;
@@ -226,46 +238,129 @@ export function createWorld(T, scene) {
   road(-6, 10.3, 13, 2.8);
   const plaza = cyl(path, -1, 0.08, 2.7, 5.3, 0.08);
   plaza.scale.z = 4.5;
-  // Riverbanks slope into a turquoise stream.
-  box(darkStone, 12, -0.2, 0, 4.9, 0.3, 42);
-  box(mat("#71937f"), 12, 0.005, 0, 4.45, 0.12, 42);
-  const waterMat = new T.MeshStandardMaterial({
-    color: "#2b8f96",
-    roughness: 0.2,
-    metalness: 0.04,
-    transparent: false,
-    opacity: 1,
-  });
-  box(waterMat, 12, 0.075, 0, 3.65, 0.065, 42);
-  const waterTime = { value: 0 };
-  waterMat.onBeforeCompile = (shader) => {
-    shader.uniforms.uWaterTime = waterTime;
-    shader.vertexShader = "varying vec3 vWaterWorld;\n" + shader.vertexShader;
-    shader.vertexShader = shader.vertexShader.replace(
-      "#include <worldpos_vertex>",
-      "#include <worldpos_vertex>\nvWaterWorld=(modelMatrix*vec4(transformed,1.0)).xyz;",
-    );
-    shader.fragmentShader =
-      "varying vec3 vWaterWorld; uniform float uWaterTime;\n" +
-      shader.fragmentShader;
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <color_fragment>",
-      `#include <color_fragment>
-  float flow=sin(vWaterWorld.z*2.1-uWaterTime*.9+sin(vWaterWorld.x*4.0+uWaterTime*.25)*.8);
-  float fine=sin(vWaterWorld.z*12.0-uWaterTime*1.8+sin(vWaterWorld.x*8.0+sin(vWaterWorld.z*.45))*1.7);
-  float glint=pow(max(0.0,fine),18.0)*.045;
-  diffuseColor.rgb*=.95+flow*.035;
-  diffuseColor.rgb+=vec3(.12,.24,.23)*glint;`,
-    );
+  // A shared bathymetry field drives both the carved bed and the fluid boundary.
+  const riverLayoutSeed = seed;
+  const riverConfig = {
+    id: "river",
+    x: 12,
+    y: 0.108,
+    z: 0,
+    size: [4.2, 42],
+    depth: 0.82,
+    flow: 0.44,
+    amplitude: 0.024,
+    obstacles: [
+      { x: -0.84, z: -4.7, radius: 0.22 },
+      { x: 0.84, z: 7.2, radius: 0.2 },
+      { x: -0.72, z: 12.5, radius: 0.27 },
+      { x: 1.72, z: -6.5, radius: 0.18 },
+    ],
   };
-  animated.push((dt, t) => {
-    waterTime.value = t;
+  water.addBody(riverConfig);
+  const bedMaterial = mat("#8b9277", 0.96);
+  bedMaterial.map = texture("#8b9277", "stone");
+  bedMaterial.color.set("#ffffff");
+  bedMaterial.map.repeat.set(3, 28);
+  const bedGeometry = new T.PlaneGeometry(4.6, 42, 56, 420).rotateX(
+    -Math.PI / 2,
+  );
+  const bedPositions = bedGeometry.attributes.position;
+  for (let i = 0; i < bedPositions.count; i++) {
+    const x = bedPositions.getX(i),
+      z = bedPositions.getZ(i);
+    const field = sampleWaterField(riverConfig, x, z);
+    const bottom = field[3] ? riverConfig.y - field[0] - 0.018 : 0.045;
+    bedPositions.setY(
+      i,
+      bottom + (field[0] > 0.12 ? Math.sin(x * 11 + z * 2.7) * 0.025 : 0),
+    );
+  }
+  bedGeometry.computeVertexNormals();
+  mesh(bedGeometry, bedMaterial, 12, 0, 0);
+  const pebbleColors = ["#9a987e", "#78877b", "#a8a088", "#677b72"].map(
+    (c) => new T.Color(c),
+  );
+  const pebbles = new T.InstancedMesh(
+    new T.IcosahedronGeometry(1, 1),
+    new T.MeshStandardMaterial({ roughness: 0.85 }),
+    430,
+  );
+  const dum = new T.Object3D();
+  for (let i = 0; i < pebbles.count; i++) {
+    const x = range(-1.94, 1.94),
+      z = range(-20.8, 20.8);
+    const [depth] = sampleWaterField(riverConfig, x, z);
+    dum.position.set(12 + x, riverConfig.y - depth - 0.01, z);
+    dum.scale.set(range(0.035, 0.1), range(0.025, 0.065), range(0.045, 0.13));
+    dum.rotation.set(rand(), rand() * 6.28, rand());
+    dum.updateMatrix();
+    pebbles.setMatrixAt(i, dum.matrix);
+    pebbles.setColorAt(i, pebbleColors[i % pebbleColors.length]);
+  }
+  pebbles.receiveShadow = true;
+  scene.add(pebbles);
+  // Saturated stone is darker and smoother just below the lapping waterline.
+  function wetStone(base) {
+    const material = base.clone();
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader =
+        "varying float vStoneHeight;\n" + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace(
+        "#include <worldpos_vertex>",
+        "#include <worldpos_vertex>\nvStoneHeight = (modelMatrix * vec4(transformed, 1.0)).y;",
+      );
+      shader.fragmentShader =
+        "varying float vStoneHeight;\n" + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <color_fragment>",
+        "#include <color_fragment>\ndiffuseColor.rgb *= mix(0.62, 1.0, smoothstep(0.08, 0.22, vStoneHeight));",
+      );
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <roughnessmap_fragment>",
+        "#include <roughnessmap_fragment>\nroughnessFactor = mix(0.34, roughnessFactor, smoothstep(0.08, 0.22, vStoneHeight));",
+      );
+    };
+    material.customProgramCacheKey = () => "river-wet-stone";
+    return material;
+  }
+  const wetBankStone = wetStone(stone),
+    wetRiverStone = wetStone(darkStone);
+  for (const rock of riverConfig.obstacles) {
+    orb(
+      wetRiverStone,
+      12 + rock.x,
+      0.07,
+      rock.z,
+      rock.radius * 1.16,
+      0.18,
+      rock.radius * 1.24,
+    );
+    water.addSource("river", {
+      x: 12 + rock.x,
+      z: rock.z + rock.radius + 0.09,
+      radius: 0.11,
+      strength: 0.004,
+      interval: 0.31,
+    });
+  }
+  water.addJet("river", {
+    start: [13.78, 0.48, -6.48],
+    end: [13.79, 0.108, -6.1],
+    arc: 0.015,
+    radius: 0.009,
   });
-
+  water.addJet("river", {
+    start: [13.9, 0.35, -6.34],
+    end: [13.89, 0.108, -5.98],
+    arc: 0.01,
+    radius: 0.007,
+    phase: 0.07,
+  });
+  seed = riverLayoutSeed;
   for (let side of [-1, 1])
     for (let z = -20; z < 21; z += 1.6) {
       orb(
-        stone,
+        wetBankStone,
         12 + side * 2.1,
         0.02,
         z + range(-0.15, 0.15),
@@ -274,26 +369,9 @@ export function createWorld(T, scene) {
         range(0.65, 0.95),
       );
     }
-  const ripples = new T.InstancedMesh(
-      new T.BoxGeometry(1, 0.012, 0.025),
-      new T.MeshBasicMaterial({
-        color: "#b7d8c3",
-        transparent: true,
-        opacity: 0.34,
-      }),
-      120,
-    ),
-    dum = new T.Object3D();
-  for (let i = 0; i < 120; i++) {
-    dum.position.set(range(10.5, 13.5), 0.121, range(-20, 20));
-    dum.scale.set(range(0.13, 0.8), 1, 1);
-    dum.updateMatrix();
-    ripples.setMatrixAt(i, dum.matrix);
-  }
-  scene.add(ripples);
-  animated.push((dt, t) => {
-    ripples.position.z = Math.sin(t * 0.15) * 0.2;
-  });
+  // Preserve the established village layout after retiring the 120 ripple strips.
+  for (let i = 0; i < 360; i++) rand();
+  dum.rotation.set(0, 0, 0);
   colliders.push(
     { x: 12, z: -8.5, w: 4.3, d: 19.5 },
     { x: 12, z: 13, w: 4.3, d: 16.5 },
@@ -635,7 +713,7 @@ export function createWorld(T, scene) {
   // Working mill wheel, clean concentric rings and wooden paddles.
   const wheel = new T.Group();
   wheel.userData.dynamic = true;
-  wheel.position.set(14.63, 1.7, -6.5);
+  wheel.position.set(14.12, 1.43, -6.5);
   scene.add(wheel);
   wheel.rotation.z = Math.PI / 2;
   const torG = new T.TorusGeometry(1.38, 0.105, 6, 32);
@@ -666,10 +744,39 @@ export function createWorld(T, scene) {
   }
   cyl(darkWood, 0, 0, 0, 0.18, 1.2, wheel);
   animated.push((dt) => (wheel.rotation.y += dt * 0.18));
+  // Sealed stone walls enclose each pool below the rounded lip.
+  function basinWall(x, y, z, inner, outer, height) {
+    const ring = new T.Shape();
+    ring.absarc(0, 0, outer, 0, Math.PI * 2, false);
+    const hole = new T.Path();
+    hole.absarc(0, 0, inner, 0, Math.PI * 2, true);
+    ring.holes.push(hole);
+    const geometry = new T.ExtrudeGeometry(ring, {
+      depth: height,
+      steps: 1,
+      bevelEnabled: false,
+      curveSegments: 48,
+    });
+    geometry.rotateX(-Math.PI / 2);
+    mesh(geometry, stone, x, y, z);
+  }
   // Central fountain with shallow clear water, central carved basin and gentle jets.
   cyl(darkStone, -1, 0.18, 2.5, 1.65, 0.25);
-  cyl(stone, -1, 0.37, 2.5, 1.53, 0.3);
-  cyl(waterMat, -1, 0.55, 2.5, 1.32, 0.045);
+  cyl(stone, -1, 0.32, 2.5, 1.53, 0.2);
+  basinWall(-1, 0.42, 2.5, 1.32, 1.48, 0.15);
+  water.addBody({
+    id: "fountain-lower",
+    x: -1,
+    y: 0.5725,
+    z: 2.5,
+    radius: 1.32,
+    hole: 0.285,
+    depth: 0.15,
+    amplitude: 0.004,
+    absorption: [0.7, 0.24, 0.12],
+    scatter: "#517e70",
+    roughness: 0.13,
+  });
   const rim = mesh(
     new T.TorusGeometry(1.43, 0.115, 8, 48),
     trim,
@@ -679,7 +786,8 @@ export function createWorld(T, scene) {
   );
   rim.rotation.x = Math.PI / 2;
   cyl(stone, -1, 0.78, 2.5, 0.28, 0.7);
-  cyl(trim, -1, 1.13, 2.5, 0.66, 0.15);
+  cyl(trim, -1, 1.1, 2.5, 0.66, 0.09);
+  basinWall(-1, 1.145, 2.5, 0.53, 0.63, 0.08);
   const bowl = mesh(
     new T.TorusGeometry(0.58, 0.09, 7, 32),
     stone,
@@ -688,29 +796,40 @@ export function createWorld(T, scene) {
     2.5,
   );
   bowl.rotation.x = Math.PI / 2;
-  cyl(waterMat, -1, 1.2, 2.5, 0.53, 0.04);
+  water.addBody({
+    id: "fountain-upper",
+    x: -1,
+    y: 1.22,
+    z: 2.5,
+    radius: 0.53,
+    hole: 0.125,
+    depth: 0.075,
+    amplitude: 0.002,
+    absorption: [0.55, 0.18, 0.1],
+    scatter: "#517e70",
+    roughness: 0.12,
+  });
   cyl(stone, -1, 1.42, 2.5, 0.12, 0.48);
   orb(trim, -1, 1.72, 2.5, 0.21);
-  const jetMat = new T.MeshBasicMaterial({
-    color: "#e1efe2",
-    transparent: true,
-    opacity: 0.62,
-  });
   for (let i = 0; i < 7; i++) {
-    const a = (i / 7) * Math.PI * 2,
-      pts = [];
-    for (let j = 0; j <= 12; j++) {
-      const f = j / 12;
-      pts.push(
-        new T.Vector3(
-          -1 + Math.cos(a) * f * 0.9,
-          1.63 + Math.sin(f * Math.PI) * 0.25 - f * 1.04,
-          2.5 + Math.sin(a) * f * 0.9,
-        ),
-      );
-    }
-    const cv = new T.CatmullRomCurve3(pts);
-    mesh(new T.TubeGeometry(cv, 14, 0.014, 4, false), jetMat);
+    const a = (i / 7) * Math.PI * 2;
+    water.addJet("fountain-lower", {
+      start: [-1 + Math.cos(a) * 0.09, 1.65, 2.5 + Math.sin(a) * 0.09],
+      end: [-1 + Math.cos(a) * 0.92, 0.5725, 2.5 + Math.sin(a) * 0.92],
+      arc: 0.045,
+      phase: i * 0.073,
+      radius: 0.012,
+    });
+  }
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + 0.3;
+    water.addJet("fountain-upper", {
+      start: [-1 + Math.cos(a) * 0.16, 1.69, 2.5 + Math.sin(a) * 0.16],
+      end: [-1 + Math.cos(a) * 0.35, 1.22, 2.5 + Math.sin(a) * 0.35],
+      arc: 0.02,
+      phase: i * 0.11,
+      radius: 0.008,
+    });
   }
   colliders.push({ x: -1, z: 2.5, r: 1.7 });
   interactables.push({
@@ -960,16 +1079,31 @@ export function createWorld(T, scene) {
     [11.4, 13],
     [12.7, -3],
   ]) {
+    const floating = new T.Group();
+    floating.userData.dynamic = true;
+    floating.position.set(x, 0.139, z);
+    scene.add(floating);
     const leaf = mesh(
-      new T.CircleGeometry(0.26, 14, 0, Math.PI * 1.85),
+      new T.CircleGeometry(0.26, 28, 0, Math.PI * 1.85),
       lilyMat,
-      x,
-      0.119,
-      z,
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      floating,
     );
     leaf.rotation.x = -Math.PI / 2;
     leaf.rotation.z = rand() * 6.28;
-    orb(flowerMats[1], x + 0.02, 0.18, z, 0.09, 0.05, 0.09);
+    orb(flowerMats[1], 0.02, 0.06, 0, 0.09, 0.05, 0.09, floating);
+    animated.push(() => {
+      const t = water.time;
+      floating.position.y =
+        0.139 + Math.sin(x * 1.01 + z * 3.46 - t * 5.95) * 0.011;
+      floating.rotation.z = Math.sin(z * 2.1 - t * 3.6) * 0.025;
+      floating.rotation.x = Math.cos(x * 2.3 + t * 2.8) * 0.02;
+    });
   }
   // Curving beds of lavender near front walkway.
   const stalkMat = mat("#79916a"),
@@ -1122,6 +1256,7 @@ export function createWorld(T, scene) {
   const isPlantable = (x, z) =>
     Math.abs(x) < 22 && Math.abs(z) < 18 && !inRoad(x, z) && !isBlocked(x, z);
   return {
+    water,
     getGroundHeight,
     isPlantable,
     colliders,
@@ -1129,6 +1264,7 @@ export function createWorld(T, scene) {
     interactables,
     spawn: { x: -2.8, z: 6.2 },
     update(dt, time) {
+      water.update(dt);
       for (const f of animated) f(dt, time);
     },
     lanterns,

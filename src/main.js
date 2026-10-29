@@ -437,6 +437,7 @@ $("#volume").oninput = (e) => audio.setVolume(Number(e.target.value) / 100);
 $("#motion").onchange = (e) => (motion = e.target.checked);
 $("#quality").onchange = (e) => {
   const q = e.target.value;
+  world.water.setQuality(q);
   renderer.setPixelRatio(
     Math.min(
       devicePixelRatio,
@@ -1006,6 +1007,7 @@ function animate(now) {
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
   playerVisibility.update(camera, !photo);
   renderer.info.reset();
+  world.water.render(renderer, camera, { dt, dusk: duskMix, sun });
   composer.render();
   if (frame === 3) {
     $("#loading").classList.add("loaded");
@@ -1021,6 +1023,7 @@ window.__willowmere = {
   getState: () => structuredClone(state),
   getPlayer: () => ({ x: life.player.position.x, z: life.player.position.z }),
   getInterior: () => interior?.diagnostics() ?? { active: false },
+  getWater: () => world.water.diagnostics(),
   getDiagnostics: () => ({
     objects: scene.children.length,
     drawCalls: renderer.info.render.calls,
