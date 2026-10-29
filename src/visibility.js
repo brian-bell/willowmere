@@ -1,6 +1,11 @@
 import * as T from "three";
 // A warm silhouette keeps the traveler legible behind foreground scenery.
-export function createPlayerVisibility(scene, player, colliders) {
+export function createPlayerVisibility(
+  scene,
+  player,
+  colliders,
+  treeCanopies = [],
+) {
   const material = new T.MeshBasicMaterial({
     color: "#f8dba3",
     depthTest: false,
@@ -29,20 +34,19 @@ export function createPlayerVisibility(scene, player, colliders) {
   pair(player, ghost);
   ghost.visible = false;
   scene.add(ghost);
-  const volumes = colliders.flatMap((c) => {
-    if (c.r > 0.3 && c.r < 0.6) {
-      const s = c.r / 0.33;
-      return [new T.Sphere(new T.Vector3(c.x, 3.1 * s, c.z), 1.85 * s)];
-    }
-    if (c.w > 3 && c.w < 7 && c.d > 3 && c.d < 6)
-      return [
-        new T.Box3(
-          new T.Vector3(c.x - c.w / 2, 0, c.z - c.d / 2),
-          new T.Vector3(c.x + c.w / 2, 5.5, c.z + c.d / 2),
-        ),
-      ];
-    return [];
-  });
+  const volumes = [
+    ...treeCanopies,
+    ...colliders.flatMap((c) => {
+      if (c.w > 3 && c.w < 7 && c.d > 3 && c.d < 6)
+        return [
+          new T.Box3(
+            new T.Vector3(c.x - c.w / 2, 0, c.z - c.d / 2),
+            new T.Vector3(c.x + c.w / 2, 5.5, c.z + c.d / 2),
+          ),
+        ];
+      return [];
+    }),
+  ];
   const ray = new T.Ray(),
     target = new T.Vector3(),
     intersection = new T.Vector3();

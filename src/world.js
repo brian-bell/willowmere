@@ -1,4 +1,5 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { createTrees } from "./trees.js";
 export function createWorld(T, scene) {
   const initialChildren = new Set(scene.children);
   const colliders = [],
@@ -817,75 +818,8 @@ export function createWorld(T, scene) {
     [-10.5, 11.7],
   ])
     lamp(x, z);
-  // Trees: twisting trunks, layered sculptural crowns and finer leaves silhouetting the canopy.
-  const leafRecords = [];
-  const trunk = mat("#786148"),
-    treeMats = ["#517650", "#66844c", "#72914f", "#829b55", "#93a65e"].map(
-      (c) => mat(c),
-    );
-  function tree(x, z, s = 1, autumn = false) {
-    contact(x, z, 2.1 * s, 2.1 * s);
-    const shape = Math.abs(Math.round(x * 2 + z)) % 3,
-      stretch = shape === 0 ? 1.22 : shape === 1 ? 0.82 : 1;
-    const tm = autumn
-      ? ["#ae9860", "#bfaa69", "#899353"].map((c) => mat(c))
-      : treeMats;
-    cyl(trunk, x, 1.25 * s, z, 0.19 * s, 2.5 * s);
-    for (let root = 0; root < 4; root++) {
-      const a = root * 1.571 + x * 0.17;
-      beam(
-        trunk,
-        [x, 0.33 * s, z],
-        [x + Math.cos(a) * 0.47 * s, 0.07, z + Math.sin(a) * 0.47 * s],
-        0.13 * s,
-      );
-    }
-    for (let i = 0; i < 3; i++) {
-      const a = i * 2.1;
-      beam(
-        trunk,
-        [x, 1.5 * s, z],
-        [x + Math.cos(a) * 0.65 * s, 2.7 * s, z + Math.sin(a) * 0.65 * s],
-        0.13 * s,
-      );
-    }
-    orb(tm[0], x, 2.75 * s, z, 1.02 * s, 0.94 * s * stretch, 1.02 * s);
-    for (let i = 0; i < 18; i++) {
-      const a = i * 2.399,
-        r = range(0.35, 1.22) * s,
-        yy = (2.65 + range(-0.4, 0.85) * stretch) * s;
-      const crown = orb(
-        tm[i % tm.length],
-        x + Math.cos(a) * r,
-        yy,
-        z + Math.sin(a) * r,
-        range(0.43, 0.82) * s,
-        range(0.52, 0.9) * s * stretch,
-        range(0.45, 0.78) * s,
-      );
-      for (let j = 0; j < 30; j++) {
-        const u = range(-1, 1),
-          ang = rand() * Math.PI * 2,
-          q = Math.sqrt(1 - u * u),
-          nx = q * Math.cos(ang),
-          ny = u,
-          nz = q * Math.sin(ang);
-        leafRecords.push({
-          x: crown.position.x + nx * crown.scale.x,
-          y: crown.position.y + ny * crown.scale.y,
-          z: crown.position.z + nz * crown.scale.z,
-          nx,
-          ny,
-          nz,
-          s,
-          color: tm[i % tm.length].color.clone(),
-        });
-      }
-      crown.scale.multiplyScalar(0.95);
-    }
-    colliders.push({ x, z, r: 0.33 * s });
-  }
-  for (const [x, z, s] of [
+  // Branch-built trees share four batches for bark, details, leaves and litter.
+  const treePlacements = [
     [-20, -14, 1.3],
     [-16, -13, 1.2],
     [-11, -13, 1.4],
@@ -908,28 +842,14 @@ export function createWorld(T, scene) {
     [-9, 8, 1.05],
     [6, -5, 0.9],
     [6.7, 8.5, 1.1],
-  ])
-    tree(x, z, s, x < -17);
-  const leafGeometry = new T.SphereGeometry(1, 6, 3),
-    leaves = new T.InstancedMesh(
-      leafGeometry,
-      mat("#ffffff"),
-      leafRecords.length,
-    );
-  const leafUp = new T.Vector3(0, 1, 0);
-  for (let i = 0; i < leafRecords.length; i++) {
-    const l = leafRecords[i];
-    dum.position.set(l.x, l.y, l.z);
-    dum.quaternion.setFromUnitVectors(leafUp, new T.Vector3(l.nx, l.ny, l.nz));
-    dum.rotateY(rand() * Math.PI);
-    dum.scale.set(range(0.12, 0.2) * l.s, 0.04 * l.s, range(0.14, 0.24) * l.s);
-    dum.updateMatrix();
-    leaves.setMatrixAt(i, dum.matrix);
-    leaves.setColorAt(i, l.color.offsetHSL(0, 0, range(-0.045, 0.045)));
+  ];
+  const trees = createTrees(treePlacements);
+  scene.add(trees.group);
+  for (const [x, z, s] of treePlacements) {
+    contact(x, z, 2.1 * s, 2.1 * s);
+    colliders.push({ x, z, r: 0.33 * s });
   }
-  leaves.castShadow = false;
-  leaves.receiveShadow = false;
-  scene.add(leaves);
+  animated.push((dt, time) => trees.update(time));
   // Orchard and picket details around the first cottages.
   fence(-10, -3.2, -9, -3.2);
   fence(-5, -3.2, -3.8, -3.2);
@@ -1205,6 +1125,7 @@ export function createWorld(T, scene) {
     getGroundHeight,
     isPlantable,
     colliders,
+    treeCanopies: trees.canopyBounds,
     interactables,
     spawn: { x: -2.8, z: 6.2 },
     update(dt, time) {

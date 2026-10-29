@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The village trees · Willowmere</title>
+    <link rel="icon" href="data:," />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        overflow: hidden;
+        color: #334d3e;
+        background: #dfe2ce;
+        font-family: system-ui, sans-serif;
+      }
+      canvas {
+        display: block;
+      }
+      header {
+        position: absolute;
+        top: 34px;
+        left: 40px;
+        pointer-events: none;
+      }
+      .eyebrow {
+        font-size: 10px;
+        font-weight: 650;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+      }
+      h1 {
+        font:
+          38px/1.2 Georgia,
+          serif;
+        margin: 12px 0 9px;
+        font-weight: normal;
+      }
+      header p {
+        font-size: 12px;
+        color: #64745e;
+        margin: 0;
+      }
+      body.dusk header p,
+      body.dusk footer {
+        color: #c2cbbb;
+      }
+      nav {
+        position: absolute;
+        right: 32px;
+        top: 34px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      select,
+      button,
+      a {
+        font: inherit;
+        font-size: 12px;
+        color: inherit;
+        border: 1px solid #6d806334;
+        border-radius: 10px;
+        padding: 12px 15px;
+        background: #f8f7eaeb;
+        text-decoration: none;
+      }
+      select,
+      button {
+        cursor: pointer;
+      }
+      :focus-visible {
+        outline: 2px solid #477751;
+        outline-offset: 4px;
+      }
+      footer {
+        position: absolute;
+        bottom: 27px;
+        width: 100%;
+        text-align: center;
+        font-size: 11px;
+        color: #64745e;
+        pointer-events: none;
+        letter-spacing: 0.07em;
+      }
+      @media (max-width: 700px) {
+        header {
+          top: 25px;
+          left: 22px;
+        }
+        h1 {
+          font-size: 29px;
+        }
+        nav {
+          top: auto;
+          bottom: 58px;
+          left: 20px;
+          right: 20px;
+          justify-content: center;
+        }
+        nav a {
+          display: none;
+        }
+        footer {
+          font-size: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="eyebrow">Willowmere · Botanical studies</div>
+      <h1>The village trees</h1>
+      <p>From the first root to the last leaf.</p>
+    </header>
+    <nav aria-label="Tree study controls">
+      <select id="specimen" aria-label="Tree variety">
+        <option value="broadleaf">Broadleaf</option>
+        <option value="amber">Amber grove</option>
+        <option value="willow">Weeping willow</option>
+      </select>
+      <button id="light" aria-pressed="false">Blue hour</button>
+      <button id="wind" aria-pressed="true">Breeze on</button>
+      <a href="/">Visit the village ↗</a>
+    </nav>
+    <footer>
+      Drag to turn &nbsp; · &nbsp; Scroll to look closer &nbsp; · &nbsp;
+      Right-drag to pan
+    </footer>
+    <script type="module">
+      import * as T from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+      import { createTrees } from "./src/trees.js";
+
+      const scene = new T.Scene();
+      scene.background = new T.Color("#dfe2ce");
+      scene.fog = new T.Fog("#dfe2ce", 18, 38);
+      const renderer = new T.WebGLRenderer({
+        antialias: true,
+        preserveDrawingBuffer: true,
+      });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = T.PCFSoftShadowMap;
+      renderer.toneMapping = T.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+      renderer.domElement.setAttribute(
+        "aria-label",
+        "Interactive 3D tree model. Drag to rotate and scroll to zoom.",
+      );
+      document.body.appendChild(renderer.domElement);
+      const camera = new T.PerspectiveCamera(33, 1, 0.1, 100);
+      camera.position.set(7.1, 5.2, 9);
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 2, 0);
+      controls.enableDamping = true;
+      controls.minDistance = 2;
+      controls.maxDistance = 18;
+      controls.maxPolarAngle = Math.PI * 0.49;
+      const hemi = new T.HemisphereLight("#eff5df", "#737f60", 1.7);
+      scene.add(hemi);
+      const sun = new T.DirectionalLight("#ffe4bf", 2.6);
+      sun.position.set(-4, 7, 5);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      Object.assign(sun.shadow.camera, {
+        left: -5,
+        right: 5,
+        top: 6,
+        bottom: -5,
+      });
+      sun.shadow.normalBias = 0.018;
+      sun.shadow.bias = -0.00015;
+      scene.add(sun);
+      const fill = new T.DirectionalLight("#d0e4f0", 0.75);
+      fill.position.set(4, 4, -5);
+      scene.add(fill);
+      const ground = new T.Mesh(
+        new T.PlaneGeometry(200, 200),
+        new T.MeshStandardMaterial({ color: "#c0c49f", roughness: 1 }),
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = 0.045;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      const specimens = new Map();
+      for (const [name, placement] of Object.entries({
+        broadleaf: [0, 0, 1],
+        amber: [-20, -14, 1],
+        willow: [8, 16, 1],
+      })) {
+        const tree = createTrees([placement]);
+        tree.group.position.set(-placement[0], 0, -placement[1]);
+        tree.group.visible = name === "broadleaf";
+        specimens.set(name, tree);
+        scene.add(tree.group);
+      }
+      document.querySelector("#specimen").onchange = (e) => {
+        for (const [name, tree] of specimens)
+          tree.group.visible = name === e.target.value;
+      };
+      let dusk = false;
+      document.querySelector("#light").onclick = (e) => {
+        dusk = !dusk;
+        e.target.setAttribute("aria-pressed", dusk);
+        e.target.textContent = dusk ? "Golden hour" : "Blue hour";
+        sun.intensity = dusk ? 0.6 : 2.6;
+        sun.color.set(dusk ? "#ffa572" : "#ffe4bf");
+        hemi.intensity = dusk ? 1 : 1.7;
+        hemi.color.set(dusk ? "#8dacef" : "#eff5df");
+        scene.background.set(dusk ? "#626e84" : "#dfe2ce");
+        scene.fog.color.copy(scene.background);
+        document.body.classList.toggle("dusk", dusk);
+        document.body.style.color = dusk ? "#eee9d7" : "#334d3e";
+        document.querySelector("nav").style.color = "#334d3e";
+      };
+      let breeze = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const windButton = document.querySelector("#wind");
+      function updateWindLabel() {
+        windButton.setAttribute("aria-pressed", breeze);
+        windButton.textContent = breeze ? "Breeze on" : "Breeze off";
+      }
+      updateWindLabel();
+      windButton.onclick = () => {
+        breeze = !breeze;
+        updateWindLabel();
+      };
+      function resize() {
+        renderer.setSize(innerWidth, innerHeight);
+        camera.aspect = innerWidth / innerHeight;
+        camera.fov = innerWidth < 700 ? 49 : 33;
+        camera.updateProjectionMatrix();
+      }
+      addEventListener("resize", resize);
+      resize();
+      let last = performance.now(),
+        elapsed = 0;
+      function draw(now) {
+        requestAnimationFrame(draw);
+        if (breeze) elapsed += Math.min((now - last) / 1000, 0.045);
+        last = now;
+        for (const tree of specimens.values()) tree.update(elapsed);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      requestAnimationFrame(draw);
+      window.__treeStudy = { scene, camera, renderer, controls, specimens };
+    </script>
+  </body>
+</html>

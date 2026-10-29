@@ -93,6 +93,7 @@ const playerVisibility = createPlayerVisibility(
   scene,
   life.player,
   world.colliders,
+  world.treeCanopies,
 );
 const STORAGE = "willowmere.save.v1";
 let state = {

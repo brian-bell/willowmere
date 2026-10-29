@@ -17,6 +17,8 @@ npm run dev
 
 Open the local address printed by Vite. Build a production web version with `npm run build`. The result is in `dist/`.
 
+During development, open `/tree-study.html` to inspect the broadleaf, amber, and weeping willow models. Drag to orbit, scroll to examine the bark and roots, and switch the lighting or pause the breeze.
+
 ## Deploy to Cloudflare
 
 The `willowmere` Worker serves the production build through Cloudflare's static asset hosting. Its configuration is in `wrangler.jsonc`.
@@ -68,6 +70,7 @@ This is a small complete playable prototype with a short welcome quest and free 
 
 - `src/main.js`: renderer, camera, movement, collision, route finding, interactions, UI and save state.
 - `src/world.js`: environment, procedural materials, foliage, collision layout and water animation.
+- `src/trees.js`: branching tree geometry, bark and leaf materials, batched foliage, wind and canopy bounds.
 - `src/life.js`: characters, gait, residents and wildlife.
 - `src/audio.js`: browser-synthesized ambiance and feedback.
 - `src/effects.js`: gathering, planting and watering feedback particles.
