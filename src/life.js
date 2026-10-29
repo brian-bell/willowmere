@@ -1,3 +1,5 @@
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+
 /** Hand-built inhabitants and wildlife. Coordinates are in the village's X/Z plane. */
 export function createLife(THREE, scene) {
   const materials = new Map();
@@ -705,6 +707,61 @@ export function createLife(THREE, scene) {
   });
   const motes = new THREE.Points(moteGeometry, moteMaterial);
   scene.add(motes);
+
+  // Bake only rigid siblings from our plain-color palette. The groups remain
+  // independent joints, so gait, ears, tails, scarf and leash anchors still move.
+  const palette = new Set(materials.values()),
+    batchMaterials = new Map();
+  function batchParts(group) {
+    const batches = new Map();
+    for (const child of [...group.children]) {
+      if (child.isGroup) batchParts(child);
+      if (!child.isMesh || !palette.has(child.material)) continue;
+      child.updateMatrix();
+      child.matrixAutoUpdate = false;
+      const key = `${child.material.roughness}/${child.castShadow}/${child.receiveShadow}`;
+      if (!batches.has(key)) batches.set(key, []);
+      batches.get(key).push(child);
+    }
+    for (const [key, meshes] of batches) {
+      if (meshes.length < 2) continue;
+      if (!batchMaterials.has(key)) {
+        const material = meshes[0].material.clone();
+        material.color.set(0xffffff);
+        material.vertexColors = true;
+        batchMaterials.set(key, material);
+      }
+      const parts = meshes.map((mesh) => {
+        const part = mesh.geometry.clone().applyMatrix4(mesh.matrix);
+        const colors = new Float32Array(part.attributes.position.count * 3);
+        const { r, g, b } = mesh.material.color;
+        for (let i = 0; i < colors.length; i += 3) {
+          colors[i] = r;
+          colors[i + 1] = g;
+          colors[i + 2] = b;
+        }
+        part.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+        return part;
+      });
+      const geometry = mergeGeometries(parts);
+      parts.forEach((part) => part.dispose());
+      const mesh = new THREE.Mesh(geometry, batchMaterials.get(key));
+      mesh.castShadow = meshes[0].castShadow;
+      mesh.receiveShadow = meshes[0].receiveShadow;
+      mesh.matrixAutoUpdate = false;
+      meshes.forEach((part) => part.removeFromParent());
+      group.add(mesh);
+    }
+  }
+  for (const root of [
+    player,
+    ...residents.map((npc) => npc.group),
+    girl.root,
+    puppy,
+    ...cats.map((cat) => cat.root),
+  ])
+    batchParts(root);
+
   let velocityX = 0,
     velocityZ = 0,
     walkPhase = 0,

@@ -123,3 +123,45 @@ test("canopy bounds keep the traveler visible behind small trees", () => {
   visibility.update(camera);
   expect(ghost.visible).toBe(false);
 });
+
+test("distant trees can be culled independently while sharing materials", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__willowmere);
+  const result = await page.evaluate(async () => {
+    const T = await import("/node_modules/three/build/three.module.js");
+    const { createTrees } = await import("/src/trees.js");
+    const trees = createTrees([
+      [0, 0, 1],
+      [40, 0, 1],
+    ]);
+    trees.group.updateMatrixWorld(true);
+    const camera = new T.OrthographicCamera(-6, 6, 6, -6, 0.1, 100);
+    camera.position.set(0, 6, 12);
+    camera.lookAt(0, 2, 0);
+    camera.updateMatrixWorld();
+    const frustum = new T.Frustum().setFromProjectionMatrix(
+      new T.Matrix4().multiplyMatrices(
+        camera.projectionMatrix,
+        camera.matrixWorldInverse,
+      ),
+    );
+    const visible = trees.group.children.filter((mesh) =>
+      frustum.intersectsObject(mesh),
+    );
+    const leaves = trees.group.children.filter(
+      (mesh) => mesh.name === "Living folded leaves",
+    );
+    return {
+      batches: trees.group.children.length,
+      visible: visible.length,
+      sharedLeaves: leaves[0].material === leaves[1].material,
+      sharedShadows:
+        leaves[0].customDepthMaterial === leaves[1].customDepthMaterial,
+    };
+  });
+  expect(result.batches).toBe(8);
+  expect(result.visible).toBe(4);
+  expect(result.sharedLeaves && result.sharedShadows).toBe(true);
+});

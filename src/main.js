@@ -10,6 +10,7 @@ import { createWorld } from "./world.js";
 import { createLife } from "./life.js";
 import { createAudio } from "./audio.js";
 import { createEffects } from "./effects.js";
+import { createFlowerFactory } from "./flowers.js";
 import { createPlayerVisibility } from "./visibility.js";
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
@@ -17,11 +18,13 @@ const canvas = $("#scene"),
   scene = new THREE.Scene();
 scene.background = new THREE.Color("#abc2a1");
 scene.fog = new THREE.FogExp2("#b5c2a0", 0.0025);
+// Update transforms once, then reuse them for water, shadows and the final view.
+scene.matrixWorldAutoUpdate = false;
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  antialias: true,
+  // The composer already renders into a multisampled target.
+  antialias: false,
   powerPreference: "high-performance",
-  preserveDrawingBuffer: true,
 });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 renderer.shadowMap.enabled = true;
@@ -164,59 +167,7 @@ const gatheringSpots = [
     [-10, -1],
   ],
   flowerGroups = new Map();
-const petalMat = new THREE.MeshStandardMaterial({
-    color: "#fff1b3",
-    roughness: 0.8,
-  }),
-  centerMat = new THREE.MeshStandardMaterial({ color: "#d99a3e" }),
-  stemMat = new THREE.MeshStandardMaterial({ color: "#56733e" });
-function makeFlower(x, z, planted = false) {
-  const group = new THREE.Group();
-  group.position.set(x, 0, z);
-  for (let i = 0; i < 5; i++) {
-    const a = i * 2.4,
-      r = 0.14 + i * 0.035,
-      fx = Math.cos(a) * r,
-      fz = Math.sin(a) * r,
-      h = 0.32 + (i % 3) * 0.11;
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.017, 0.02, h, 4),
-      stemMat,
-    );
-    stem.position.set(fx, h / 2, fz);
-    group.add(stem);
-    const c = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 4), centerMat);
-    c.position.set(fx, h, fz);
-    group.add(c);
-    for (let p = 0; p < 5; p++) {
-      const b = (p * Math.PI * 2) / 5;
-      const petal = new THREE.Mesh(
-        new THREE.SphereGeometry(0.065, 6, 4),
-        petalMat,
-      );
-      petal.scale.set(1, 0.35, 1.5);
-      petal.position.set(fx + Math.cos(b) * 0.07, h, fz + Math.sin(b) * 0.07);
-      petal.rotation.y = -b;
-      group.add(petal);
-    }
-  }
-  if (!planted) {
-    const halo = new THREE.Mesh(
-      new THREE.RingGeometry(0.37, 0.4, 32),
-      new THREE.MeshBasicMaterial({
-        color: "#f6e5ae",
-        transparent: true,
-        opacity: 0.6,
-        side: THREE.DoubleSide,
-      }),
-    );
-    halo.rotation.x = -Math.PI / 2;
-    halo.position.y = 0.025;
-    group.add(halo);
-  }
-  scene.add(group);
-  return group;
-}
+const makeFlower = createFlowerFactory(scene);
 gatheringSpots.forEach(([x, z], i) => {
   if (!state.gathered.includes(i)) flowerGroups.set(i, makeFlower(x, z));
 });
@@ -837,7 +788,10 @@ function resize() {
   interior?.resize();
 }
 window.addEventListener("resize", resize);
-resize();
+if (innerWidth < 760) {
+  $("#quality").value = "balanced";
+  $("#quality").dispatchEvent(new Event("change"));
+} else resize();
 function scanNearby() {
   if (dialogue || photo || modalOpen()) {
     $("#interaction").hidden = true;
@@ -901,7 +855,11 @@ const screenRight = new THREE.Vector2(
     cameraOffset.z,
     -cameraOffset.x,
   ).normalize(),
-  screenDown = new THREE.Vector2(cameraOffset.x, cameraOffset.z).normalize();
+  screenDown = new THREE.Vector2(cameraOffset.x, cameraOffset.z).normalize(),
+  input = new THREE.Vector2(),
+  duskHemi = new THREE.Color("#8dacef"),
+  duskSun = new THREE.Color("#ffa572"),
+  duskSky = new THREE.Color("#566782");
 function animate(now) {
   requestAnimationFrame(animate);
   const dt = Math.min((now - last) / 1000, 0.045);
@@ -914,7 +872,7 @@ function animate(now) {
     return;
   }
   const p = life.player.position;
-  let input = new THREE.Vector2();
+  input.set(0, 0);
   if (!dialogue && !modalOpen()) {
     const horiz =
         (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
@@ -982,9 +940,8 @@ function animate(now) {
   }
   plantedGroups.forEach((g, i) => {
     const targetScale = state.plants[i].watered ? 1.35 : 0.7;
-    g.scale.lerp(
-      new THREE.Vector3(targetScale, targetScale, targetScale),
-      1 - Math.exp(-dt * 1.5),
+    g.scale.setScalar(
+      THREE.MathUtils.lerp(g.scale.x, targetScale, 1 - Math.exp(-dt * 1.5)),
     );
   });
   duskMix = THREE.MathUtils.lerp(
@@ -994,9 +951,9 @@ function animate(now) {
   );
   sun.intensity = THREE.MathUtils.lerp(2.4, 0.6, duskMix);
   hemi.intensity = THREE.MathUtils.lerp(1.5, 1.0, duskMix);
-  hemi.color.set("#eaf2df").lerp(new THREE.Color("#8dacef"), duskMix);
-  sun.color.set("#fff0d6").lerp(new THREE.Color("#ffa572"), duskMix);
-  scene.background.set("#abc2a1").lerp(new THREE.Color("#566782"), duskMix);
+  hemi.color.set("#eaf2df").lerp(duskHemi, duskMix);
+  sun.color.set("#fff0d6").lerp(duskSun, duskMix);
+  scene.background.set("#abc2a1").lerp(duskSky, duskMix);
   scene.fog.color.copy(scene.background);
   for (const light of world.lanterns || [])
     light.intensity = THREE.MathUtils.lerp(0.1, 18.0, duskMix);
@@ -1006,15 +963,12 @@ function animate(now) {
   for (const material of glowMaterials)
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
   playerVisibility.update(camera, !photo);
+  scene.updateMatrixWorld();
   renderer.info.reset();
   world.water.render(renderer, camera, { dt, dusk: duskMix, sun });
   composer.render();
   if (frame === 3) {
     $("#loading").classList.add("loaded");
-    if (innerWidth < 760) {
-      $("#quality").value = "balanced";
-      $("#quality").dispatchEvent(new Event("change"));
-    }
   }
 }
 updateUI();
@@ -1028,6 +982,8 @@ window.__willowmere = {
     objects: scene.children.length,
     drawCalls: renderer.info.render.calls,
     triangles: renderer.info.render.triangles,
+    geometries: renderer.info.memory.geometries,
+    textures: renderer.info.memory.textures,
     colliders: colliders.length,
     flowers: flowerGroups.size,
     position: life.player.position.toArray(),

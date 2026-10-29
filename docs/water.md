@@ -25,13 +25,15 @@ The river has a recessed bed, sloping banks, submerged pebbles, and partially su
 
 ## Quality and lifecycle
 
-| Setting     | River grid | Each basin grid | Reflection size | Refraction scale | Reflection interval |
-| ----------- | ---------- | --------------- | --------------- | ---------------- | ------------------- |
-| High        | 64 × 640   | 96 × 96         | 768²            | 100%             | at least 1/24 s     |
-| Balanced    | 48 × 480   | 64 × 64         | 512²            | 75%              | at least 1/15 s     |
-| Performance | 24 × 240   | 32 × 32         | 256²            | 50%              | at least 1/8 s      |
+| Setting     | River grid | Each basin grid | Reflection cap | Refraction scale | Reflection interval |
+| ----------- | ---------- | --------------- | -------------- | ---------------- | ------------------- |
+| High        | 64 × 640   | 96 × 96         | 768²           | 100%             | at least 1/24 s     |
+| Balanced    | 48 × 480   | 64 × 64         | 512²           | 75%              | at least 1/15 s     |
+| Performance | 24 × 240   | 32 × 32         | 256²           | 50%              | at least 1/8 s      |
 
-After initial captures, at most one body's reflection updates per frame; visible bodies take turns. Refraction updates once per frame. Bodies outside the camera frustum suspend simulation, and stale offscreen impulses are discarded. The frame restores the caller's render target, viewport, scissor, clipping, clear color, tone mapping, shadow-update policy, and XR state. Reflection and refraction captures reuse existing shadows.
+Orthographic village captures crop the mirrored view to each pool’s projected bounds, including a guard band for waves and distortion. Targets follow that footprint in 64-pixel increments up to the reflection cap; the projected texture coordinates and distortion scale follow the crop. Perspective study captures use the full mirrored view.
+
+After initial captures, at most one body's reflection updates per frame; visible bodies take turns. Refraction updates once per frame. Bodies outside the camera frustum suspend simulation, and stale offscreen impulses are discarded. The frame restores the caller's render target, viewport, scissor, clipping, clear color, tone mapping, shadow-update policy, scene-transform update policy, and XR state. Reflection and refraction captures reuse existing shadows.
 
 Turning off decorative motion freezes fluid time and jet motion while allowing camera and lighting changes. Quality changes recreate bounded simulation resources and reset ripples. The bakery runs in its own scene, suspending the outdoor water update. GPUs without `EXT_color_buffer_float` retain the optical and analytical wave model using byte color captures, with numerical ripple simulation disabled. `dispose()` releases all water-owned targets, textures, geometries, and materials.
 
@@ -41,7 +43,7 @@ The new river dressing uses a separate random sequence and preserves the existin
 
 Call `water.addBody` during world creation with a unique `id`, centre (`x`, `y`, `z`), `depth`, and either `size: [width, length]` or `radius`. Optional settings include a central `hole`, obstacle circles in local coordinates, `flow`, `amplitude`, RGB absorption coefficients, scattering color, and roughness. Build the bed below the given surface height and enclose the edges. Register an impact using `addSource`, or use `addJet` with its start and landing point. Call `disturb(id, worldX, worldZ, strength, radius)` for a discrete interaction.
 
-The world already calls `water.update(dt)`. Immediately before the main scene render, call `water.render(renderer, camera, { dt, dusk, sun })`. Surfaces are tagged as dynamic to exclude them from world static-geometry batching.
+The world already calls `water.update(dt)`. Immediately before the main scene render, call `water.render(renderer, camera, { dt, dusk, sun })`. If the caller disables `scene.matrixWorldAutoUpdate`, it must update scene transforms before calling `water.render`; otherwise water updates them before its captures. Surfaces are tagged as dynamic to exclude them from world static-geometry batching.
 
 ## Verification
 

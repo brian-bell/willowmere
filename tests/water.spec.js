@@ -89,6 +89,12 @@ test("every village pool shares the model across quality, lighting and paused mo
     "fountain-upper",
   ]);
   expect(initial.simulation).toBe("GPU RGBA16F");
+  for (const body of initial.bodies.filter((b) =>
+    b.id.startsWith("fountain"),
+  )) {
+    expect(Math.max(...body.reflectionSize)).toBeLessThan(512);
+    expect(Math.min(...body.reflectionSize)).toBeGreaterThanOrEqual(64);
+  }
   await page.locator("#motion").uncheck();
   const frozen = await page.evaluate(() => window.__willowmere.getWater());
   await page.waitForTimeout(350);

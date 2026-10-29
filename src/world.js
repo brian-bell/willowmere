@@ -937,7 +937,7 @@ export function createWorld(T, scene) {
     [-10.5, 11.7],
   ])
     lamp(x, z);
-  // Branch-built trees share four batches for bark, details, leaves and litter.
+  // Each tree keeps four material batches so offscreen specimens can be culled.
   const treePlacements = [
     [-20, -14, 1.3],
     [-16, -13, 1.2],

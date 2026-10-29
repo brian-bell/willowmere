@@ -120,8 +120,8 @@ function leafTexture() {
   return texture;
 }
 
-// All specimens share materials and geometry batches; increasing botanical
-// detail does not add a draw call for each leaf, twig, or root.
+// Specimens share materials, but retain separate bounds so offscreen trees
+// can be culled in the village view and its water reflections.
 export function createTrees(placements) {
   const group = new T.Group();
   group.name = "Willowmere trees";
@@ -130,7 +130,8 @@ export function createTrees(placements) {
     detailParts = [],
     leafRecords = [],
     litterRecords = [];
-  const canopyBounds = [];
+  const canopyBounds = [],
+    specimens = [];
   const dummy = new T.Object3D();
   const bark = barkTexture();
   const woodMaterial = new T.MeshStandardMaterial({
@@ -213,6 +214,12 @@ export function createTrees(placements) {
   const mushroomCap = new T.SphereGeometry(1, 10, 6, 0, TAU, 0, Math.PI * 0.57);
 
   for (const [x, z, scale = 1] of placements) {
+    const start = [
+      woodParts.length,
+      detailParts.length,
+      leafRecords.length,
+      litterRecords.length,
+    ];
     const seed =
       (Math.round((x + 32) * 7381) ^ Math.round((z + 32) * 19391)) >>> 0;
     const rand = random(seed),
@@ -717,6 +724,12 @@ export function createTrees(placements) {
         );
       }
     }
+    specimens.push({
+      wood: woodParts.slice(start[0]),
+      details: detailParts.slice(start[1]),
+      leaves: leafRecords.slice(start[2]),
+      litter: litterRecords.slice(start[3]),
+    });
   }
 
   function batch(parts, material, name) {
@@ -726,16 +739,9 @@ export function createTrees(placements) {
     const mesh = new T.Mesh(geometry, material);
     mesh.name = name;
     mesh.castShadow = mesh.receiveShadow = true;
+    mesh.matrixAutoUpdate = false;
     group.add(mesh);
   }
-  if (woodParts.length)
-    batch(woodParts, woodMaterial, "Fluted bark, roots and branching twigs");
-  if (detailParts.length)
-    batch(
-      detailParts,
-      detailMaterial,
-      "Tree hollows, moss and woodland details",
-    );
   const blade = leafGeometry();
   function instances(records, material, name, wind = false) {
     if (!records.length) return;
@@ -755,12 +761,31 @@ export function createTrees(placements) {
     if (wind) mesh.customDepthMaterial = depthMaterial;
     mesh.computeBoundingSphere();
     mesh.boundingSphere.radius += 0.12;
+    mesh.matrixAutoUpdate = false;
     group.add(mesh);
     return mesh;
   }
-  instances(leafRecords, leafMaterial, "Living folded leaves", true);
   const litterMaterial = leafMaterial.clone();
-  instances(litterRecords, litterMaterial, "Leaves settled among the roots");
+  for (const specimen of specimens) {
+    if (specimen.wood.length)
+      batch(
+        specimen.wood,
+        woodMaterial,
+        "Fluted bark, roots and branching twigs",
+      );
+    if (specimen.details.length)
+      batch(
+        specimen.details,
+        detailMaterial,
+        "Tree hollows, moss and woodland details",
+      );
+    instances(specimen.leaves, leafMaterial, "Living folded leaves", true);
+    instances(
+      specimen.litter,
+      litterMaterial,
+      "Leaves settled among the roots",
+    );
+  }
   for (const geometry of [
     ringGeometry,
     scarGeometry,

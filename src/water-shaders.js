@@ -121,7 +121,7 @@ export const waterFragment = /* glsl */ `
 #include <fog_pars_fragment>
 ${waveFunctions}
 uniform sampler2D uReflection, uScene, uDepth;
-uniform vec2 uTexel, uViewport;
+uniform vec2 uTexel, uViewport, uReflectionScale;
 uniform vec3 uAbsorption, uScatter, uSunDirection, uSunColor, uSkyColor, uViewDirection;
 uniform mat4 uInvProjection, uCameraWorld;
 uniform float uReflectionReady, uDusk, uIsOrthographic, uRoughness;
@@ -182,7 +182,7 @@ void main() {
   bed *= 1.0 + focus * 0.34 * exp(-thickness * 0.7) * (1.0 - uDusk * 0.85) * shadow;
   vec3 underwater = bed * transmission + uScatter * (1.0 - transmission) * (0.55 + shadow * 0.45);
   vec2 reflectUV = vReflection.xy / vReflection.w;
-  reflectUV += slope * 0.018;
+  reflectUV += slope * 0.018 * uReflectionScale;
   vec3 reflected = texture2D(uReflection, clamp(reflectUV, 0.002, 0.998)).rgb;
   reflected = mix(uSkyColor, reflected, uReflectionReady);
   float fresnel = 0.02037 + 0.97963 * pow(1.0 - NoV, 5.0); // Air/water IOR 1.333.

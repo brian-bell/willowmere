@@ -49,6 +49,7 @@ export function probeWater() {
   renderer.clippingPlanes = clipping;
   system.render(renderer, camera, { dt: 1 / 60 });
   const restored =
+    scene.matrixWorldAutoUpdate === true &&
     renderer.getRenderTarget() === target &&
     renderer.clippingPlanes === clipping &&
     renderer.getScissorTest() &&
@@ -57,6 +58,9 @@ export function probeWater() {
     renderer.getScissor(new T.Vector4()).toArray().join() === "7,8,70,60" &&
     Math.abs(renderer.getClearAlpha() - 0.37) < 0.0001 &&
     renderer.getClearColor(new T.Color()).getHexString() === "ab2345";
+  scene.matrixWorldAutoUpdate = false;
+  system.render(renderer, camera, { dt: 1 / 60 });
+  const manualTransformsRestored = scene.matrixWorldAutoUpdate === false;
   system.dispose();
   system.dispose();
   target.dispose();
@@ -69,6 +73,6 @@ export function probeWater() {
     impact,
     propagated,
     settled,
-    restored,
+    restored: restored && manualTransformsRestored,
   };
 }

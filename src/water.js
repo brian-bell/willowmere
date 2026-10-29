@@ -136,9 +136,12 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
   const savedViewport = new T.Vector4(),
     savedScissor = new T.Vector4();
   const savedClear = new T.Color(),
-    viewDirection = new T.Vector3();
+    viewDirection = new T.Vector3(),
+    drawingBufferSize = new T.Vector2();
   const reflectionLook = new T.Vector3(),
-    cameraDirection = new T.Vector3();
+    cameraDirection = new T.Vector3(),
+    reflectionCorner = new T.Vector3(),
+    reflectionCrop = new T.Matrix4();
   let time = 0,
     pendingDt = 0,
     renderFrame = 0,
@@ -233,6 +236,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
         uState: { value: zero },
         uReflection: { value: null },
         uReflectionMatrix: { value: new T.Matrix4() },
+        uReflectionScale: { value: new T.Vector2(1, 1) },
         uScene: { value: null },
         uDepth: { value: null },
         uInvProjection: { value: new T.Matrix4() },
@@ -328,8 +332,8 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       Math.sqrt((2 * arc) / GRAVITY);
     const velocityY =
       (end[1] - start[1] + 0.5 * GRAVITY * duration ** 2) / duration;
-    const point = (f) => {
-      const p = origin.clone().lerp(landing, f);
+    const point = (f, p = new T.Vector3()) => {
+      p.copy(origin).lerp(landing, f);
       p.y =
         origin.y +
         velocityY * f * duration -
@@ -418,7 +422,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
         for (let i = 0; i < jet.drops.count; i++) {
           const f =
             ((time + jet.phase) / jet.duration + i / jet.drops.count) % 1;
-          jet.dummy.position.copy(jet.point(f));
+          jet.point(f, jet.dummy.position);
           jet.dummy.scale.set(0.75, 1.2 + f * 1.4, 0.75);
           jet.dummy.updateMatrix();
           jet.drops.setMatrixAt(i, jet.dummy.matrix);
@@ -479,6 +483,73 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     mirror.up.set(0, -1, 0);
     mirror.lookAt(reflectionLook);
     mirror.updateMatrixWorld(true);
+    const reflectionScale = body.mesh.material.uniforms.uReflectionScale.value;
+    reflectionScale.set(1, 1);
+    if (camera.isOrthographicCamera) {
+      // Only the reflected footprint of this pool is sampled by its surface.
+      // Crop conservatively around the displaced geometry, keeping the crop in
+      // the texture matrix so cached reflections remain aligned as the view moves.
+      const bounds = body.mesh.geometry.boundingBox;
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      for (const x of [bounds.min.x, bounds.max.x])
+        for (const y of [bounds.min.y, bounds.max.y])
+          for (const z of [bounds.min.z, bounds.max.z]) {
+            reflectionCorner
+              .set(x, y, z)
+              .applyMatrix4(body.mesh.matrixWorld)
+              .project(mirror);
+            minX = Math.min(minX, reflectionCorner.x);
+            maxX = Math.max(maxX, reflectionCorner.x);
+            minY = Math.min(minY, reflectionCorner.y);
+            maxY = Math.max(maxY, reflectionCorner.y);
+          }
+      // Keep a guard band for normal distortion at the shoreline.
+      minX = Math.max(-1, minX - 0.05);
+      maxX = Math.min(1, maxX + 0.05);
+      minY = Math.max(-1, minY - 0.05);
+      maxY = Math.min(1, maxY + 0.05);
+      const width = maxX - minX,
+        height = maxY - minY;
+      if (width > 0 && height > 0) {
+        reflectionCrop.set(
+          2 / width,
+          0,
+          0,
+          -(maxX + minX) / width,
+          0,
+          2 / height,
+          0,
+          -(maxY + minY) / height,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+        );
+        mirror.projectionMatrix.premultiply(reflectionCrop);
+        mirror.projectionMatrixInverse.copy(mirror.projectionMatrix).invert();
+        reflectionScale.set(2 / width, 2 / height);
+        renderer.getDrawingBufferSize(drawingBufferSize);
+        // Quantize allocation sizes to avoid resizing targets for every zoom step.
+        const pixels = (extent, size) =>
+          Math.min(
+            settings.reflection,
+            Math.max(64, Math.ceil((extent * size) / 2 / 64) * 64),
+          );
+        body.reflection.setSize(
+          pixels(width, drawingBufferSize.x),
+          pixels(height, drawingBufferSize.y),
+        );
+      }
+    } else {
+      body.reflection.setSize(settings.reflection, settings.reflection);
+    }
     const matrix = body.mesh.material.uniforms.uReflectionMatrix.value;
     matrix.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
     matrix
@@ -509,7 +580,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     }
     wallTime += Math.max(0, dt);
     camera.updateMatrixWorld();
-    scene.updateMatrixWorld();
+    if (scene.matrixWorldAutoUpdate) scene.updateMatrixWorld();
     projectionView.multiplyMatrices(
       camera.projectionMatrix,
       camera.matrixWorldInverse,
@@ -529,6 +600,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       previousToneMapping = renderer.toneMapping;
     const previousClipping = renderer.clippingPlanes,
       previousShadow = renderer.shadowMap.autoUpdate;
+    const previousMatrixUpdate = scene.matrixWorldAutoUpdate;
     const previousXr = renderer.xr.enabled,
       previousScissorTest = renderer.getScissorTest();
     const previousClearAlpha = renderer.getClearAlpha();
@@ -538,6 +610,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     renderer.getScissor(savedScissor);
     try {
       renderer.xr.enabled = false;
+      scene.matrixWorldAutoUpdate = false;
       renderer.shadowMap.autoUpdate = false;
       renderer.toneMapping = T.NoToneMapping;
       renderer.setScissorTest(false);
@@ -548,7 +621,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       pendingDt = 0;
       for (const body of bodies) body.mesh.visible = false;
       renderer.setClearColor(savedClear, previousClearAlpha);
-      const size = renderer.getDrawingBufferSize(new T.Vector2());
+      const size = renderer.getDrawingBufferSize(drawingBufferSize);
       const width = Math.max(1, Math.round(size.x * settings.refraction));
       const height = Math.max(1, Math.round(size.y * settings.refraction));
       if (sceneTarget.width !== width || sceneTarget.height !== height)
@@ -591,6 +664,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       renderer.clippingPlanes = previousClipping;
       renderer.toneMapping = previousToneMapping;
       renderer.shadowMap.autoUpdate = previousShadow;
+      scene.matrixWorldAutoUpdate = previousMatrixUpdate;
       renderer.xr.enabled = previousXr;
       renderer.setClearColor(savedClear, previousClearAlpha);
       renderer.setRenderTarget(previousTarget);
@@ -622,6 +696,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
         resolution: [...b.resolution],
         maxStep: b.maxStep,
         reflectionReady: b.reflectionReady,
+        reflectionSize: [b.reflection.width, b.reflection.height],
         impulses: b.impulses.length,
         sources: b.sources.length,
         vertices: b.mesh.geometry.attributes.position.count,

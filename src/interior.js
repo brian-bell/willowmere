@@ -10,6 +10,18 @@ import { createInteriorWalker } from "./interior-movement.js";
 import "./interior.css";
 
 class InteriorAO extends SSAOPass {
+  render(renderer, ...args) {
+    // RenderPass already updated the shadows for this frame. The normal pass
+    // needs only geometry, so reuse those same shadow maps.
+    const autoUpdate = renderer.shadowMap.autoUpdate;
+    renderer.shadowMap.autoUpdate = false;
+    try {
+      super.render(renderer, ...args);
+    } finally {
+      renderer.shadowMap.autoUpdate = autoUpdate;
+    }
+  }
+
   _overrideVisibility() {
     super._overrideVisibility();
     this.scene.traverse((object) => {
@@ -23,6 +35,7 @@ class InteriorAO extends SSAOPass {
 
 export function createInterior({ renderer, onExit, onStep, onInteract }) {
   const bakery = createBakery();
+  bakery.scene.matrixWorldAutoUpdate = false;
   const walker = createInteriorWalker(bakery.layout);
   const canvas = renderer.domElement;
   const camera = new T.PerspectiveCamera(
@@ -493,6 +506,7 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
       }
       scanNearby();
       bakery.update(time, motion);
+      bakery.scene.updateMatrixWorld();
       renderer.toneMappingExposure = 1.05;
       renderer.info.reset();
       composer.render();

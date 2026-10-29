@@ -92,6 +92,7 @@ This is a small playable prototype with a short welcome quest, free village expl
 - `src/life.js`: characters, gait, residents and wildlife.
 - `src/audio.js`: browser-synthesized ambiance and feedback.
 - `src/effects.js`: gathering, planting and watering feedback particles.
+- `src/flowers.js`: shared, batched wildflower and garden geometry.
 - `src/visibility.js`: player silhouettes behind foreground scenery.
 - `src/icons.js` / `src/style.css`: interface art and layout.
 
@@ -102,3 +103,5 @@ All game art and audio are constructed in code. Three.js and other dependencies 
 Run `npm test` to check the complete welcome quest, planting and watering, journal, photo mode, saved progress, and bridge traversal. The test uses installed Chrome on macOS; elsewhere run `npx playwright install chromium`, or set `CHROME_PATH` to your browser executable.
 
 The interior tests also cover walking to the bakery door, traversing the room, furniture collision, interacting with Crumb and Cinnamon, leaving through the entrance, mouse capture, pause and photo modes, preserved village state, repeat visits, and touch controls with reduced motion.
+
+For repeatable frame-time and rendering-work measurements, run `npm run benchmark` with the local dev server running. See [Rendering performance](docs/performance.md) for the method and regression budgets.
