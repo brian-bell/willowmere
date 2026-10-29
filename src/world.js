@@ -1,5 +1,6 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createTrees } from "./trees.js";
+import { createReeds } from "./reeds.js";
 import { createWaterSystem, sampleWaterField } from "./water.js";
 export function createWorld(T, scene) {
   const initialChildren = new Set(scene.children);
@@ -1058,8 +1059,7 @@ export function createWorld(T, scene) {
   scene.add(blades, blossoms);
 
   // Reeds and broad lily leaves interrupt the water edge with natural silhouettes.
-  const reedMat = mat("#788b55"),
-    cattailMat = mat("#89704f"),
+  const reedPlacements = [],
     lilyMat = mat("#71926a");
   for (let i = 0; i < 35; i++) {
     const z = range(-18, 18);
@@ -1069,10 +1069,16 @@ export function createWorld(T, scene) {
       const xx = x + range(-0.17, 0.17),
         zz = z + range(-0.25, 0.25),
         h = range(0.45, 0.85);
-      beam(reedMat, [xx, 0.08, zz], [xx + 0.08, h, zz], 0.025);
-      cyl(cattailMat, xx + 0.08, h + 0.07, zz, 0.045, 0.18);
+      // Settle into the shallows on the waterward side of the bank stones.
+      reedPlacements.push({ x: xx + (x < 12 ? 0.22 : -0.22), z: zz, height: h });
     }
   }
+  const reeds = createReeds(reedPlacements, (x, z) => {
+    const [depth] = sampleWaterField(riverConfig, x - riverConfig.x, z);
+    return riverConfig.y - depth - 0.02;
+  });
+  scene.add(reeds.group);
+  animated.push((dt, time) => reeds.update(time));
   for (const [x, z] of [
     [11.1, 8],
     [13, -11],
