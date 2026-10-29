@@ -2,7 +2,7 @@
 
 The village keeps its detailed geometry and animations while reducing the work submitted for each view.
 
-- Character parts with the same roughness and shadow settings are baked together within each rigid joint. Colors become vertex colors. The 47,660 triangles remain; the inhabitants and wildlife use 117 meshes instead of 359. Arms, legs, ears, tails, scarf, and leash anchors retain their original transforms.
+- Character parts with the same roughness and shadow settings are baked together within each rigid joint. Colors become vertex colors. The detailed inhabitants and wildlife use 151 meshes and about 64,000 triangles. Arms, legs, ears, paws, tails, scarf, and leash anchors retain their original transforms.
 - Wildflower and planted bouquets share three baked geometries and materials. Each bouquet needs three draws instead of 35, plus a shared halo for gatherable flowers. Planting does not allocate another set of petal geometry.
 - Each tree retains separate bark, detail, leaf, and litter bounds. Materials, leaf geometry, textures, and wind uniforms are shared. Offscreen trees can be rejected independently in the main camera, shadows, and water reflections.
 - Orthographic water reflections crop the mirrored camera to the pool's projected bounds, with a margin for displaced waves and normal distortion. Capture textures follow the visible footprint, rounded to 64-pixel increments and capped by the chosen quality. The reflection matrix and distortion scale preserve texture projection. Perspective study views retain the full mirrored view.

@@ -1,6 +1,7 @@
 import * as T from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { createCat } from "./cats.js";
 
 // An authored, deterministic set: all materials and objects are made locally.
 // Static props are merged by material after dressing; moving details stay separate.
@@ -1026,41 +1027,22 @@ export function createBakery() {
   const bench = group(-6.6, 0, 0.25);
   box(teal, 0, 0.5, 0, 1.15, 0.75, 2.0, 0.06, bench);
   box(mat("#b78257"), 0, 0.94, 0, 1.2, 0.2, 2.02, 0.1, bench);
-  const cat = group(-6.5, 1.1, 0.45, 0.3);
-  orb(mat("#b97e48"), 0, 0.13, 0, 0.38, 0.23, 0.5, cat);
-  orb(mat("#cf9964"), 0.1, 0.22, 0.32, 0.24, 0.2, 0.22, cat);
-  for (const side of [-1, 1]) {
-    const ear = mesh(
-      new T.ConeGeometry(0.105, 0.19, 4),
-      mat("#b97e48"),
-      0.1 + side * 0.14,
-      0.42,
-      0.29,
-      cat,
-    );
-    ear.rotation.z = -side * 0.2;
-    tube(
-      dark,
-      [
-        [0.1 + side * 0.06, 0.25, 0.515],
-        [0.1 + side * 0.11, 0.23, 0.522],
-        [0.1 + side * 0.15, 0.25, 0.505],
-      ],
-      0.012,
-      cat,
-    );
-  }
-  tube(
-    mat("#955c35"),
-    [
-      [-0.28, 0.15, -0.3],
-      [-0.45, 0.12, 0],
-      [-0.3, 0.09, 0.48],
-      [0.18, 0.08, 0.5],
-    ],
-    0.09,
-    cat,
+  const cinnamon = createCat(
+    T,
+    {
+      fur: "#bf824d",
+      stripe: "#925b37",
+      cream: "#f2d3a3",
+      pink: "#bb827b",
+    },
+    mat,
+    true,
   );
+  const cat = cinnamon.root;
+  cat.name = "Cinnamon the sleeping cat";
+  cat.position.set(-6.5, 1.01, 0.45);
+  cat.rotation.y = 0.3;
+  root.add(cat);
   // The baker's work island, with pegged legs, lower shelf and draped ticking cloth.
   const work = group(-0.6, 0, 0.1, -0.06);
   for (const x of [-1.6, 1.6])
@@ -1835,7 +1817,11 @@ export function createBakery() {
       steam.rotation.y = t * 0.25;
       steamMat.opacity = 0.12 + Math.sin(t * 0.8) * 0.04;
       fireLight.intensity = 18 + Math.sin(t * 4) * 1.8 + Math.sin(t * 7) * 1.2;
-      cat.scale.y = 1 + Math.sin(t * 1.7) * 0.025;
+      cinnamon.torso.scale.y = 1 + Math.sin(t * 1.7) * 0.035;
+      cinnamon.head.rotation.z = -0.16 + Math.sin(t * 1.7 + 0.4) * 0.012;
+      cinnamon.tailTip.rotation.y = Math.sin(t * 0.85) * 0.09;
+      cinnamon.ears[0].rotation.x = Math.sin(t * 1.3) > 0.992 ? -0.18 : 0;
+      cinnamon.ears[1].rotation.x = Math.sin(t * 1.1 + 2) > 0.994 ? 0.13 : 0;
       mobile.rotation.y = Math.sin(t * 0.35) * 0.16;
       dust.rotation.y = Math.sin(t * 0.04) * 0.08;
       dust.position.y = Math.sin(t * 0.3) * 0.1;

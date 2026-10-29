@@ -1,4 +1,5 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { createCat } from "./cats.js";
 
 /** Hand-built inhabitants and wildlife. Coordinates are in the village's X/Z plane. */
 export function createLife(THREE, scene) {
@@ -634,49 +635,47 @@ export function createLife(THREE, scene) {
     sphere(root, 0x5c5140, 0, 0.12, 0, 0.021, 0.145, 0.024);
     butterflies.push({ root, wings, x, z, seed: i * 1.91 });
   });
-  const cats = [];
-  [
-    [-2, 6, 0xbf9867],
-    [6, -2, 0x757c7a],
-  ].forEach(([x, z, color], i) => {
-    const root = new THREE.Group(),
-      body = new THREE.Group();
-    root.add(body);
-    root.position.set(x, 0, z);
-    root.scale.setScalar(1.15);
-    shadow(root, 0.4, 0.19);
-    scene.add(root);
-    sphere(body, color, 0, 0.28, 0, 0.15, 0.17, 0.29);
-    sphere(body, color, 0, 0.41, 0.26, 0.143, 0.14, 0.12);
-    for (const s of [-1, 1]) {
-      const ear = new THREE.Mesh(
-        new THREE.ConeGeometry(0.073, 0.15, 3),
-        mat(color),
-      );
-      ear.position.set(s * 0.095, 0.535, 0.255);
-      ear.rotation.z = s * -0.2;
-      body.add(ear);
-      sphere(body, 0xcab584, s * 0.066, 0.432, 0.366, 0.027, 0.017, 0.01);
-      sphere(body, 0x3d4637, s * 0.066, 0.432, 0.375, 0.006, 0.014, 0.006);
-      for (const zz of [-0.17, 0.17])
-        sphere(body, color, s * 0.1, 0.125, zz, 0.057, 0.13, 0.067);
-    }
-    sphere(body, 0xb78e87, 0, 0.386, 0.379, 0.019, 0.014, 0.009);
-    const tail = new THREE.Group();
-    tail.position.set(0, 0.33, -0.24);
-    body.add(tail);
-    const tailCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0.04, 0.17, -0.13),
-      new THREE.Vector3(0.08, 0.36, -0.13),
-      new THREE.Vector3(0.11, 0.42, -0.06),
-    ]);
-    const tailMesh = new THREE.Mesh(
-      new THREE.TubeGeometry(tailCurve, 10, 0.034, 6, false),
-      mat(color),
+  const cats = [
+    {
+      name: "Bracken the tabby cat",
+      center: [-2, 6],
+      colors: { fur: 0xbf9360, stripe: 0x8b603c, cream: 0xf1d7ac, eye: 0x8caa62 },
+    },
+    {
+      name: "Misty the gray cat",
+      center: [6, -2],
+      colors: { fur: 0x818b88, stripe: 0x4d666b, cream: 0xdde2d4, eye: 0xc6aa72 },
+    },
+  ].map(({ name, center, colors }, i) => {
+    const cat = createCat(THREE, colors, mat);
+    cat.root.name = name;
+    cat.root.scale.setScalar(1.15);
+    shadow(cat.root, 0.44, 0.25);
+    scene.add(cat.root);
+    const [x, z] = center;
+    const route = new THREE.CatmullRomCurve3(
+      [
+        [-1.45, 0],
+        [-1, -0.48],
+        [0, -0.65],
+        [1.3, -0.42],
+        [1.5, 0.1],
+        [0.8, 0.58],
+        [-0.45, 0.65],
+        [-1.3, 0.4],
+      ].map(([dx, dz]) => new THREE.Vector3(x + dx, 0, z + dz)),
+      true,
+      "centripetal",
     );
-    tail.add(tailMesh);
-    cats.push({ root, body, tail, x, z, seed: i * 2.4 });
+    return {
+      ...cat,
+      route,
+      routeLength: route.getLength(),
+      position: new THREE.Vector3(),
+      tangent: new THREE.Vector3(),
+      offset: i * 0.43,
+      seed: i * 2.4,
+    };
   });
   const birds = [];
   for (let i = 0; i < 4; i++) {
@@ -830,12 +829,61 @@ export function createLife(THREE, scene) {
       wings[0].rotation.y = Math.sin(time * 14 + seed) * 1.05;
       wings[1].rotation.y = -wings[0].rotation.y;
     });
-    cats.forEach(({ root, body, tail, x, z, seed }) => {
-      const t = time * 0.13 + seed;
-      root.position.set(x + Math.cos(t) * 1.5, 0, z + Math.sin(t) * 0.6);
-      root.rotation.y = Math.atan2(-Math.sin(t) * 1.5, Math.cos(t) * 0.6);
-      body.position.y = Math.sin(time * 6 + seed) * 0.009;
-      tail.rotation.z = Math.sin(time * 1.6 + seed) * 0.13;
+    cats.forEach((cat) => {
+      const { root, body, torso, head, legs, ears, eyes, tail, tailTip } = cat;
+      const cycle = 26;
+      const walkEnd = 19;
+      const ramp = 1.4;
+      const local = (time + cat.seed * 3) % cycle;
+      const movingTime = Math.min(local, walkEnd);
+      const distance =
+        movingTime < ramp
+          ? (movingTime * movingTime) / (2 * ramp)
+          : movingTime > walkEnd - ramp
+            ? walkEnd - ramp - (walkEnd - movingTime) ** 2 / (2 * ramp)
+            : movingTime - ramp / 2;
+      const walk =
+        local < walkEnd
+          ? Math.min(movingTime / ramp, (walkEnd - movingTime) / ramp, 1)
+          : 0;
+      const lap = distance / (walkEnd - ramp);
+      const u = (lap + cat.offset) % 1;
+      cat.route.getPointAt(u, cat.position);
+      cat.route.getTangentAt(u, cat.tangent).normalize();
+      root.position.copy(cat.position);
+      root.rotation.y = Math.atan2(cat.tangent.x, cat.tangent.z);
+      // A stride follows the arc actually travelled, including slow starts and stops.
+      const phase = (lap * cat.routeLength * Math.PI * 2) / 0.43;
+      const idle = Math.max(0, local - walkEnd);
+      const sniff = Math.sin(Math.min(1, idle / 2.7) * Math.PI) ** 2;
+      const groom = Math.sin(Math.max(0, Math.min(1, (idle - 2.6) / 4)) * Math.PI) ** 2;
+      body.position.y =
+        Math.abs(Math.sin(phase * 2)) * 0.015 * walk +
+        Math.sin(time * 2.2 + cat.seed) * 0.004 -
+        sniff * 0.027;
+      body.rotation.z = Math.sin(phase) * 0.025 * walk;
+      torso.rotation.x = sniff * 0.045;
+      head.rotation.x = sniff * 0.37 + groom * 0.15;
+      head.rotation.y =
+        Math.sin(time * 0.82 + cat.seed) * (0.12 + (1 - walk) * 0.14);
+      head.rotation.z = groom * Math.sin(time * 9) * 0.07;
+      legs.forEach(({ leg, paw, hind, side }) => {
+        const step = phase + (hind ? 0 : Math.PI) + (side > 0 ? Math.PI : 0);
+        leg.rotation.x = Math.sin(step) * 0.43 * walk;
+        paw.position.y = (hind ? -0.31 : -0.285) +
+          Math.max(0, Math.sin(step)) * 0.048 * walk;
+      });
+      legs[2].leg.rotation.x -= groom * (1.05 + Math.sin(time * 9) * 0.13);
+      legs[2].paw.position.y += groom * 0.09;
+      tail.rotation.y = Math.sin(time * 2.1 + cat.seed) * (0.13 + (1 - walk) * 0.13);
+      tail.rotation.z = Math.sin(time * 1.3 + cat.seed) * 0.08;
+      tailTip.rotation.x = Math.sin(time * 2.5 + cat.seed) * 0.18;
+      ears.forEach((ear, i) => {
+        ear.rotation.x = Math.sin(time * 2.6 + cat.seed + i * 2) * 0.045 +
+          groom * (i ? -0.11 : 0.08);
+      });
+      const blink = Math.sin(time * 0.91 + cat.seed * 2) > 0.997 ? 0.13 : 1;
+      eyes.forEach((eye) => (eye.scale.y = blink));
     });
     for (let i = 0; i < 18; i++) {
       const t = time * 0.22 + i * 2.399;

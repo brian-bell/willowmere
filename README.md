@@ -70,7 +70,7 @@ Look toward nearby objects and press **E** to interact: greet Crumb the flour sp
 
 - Four cottages, bakery stall and extension, working mill, river bridge, fountain, garden, fences, foliage, flowers, and props.
 - Procedural surface textures, overlapping shingles, water shader, instanced leaves/grass, merged static geometry, shadow mapping, multisample rendering, and restrained bloom.
-- Traveler gait and turning; four resident conversations, including Lily walking her puppy Pip; wandering cats, birds, butterflies, and drifting motes.
+- Traveler gait and turning; four resident conversations, including Lily walking her puppy Pip; tabby cats that walk, sniff, groom, and nap; birds, butterflies, and drifting motes.
 - Acceleration and braking, circular and rectangular collision, grid-based route finding, bridge height following, gathering, planting, watering, rewards, and local save/load.
 - Responsive HUD, keyboard and touch input, reduced decorative motion, journal, time-of-day lighting, and photo mode.
 - A complete bakery interior with first-person movement, furniture collision, nearby interactions, mouse and touch look, afternoon / after-hours lighting, ambient occlusion, reflections, and an animated hearth.
