@@ -54,6 +54,16 @@ The journal records the welcome objectives. Progress, collected flowers, planted
 
 Settings include afternoon / blue hour, ambient audio volume, decorative motion, visual quality, and return to the village green. Ambient wind and birds start only when sound is enabled.
 
+## Inside The Daily Loaf
+
+Walk up to the bakery on cottage lane and press **E**, or use **The bakery** button, to step inside Finn’s bakery in first person. You arrive just inside the entrance of a complete room, with four walls, a timber ceiling, and furniture you can walk around. You can also open `/?interior=bakery` directly.
+
+Use **WASD** to walk and strafe, **Shift** to walk faster, and drag to look around. **Free look** captures the mouse; **Escape** releases it. For keyboard-only navigation, **↑ / ↓** walk, **← / →** turn, and **Page Up / Page Down** look up and down. Touch screens have a directional pad and drag-to-look controls.
+
+Look toward nearby objects and press **E** to interact: greet Crumb the flour spirit, pet Cinnamon, warm your hands by the oven, admire the pastries, pause for tea, or ring the counter bell. To leave, approach the entrance, face the door, and press **E**. Your village position and progress are preserved.
+
+**Escape** opens or closes the pause menu when the mouse is free. The menu includes **After hours** lighting, **Photo**, and a return-to-village option. **P** toggles photo mode while keeping the grounded walking controls. The interior loads on first entry and reuses the scene on later visits. It supports reduced decorative motion, narrow screens, and the village’s quality settings.
+
 ## Implemented systems
 
 - Four cottages, bakery stall and extension, working mill, river bridge, fountain, garden, fences, foliage, flowers, and props.
@@ -61,16 +71,20 @@ Settings include afternoon / blue hour, ambient audio volume, decorative motion,
 - Traveler gait and turning; four resident conversations, including Lily walking her puppy Pip; wandering cats, birds, butterflies, and drifting motes.
 - Acceleration and braking, circular and rectangular collision, grid-based route finding, bridge height following, gathering, planting, watering, rewards, and local save/load.
 - Responsive HUD, keyboard and touch input, reduced decorative motion, journal, time-of-day lighting, and photo mode.
+- A complete bakery interior with first-person movement, furniture collision, nearby interactions, mouse and touch look, afternoon / after-hours lighting, ambient occlusion, reflections, and an animated hearth.
 
 ## Scope and quality
 
-This is a small complete playable prototype with a short welcome quest and free exploration. It does not contain building interiors, a full economy, a long campaign, multiplayer, or rigid-body simulation. The visual review included several screenshot iterations and comparison with official commercial game screenshots. The independent comparison preferred the commercial reference for finished visual craft. No claim of AAA parity or perfection is made.
+This is a small playable prototype with a short welcome quest, free village exploration, and one walkable bakery interior. Other buildings do not yet have interiors. There is no full economy, long campaign, multiplayer, or rigid-body simulation.
 
 ## Source map
 
 - `src/main.js`: renderer, camera, movement, collision, route finding, interactions, UI and save state.
 - `src/world.js`: environment, procedural materials, foliage, collision layout and water animation.
 - `src/trees.js`: branching tree geometry, bark and leaf materials, batched foliage, wind and canopy bounds.
+- `src/bakery.js`: procedural bakery architecture, materials, furnishings, pastries, lighting, and animation.
+- `src/interior.js` / `src/interior.css`: first-person camera, input, interactions, postprocessing, pause menu, and entry / exit lifecycle.
+- `src/interior-movement.js`: grounded movement, circle and rotated-box collision, and sliding along furniture.
 - `src/life.js`: characters, gait, residents and wildlife.
 - `src/audio.js`: browser-synthesized ambiance and feedback.
 - `src/effects.js`: gathering, planting and watering feedback particles.
@@ -82,3 +96,5 @@ All game art and audio are constructed in code. Three.js and other dependencies 
 ## Regression test
 
 Run `npm test` to check the complete welcome quest, planting and watering, journal, photo mode, saved progress, and bridge traversal. The test uses installed Chrome on macOS; elsewhere run `npx playwright install chromium`, or set `CHROME_PATH` to your browser executable.
+
+The interior tests also cover walking to the bakery door, traversing the room, furniture collision, interacting with Crumb and Cinnamon, leaving through the entrance, mouse capture, pause and photo modes, preserved village state, repeat visits, and touch controls with reduced motion.

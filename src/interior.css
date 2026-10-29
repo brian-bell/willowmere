@@ -1,0 +1,346 @@
+#game.in-bakery > :not(#scene):not(#bakery-view):not(#loading):not(#toast) {
+  display: none !important;
+}
+#game.in-bakery #scene {
+  touch-action: none;
+  cursor: grab;
+}
+#game.in-bakery #scene:active {
+  cursor: grabbing;
+}
+#bakery-view {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: #f4e8d0;
+  background: linear-gradient(
+    #10241c55,
+    transparent 19%,
+    transparent 82%,
+    #10241c55
+  );
+}
+#bakery-view[hidden],
+#bakery-view [hidden] {
+  display: none !important;
+}
+#bakery-view button,
+#bakery-view dialog {
+  pointer-events: auto;
+}
+.bakery-heading {
+  position: absolute;
+  left: 32px;
+  top: 27px;
+  text-shadow: 0 2px 15px #10251eaa;
+}
+.bakery-heading > span,
+.bakery-eyebrow {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  color: #ead8ad;
+}
+.bakery-heading h1 {
+  font:
+    400 25px/1.2 "Lora",
+    Georgia,
+    serif;
+  letter-spacing: -0.6px;
+  margin: 6px 0 0;
+}
+.bakery-actions {
+  position: absolute;
+  top: 29px;
+  right: 30px;
+  display: flex;
+  gap: 8px;
+}
+.bakery-actions button,
+.bakery-photo-return {
+  border: 1px solid #e1d5b53b;
+  border-radius: 7px;
+  background: #203c31a8;
+  color: #efe5cd;
+  padding: 0 13px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 10px;
+  backdrop-filter: blur(12px);
+}
+.bakery-actions button:hover,
+.bakery-photo-return:hover {
+  background: #3d5949;
+}
+#bakery-view kbd {
+  background: #f4e8d015;
+  color: inherit;
+  border: 1px solid #d8c99b45;
+  box-shadow: none;
+  border-radius: 4px;
+  font-size: 9px;
+  min-width: 22px;
+  padding: 4px;
+  text-align: center;
+}
+.bakery-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff6dfaa;
+  box-shadow: 0 0 3px #172921aa;
+}
+.can-interact .bakery-crosshair {
+  width: 9px;
+  height: 9px;
+  border: 1px solid #f6d8a1;
+  background: #fff2c333;
+}
+#bakery-interact {
+  position: absolute;
+  bottom: 82px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 46px;
+  padding: 9px 17px 9px 11px;
+  border: 1px solid #e1cf9f70;
+  border-radius: 9px;
+  background: #1c3b2ee0;
+  color: #f1e6cb;
+  font-size: 12px;
+  box-shadow: 0 5px 20px #152b2430;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+#bakery-interact:hover {
+  transform: translateX(-50%);
+  background: #38583f;
+}
+#bakery-note {
+  position: absolute;
+  left: 32px;
+  bottom: 91px;
+  width: 310px;
+  padding: 20px 22px;
+  border-left: 2px solid #ceb47d;
+  border-radius: 0 8px 8px 0;
+  background: #17362ae8;
+  box-shadow: 0 5px 30px #10291c33;
+  backdrop-filter: blur(12px);
+}
+#bakery-note > span {
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: #e3c591;
+}
+#bakery-note p {
+  font:
+    13px/1.8 "Lora",
+    Georgia,
+    serif;
+  margin: 10px 0 0;
+  color: #e1e5d3;
+}
+.bakery-help {
+  position: absolute;
+  bottom: 26px;
+  left: 32px;
+  right: 30px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #e0e3cc;
+  text-shadow: 0 1px 8px #173522;
+}
+.bakery-help b {
+  font-weight: 600;
+  color: #f7efd9;
+}
+.bakery-help i {
+  font-style: normal;
+  padding: 0 9px;
+  opacity: 0.6;
+}
+.bakery-help > span:last-child {
+  font-family: "Lora", Georgia, serif;
+  font-style: italic;
+}
+.bakery-photo-return {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.bakery-photo-return:hover {
+  transform: translateX(-50%);
+}
+#bakery-view.is-photo {
+  background: none;
+}
+.is-photo > :not(.bakery-photo-return):not(dialog) {
+  display: none;
+}
+#bakery-pause {
+  width: min(440px, calc(100vw - 36px));
+  border: 1px solid #d8c49770;
+  border-radius: 16px;
+  background: #203f32;
+  color: #f2e8d0;
+  padding: 33px;
+  box-shadow: 0 20px 90px #081f16aa;
+}
+#bakery-pause::backdrop {
+  background: #0d241b99;
+  backdrop-filter: blur(6px);
+}
+#bakery-pause h2 {
+  font:
+    27px/1.25 "Lora",
+    Georgia,
+    serif;
+  margin: 14px 0;
+}
+#bakery-pause p {
+  color: #bacbb7;
+  font-size: 12px;
+  line-height: 1.8;
+  margin-bottom: 25px;
+}
+#bakery-pause button {
+  min-height: 44px;
+  border: 1px solid #dfd5a747;
+  border-radius: 8px;
+  color: #e7e2ca;
+  background: #365443;
+  padding: 12px 15px;
+  font-size: 12px;
+}
+#bakery-pause button:hover {
+  background: #4d6851;
+}
+#bakery-pause #bakery-resume {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  background: #eadab8;
+  color: #304a38;
+  border: 0;
+}
+.bakery-pause-options {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 20px;
+}
+.bakery-pause-options button {
+  flex: 1;
+}
+#bakery-pause #bakery-exit {
+  width: 100%;
+  border-color: transparent;
+  background: transparent;
+  color: #bdcbb4;
+}
+.bakery-touch {
+  display: none;
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .bakery-touch {
+    position: absolute;
+    bottom: 70px;
+    left: 22px;
+    display: grid;
+    grid-template-columns: repeat(3, 48px);
+    grid-template-rows: repeat(2, 48px);
+    gap: 5px;
+  }
+  .bakery-touch button {
+    border: 1px solid #dfdcbd77;
+    border-radius: 9px;
+    color: #f0ead7;
+    background: #274b37b8;
+    font-size: 20px;
+    touch-action: none;
+    user-select: none;
+    backdrop-filter: blur(8px);
+  }
+  .bakery-touch [data-walk="forward"] {
+    grid-column: 2;
+  }
+  .bakery-touch [data-walk="left"] {
+    grid-column: 1;
+  }
+  .bakery-touch button:active {
+    background: #719064dd;
+  }
+  .bakery-help > span:last-child {
+    display: none;
+  }
+  .bakery-help {
+    font-size: 9px;
+  }
+  #bakery-interact {
+    bottom: 198px;
+    max-width: calc(100% - 32px);
+    font-size: 11px;
+  }
+  #bakery-note {
+    bottom: 255px;
+    left: 20px;
+    width: min(310px, calc(100% - 40px));
+    padding: 15px 18px;
+  }
+  #bakery-note p {
+    font-size: 11px;
+  }
+}
+@media (max-width: 600px) {
+  .bakery-heading {
+    left: 20px;
+    top: 21px;
+  }
+  .bakery-heading h1 {
+    font-size: 21px;
+  }
+  .bakery-actions {
+    top: 23px;
+    right: 16px;
+  }
+  .bakery-actions #bakery-look {
+    display: none;
+  }
+  .bakery-actions button {
+    min-height: 44px;
+    padding: 0 10px;
+  }
+  .bakery-actions kbd {
+    display: none;
+  }
+  .bakery-help {
+    left: 22px;
+    bottom: 25px;
+  }
+}
+@media (max-height: 500px) and (pointer: coarse) {
+  #bakery-note {
+    left: auto;
+    right: 18px;
+    bottom: 145px;
+    width: 250px;
+  }
+  #bakery-interact {
+    left: auto;
+    right: 18px;
+    bottom: 80px;
+    transform: none;
+  }
+}

@@ -233,6 +233,50 @@ let tool = "hand",
   dialogue = null,
   nearest = null,
   day = "day";
+let interior = null,
+  interiorLoading = false;
+async function enterBakery() {
+  if (interiorLoading || interior?.active) return;
+  interiorLoading = true;
+  begin();
+  if (photo) setPhoto(false);
+  keys.clear();
+  velocity.set(0, 0);
+  clickPath.length = 0;
+  dialogue = null;
+  $("#dialogue").hidden = true;
+  try {
+    if (!interior) {
+      const { createInterior } = await import("./interior.js");
+      interior = createInterior({
+        renderer,
+        onExit: leaveBakery,
+        onStep: () => audio.step(),
+        onInteract: () => audio.chime(),
+      });
+    }
+    interior.enter();
+    const url = new URL(location.href);
+    url.searchParams.set("interior", "bakery");
+    history.replaceState(null, "", url);
+    $("#loading").classList.add("loaded");
+  } catch (error) {
+    console.error("Could not open bakery", error);
+    toast("The bakery couldn’t open. Please try again.");
+  } finally {
+    interiorLoading = false;
+  }
+}
+function leaveBakery() {
+  interior?.exit();
+  keys.clear();
+  velocity.set(0, 0);
+  const url = new URL(location.href);
+  url.searchParams.delete("interior");
+  history.replaceState(null, "", url);
+  resize();
+}
+$("#visit-bakery").onclick = enterBakery;
 $("#motion").checked = motion;
 function begin() {
   if (!started) targetViewHeight = 18;
@@ -449,6 +493,7 @@ function openGrass(x, z) {
   );
 }
 function interact() {
+  if (interior?.active || interiorLoading) return;
   if (dialogue) {
     nextDialogue();
     return;
@@ -541,6 +586,10 @@ function interact() {
     return;
   }
   const id = nearest.data.id || nearest.data.type;
+  if (id === "bakery") {
+    enterBakery();
+    return;
+  }
   const dialogues = {
     fountain: [
       "Listen closely. Beneath the splashing water, the whole village seems to hum.",
@@ -567,6 +616,11 @@ function interact() {
   );
 }
 window.addEventListener("keydown", (e) => {
+  if (interior?.active) {
+    interior.key(e);
+    return;
+  }
+  if (interiorLoading) return;
   if (e.target.matches("input,select,textarea")) return;
   const k = e.key.toLowerCase();
   if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k))
@@ -613,15 +667,20 @@ window.addEventListener("keydown", (e) => {
     clickPath.length = 0;
   }
 });
-window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+window.addEventListener("keyup", (e) => {
+  keys.delete(e.key.toLowerCase());
+  interior?.keyUp(e);
+});
 window.addEventListener("blur", () => {
   keys.clear();
   velocity.set(0, 0);
+  interior?.blur();
 });
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     keys.clear();
     velocity.set(0, 0);
+    interior?.blur();
   }
 });
 $$("[data-key]").forEach((b) => {
@@ -728,6 +787,7 @@ destination.position.y = 0.03;
 destination.visible = false;
 scene.add(destination);
 canvas.addEventListener("pointerdown", (e) => {
+  if (interior?.active || interiorLoading) return;
   if (e.button !== 0 || dialogue || modalOpen()) return;
   begin();
   const r = canvas.getBoundingClientRect();
@@ -748,6 +808,7 @@ canvas.addEventListener("pointerdown", (e) => {
 canvas.addEventListener(
   "wheel",
   (e) => {
+    if (interior?.active || interiorLoading) return;
     e.preventDefault();
     targetViewHeight = THREE.MathUtils.clamp(
       targetViewHeight + e.deltaY * 0.012,
@@ -772,6 +833,7 @@ function resize() {
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
   updateFrustum();
+  interior?.resize();
 }
 window.addEventListener("resize", resize);
 resize();
@@ -802,7 +864,12 @@ function scanNearby() {
   for (const i of world.interactables || []) {
     const d = Math.hypot(p.x - i.x, p.z - i.z);
     if (d < (i.radius || 2.4))
-      candidates.push({ kind: "world", data: i, d: d + 0.4, label: i.name });
+      candidates.push({
+        kind: "world",
+        data: i,
+        d: d + 0.4,
+        label: i.id === "bakery" ? "Enter The Daily Loaf" : i.name,
+      });
   }
   candidates.sort((a, b) => a.d - b.d);
   nearest = candidates[0] || null;
@@ -841,6 +908,10 @@ function animate(now) {
   if (document.hidden) return;
   elapsed += dt;
   frame++;
+  if (interior?.active) {
+    interior.update(dt, elapsed, motion);
+    return;
+  }
   const p = life.player.position;
   let input = new THREE.Vector2();
   if (!dialogue && !modalOpen()) {
@@ -949,6 +1020,7 @@ requestAnimationFrame(animate);
 window.__willowmere = {
   getState: () => structuredClone(state),
   getPlayer: () => ({ x: life.player.position.x, z: life.player.position.z }),
+  getInterior: () => interior?.diagnostics() ?? { active: false },
   getDiagnostics: () => ({
     objects: scene.children.length,
     drawCalls: renderer.info.render.calls,
@@ -967,3 +1039,5 @@ window.__willowmere = {
     };
   },
 };
+if (new URLSearchParams(location.search).get("interior") === "bakery")
+  enterBakery();
