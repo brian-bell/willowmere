@@ -48,7 +48,19 @@ test("welcome quest, interaction, garden, journal, photo mode and persistence", 
     await page.locator("#dialogue").isVisible(),
     "Mabel conversation opens",
   );
-  for (let i = 0; i < 3; i++) await page.locator("#dialogue-next").click();
+  assert(
+    [
+      "Every flower has its own little way of saying hello.",
+      "The bluebells by the brook are happiest after rain.",
+      "Take your time, dear. Beautiful things are rarely in a hurry.",
+    ].includes(await page.locator("#dialogue-text").textContent()),
+    "Mabel says one of her phrases",
+  );
+  await page.locator("#dialogue-next").click();
+  assert(
+    await page.locator("#dialogue").isHidden(),
+    "Resident conversation ends after one phrase",
+  );
   await page.waitForTimeout(200);
   assert(
     (await page.evaluate(() => window.__willowmere.getState())).quests.mabel,

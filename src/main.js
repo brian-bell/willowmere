@@ -517,6 +517,9 @@ function interact() {
   }
   if (nearest.kind === "npc") {
     const n = nearest.data;
+    const phrases = n.dialogue?.length
+      ? n.dialogue
+      : ["A lovely day to be here, isn’t it?"];
     const names = {
       mabel: "MABEL · THE FLORIST",
       finn: "FINN · THE BAKER",
@@ -524,7 +527,7 @@ function interact() {
     };
     openDialogue(
       names[n.id] || n.name,
-      n.dialogue || ["A lovely day to be here, isn’t it?"],
+      [phrases[Math.floor(Math.random() * phrases.length)]],
       () => {
         if (n.id === "mabel") complete("mabel");
         if (n.id === "finn" && state.seeds < 3) {
