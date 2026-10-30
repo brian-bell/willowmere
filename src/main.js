@@ -44,6 +44,14 @@ const cameraDistance = cameraOffset.length(),
   TILT_STEP = 5;
 let tilt = DEFAULT_TILT,
   targetTilt = DEFAULT_TILT;
+const YAW_STEP = 15;
+let yaw = 0,
+  targetYaw = 0;
+function setYaw(angle) {
+  targetYaw = THREE.MathUtils.euclideanModulo(angle, 360);
+  $("#yaw-angle").textContent = `${Math.round(targetYaw)}°`;
+  $("#yaw-reset").disabled = targetYaw === 0;
+}
 const PAN_STEP = 3,
   PAN_LIMIT = 18,
   pan = new THREE.Vector2(),
@@ -301,6 +309,10 @@ updateTiltControls();
 $("#tilt-up").onclick = () => setTilt(targetTilt + TILT_STEP);
 $("#tilt-down").onclick = () => setTilt(targetTilt - TILT_STEP);
 $("#tilt-reset").onclick = () => setTilt(DEFAULT_TILT);
+setYaw(0);
+$("#yaw-left").onclick = () => setYaw(targetYaw - YAW_STEP);
+$("#yaw-right").onclick = () => setYaw(targetYaw + YAW_STEP);
+$("#yaw-reset").onclick = () => setYaw(0);
 setPan(0, 0);
 $("#pan-left").onclick = () => setPan(targetPan.x - PAN_STEP, targetPan.y);
 $("#pan-right").onclick = () => setPan(targetPan.x + PAN_STEP, targetPan.y);
@@ -935,6 +947,14 @@ function animate(now) {
     interior.update(dt, elapsed, motion);
     return;
   }
+  // Take the shortest arc, including when rotation crosses the 0°/360° seam.
+  const yawDelta = THREE.MathUtils.euclideanModulo(targetYaw - yaw + 180, 360) - 180;
+  yaw = motion
+    ? THREE.MathUtils.euclideanModulo(yaw + yawDelta * (1 - Math.exp(-dt * 8)), 360)
+    : targetYaw;
+  const heading = cameraHeading + THREE.MathUtils.degToRad(yaw);
+  screenRight.set(Math.cos(heading), -Math.sin(heading));
+  screenDown.set(Math.sin(heading), Math.cos(heading));
   const p = life.player.position;
   input.set(0, 0);
   if (!dialogue && !modalOpen()) {
@@ -1002,9 +1022,9 @@ function animate(now) {
   const pitch = THREE.MathUtils.degToRad(tilt),
     groundDistance = cameraDistance * Math.cos(pitch);
   cameraOffset.set(
-    groundDistance * Math.sin(cameraHeading),
+    groundDistance * Math.sin(heading),
     cameraDistance * Math.sin(pitch),
-    groundDistance * Math.cos(cameraHeading),
+    groundDistance * Math.cos(heading),
   );
   if (motion) pan.lerp(targetPan, 1 - Math.exp(-dt * 8));
   else pan.copy(targetPan);
@@ -1074,6 +1094,8 @@ window.__willowmere = {
     camera: {
       tilt,
       targetTilt,
+      yaw,
+      targetYaw,
       viewHeight,
       offset: cameraOffset.toArray(),
       pan: pan.toArray(),

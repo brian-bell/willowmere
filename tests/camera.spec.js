@@ -3,6 +3,79 @@ import { test, expect } from "@playwright/test";
 const camera = (page) =>
   page.evaluate(() => window.__willowmere.getDiagnostics().camera);
 
+test("yaw wraps, preserves the other view settings, and keeps movement aligned with the view", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.waitForFunction(() => window.__willowmere);
+  await page.locator("#start").click();
+  await expect.poll(async () => (await camera(page)).viewHeight).toBeLessThan(18.02);
+  const initial = await camera(page);
+  await expect(page.locator("#yaw-reset")).toBeDisabled();
+  await page.locator("#yaw-left").focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator("#yaw-angle")).toHaveText("345°");
+  await expect.poll(async () => (await camera(page)).yaw).toBe(345);
+  const rotated = await camera(page);
+  expect(Math.hypot(...rotated.offset)).toBeCloseTo(Math.hypot(...initial.offset));
+  expect(rotated.offset[1]).toBeCloseTo(initial.offset[1]);
+  const heading = Math.atan2(rotated.offset[0], rotated.offset[2]);
+  expect(heading).toBeCloseTo(Math.atan2(27, 44) - Math.PI / 12);
+  await page.locator("#yaw-right").click();
+  await expect(page.locator("#yaw-angle")).toHaveText("0°");
+  await expect(page.locator("#yaw-reset")).toBeDisabled();
+
+  for (let i = 0; i < 6; i++) await page.locator("#yaw-right").click();
+  await expect.poll(async () => (await camera(page)).yaw).toBe(90);
+  const projectPlayer = () => page.evaluate(() => {
+    const game = window.__willowmere, player = game.getPlayer();
+    return game.project(player.x, player.z);
+  });
+  const before = await projectPlayer();
+  await page.locator("#pan-right").click();
+  await expect.poll(async () => (await camera(page)).pan).toEqual([3, 0]);
+  expect((await projectPlayer()).x).toBeLessThan(before.x - 50);
+
+  const start = await page.evaluate(() => window.__willowmere.getPlayer());
+  const offset = (await camera(page)).offset;
+  await page.locator("#scene").focus();
+  await page.keyboard.down("d");
+  try {
+    await expect.poll(async () => {
+      const p = await page.evaluate(() => window.__willowmere.getPlayer());
+      return Math.hypot(p.x - start.x, p.z - start.z);
+    }).toBeGreaterThan(0.35);
+  } finally {
+    await page.keyboard.up("d");
+  }
+  const end = await page.evaluate(() => window.__willowmere.getPlayer());
+  const dx = end.x - start.x, dz = end.z - start.z;
+  expect((dx * offset[2] - dz * offset[0]) /
+    (Math.hypot(dx, dz) * Math.hypot(offset[0], offset[2]))).toBeGreaterThan(0.95);
+
+  const destination = { x: -3, z: 6.5 };
+  const point = await page.evaluate((p) => window.__willowmere.project(p.x, p.z), destination);
+  await page.mouse.click(point.x, point.y);
+  await expect.poll(async () => {
+    const p = await page.evaluate(() => window.__willowmere.getPlayer());
+    return Math.hypot(p.x - destination.x, p.z - destination.z);
+  }, { timeout: 10000 }).toBeLessThan(0.4);
+
+  for (let i = 0; i < 18; i++) await page.locator("#yaw-right").click();
+  await expect.poll(async () => (await camera(page)).yaw).toBe(0);
+  await expect(page.locator("#yaw-reset")).toBeDisabled();
+  await page.locator("#tilt-up").click();
+  await page.locator("#yaw-left").click();
+  await page.locator("#yaw-reset").click();
+  await expect.poll(async () => (await camera(page)).yaw).toBe(0);
+  const reset = await camera(page);
+  expect(reset.targetTilt).toBe(initial.targetTilt + 5);
+  expect(reset.targetPan).toEqual([3, 0]);
+  expect(reset.viewHeight).toBeCloseTo(initial.viewHeight, 1);
+  expect(errors).toEqual([]);
+});
+
 test("map tilt preserves heading and zoom, clamps at both limits, and resets", async ({ page }) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));

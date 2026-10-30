@@ -104,6 +104,12 @@
             title="Reset tilt to original angle"
           ><span id="tilt-angle">35°</span><small>Reset</small></button>
         </div>
+        <div class="yaw-controls" role="group" aria-label="Map yaw">
+          <span class="view-label">Yaw</span>
+          <button id="yaw-left" type="button" aria-label="Rotate view left" title="Rotate view left"><span aria-hidden="true">↶</span></button>
+          <button id="yaw-reset" type="button" aria-label="Reset yaw" title="Reset to original heading"><span id="yaw-angle">0°</span><small>Reset</small></button>
+          <button id="yaw-right" type="button" aria-label="Rotate view right" title="Rotate view right"><span aria-hidden="true">↷</span></button>
+        </div>
         <div class="pan-controls" role="group" aria-label="Map pan">
           <span class="view-label">Pan</span>
           <div class="pan-pad">
@@ -249,7 +255,7 @@
         >
         <p>
           WASD / arrows to walk · Shift to run<br />E to interact · 1–4 tools ·
-          J journal<br />P photo mode · Esc close · Scroll to zoom<br />Use the Zoom, Tilt, and Pan buttons to adjust the map view
+          J journal<br />P photo mode · Esc close · Scroll to zoom<br />Use the Zoom, Tilt, Yaw, and Pan buttons to adjust the map view
         </p>
         <button id="reset-position" class="soft-button">
           Return to the village green

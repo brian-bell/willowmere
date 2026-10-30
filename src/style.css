@@ -286,6 +286,7 @@ button:active {
 }
 .zoom-controls,
 .tilt-controls,
+.yaw-controls,
 .pan-controls {
   display: flex;
   flex-direction: column;
@@ -323,7 +324,8 @@ button:active {
   font-size: 10px;
   font-weight: 600;
 }
-#tilt-reset small {
+#tilt-reset small,
+#yaw-reset small {
   display: block;
   font-size: 9px;
   margin-top: 4px;
@@ -341,8 +343,24 @@ button:active {
 .view-controls button:disabled:hover {
   transform: none;
 }
-.pan-controls {
+.pan-controls,
+.yaw-controls {
   grid-column: 1 / -1;
+}
+.yaw-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 0;
+}
+.yaw-controls .view-label {
+  grid-column: 1 / -1;
+}
+.yaw-controls button {
+  min-width: 0;
+}
+#yaw-reset {
+  font-size: 10px;
+  font-weight: 600;
 }
 .pan-pad {
   display: grid;
@@ -369,10 +387,11 @@ button:active {
 }
 @media (max-height: 600px) and (min-width: 600px) {
   .view-controls {
-    width: 272px;
-    grid-template-columns: 62px 62px 132px;
+    width: 412px;
+    grid-template-columns: 62px 62px 132px 132px;
   }
-  .pan-controls {
+  .pan-controls,
+  .yaw-controls {
     grid-column: auto;
   }
 }
