@@ -228,23 +228,133 @@ const hemi = new THREE.HemisphereLight("#eaf2df", "#607b66", 1.5);
 scene.add(hemi);
 const ambient = new THREE.AmbientLight("#ccdabb", 0.22);
 scene.add(ambient);
+// Eye-level views resolve finer shadow texels than the village overview.
+const SHADOW_MAP_SIZES = {
+  high: { overview: 2048, firstPerson: 4096 },
+  balanced: { overview: 1536, firstPerson: 2048 },
+  performance: { overview: 1024, firstPerson: 1024 },
+};
 const sun = new THREE.DirectionalLight("#fff0d6", 2.4);
 sun.position.set(-16, 32, 15);
 sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
-Object.assign(sun.shadow.camera, {
-  left: -35,
-  right: 35,
-  top: 32,
-  bottom: -32,
-  near: 1,
-  far: 85,
-});
+sun.shadow.mapSize.setScalar(SHADOW_MAP_SIZES.high.overview);
+Object.assign(sun.shadow.camera, { near: 1, far: 85 });
 sun.shadow.bias = -0.00015;
 sun.shadow.normalBias = 0.045;
-sun.shadow.radius = 3;
 scene.add(sun);
 scene.add(sun.target);
+// The sun never moves. Its shadow camera rolls with each yaw step so the overview's
+// footprint lines up with the map, and its bounds follow the receivers in view in
+// fixed sizes and whole-texel steps, so shadow edges hold still while the view
+// follows or pans and change only in small steps while it zooms.
+const shadowCamera = sun.shadow.camera;
+// The soil rim's base and the tallest canopy bound every receiver vertically.
+const SHADOW_FLOOR = -1.4,
+  SHADOW_CEILING = 9.5,
+  SHADOW_MARGIN = 1,
+  // Fractions of the whole village, about 12% apart.
+  SHADOW_STEPS = Array.from({ length: 11 }, (_, i) =>
+    i < 10 ? 0.32 * 1.12 ** i : 1,
+  );
+const shadowLight = sun.position.clone().sub(sun.target.position).normalize(),
+  shadowPoint = new THREE.Vector3(),
+  shadowRay = new THREE.Vector3(),
+  shadowSize = new THREE.Vector2(),
+  shadowCenter = new THREE.Vector2(),
+  shadowView = new THREE.Box2(),
+  villageShadow = new THREE.Box2(),
+  shadowStep = [SHADOW_STEPS.length - 1, SHADOW_STEPS.length - 1];
+let shadowYaw = null;
+function addShadowPoint(box, point) {
+  point.applyMatrix4(shadowCamera.matrixWorldInverse);
+  box.expandByPoint(shadowCenter.set(point.x, point.y));
+}
+function rollShadow(yaw) {
+  // Point light-space x along the screen's right edge, projected across the sunlight.
+  const heading = cameraHeading + THREE.MathUtils.degToRad(yaw);
+  shadowPoint.set(Math.cos(heading), 0, -Math.sin(heading));
+  shadowPoint
+    .addScaledVector(shadowLight, -shadowPoint.dot(shadowLight))
+    .normalize();
+  shadowCamera.up.crossVectors(shadowLight, shadowPoint);
+  shadowCamera.position.copy(sun.position);
+  shadowCamera.lookAt(sun.target.position);
+  shadowCamera.updateMatrixWorld();
+  villageShadow.makeEmpty();
+  for (let i = 0; i < 8; i++)
+    addShadowPoint(
+      villageShadow,
+      shadowPoint.set(
+        i & 1 ? 24.6 : -24.6,
+        i & 2 ? SHADOW_CEILING : SHADOW_FLOOR,
+        i & 4 ? 21 : -21,
+      ),
+    );
+  shadowYaw = yaw;
+}
+function updateShadowMapSize() {
+  const size =
+    SHADOW_MAP_SIZES[$("#quality").value][
+      firstPerson ? "firstPerson" : "overview"
+    ];
+  if (sun.shadow.mapSize.x === size) return;
+  sun.shadow.mapSize.setScalar(size);
+  sun.shadow.map?.dispose();
+  sun.shadow.map = null;
+}
+function fitShadow() {
+  if (shadowYaw !== targetYaw) rollShadow(targetYaw);
+  if (firstPerson) shadowView.copy(villageShadow);
+  else {
+    // Trace the overview's corner rays through every receiver height.
+    shadowView.makeEmpty();
+    overviewCamera.updateMatrixWorld();
+    overviewCamera.getWorldDirection(shadowRay);
+    for (let i = 0; i < 8; i++) {
+      shadowPoint
+        .set(i & 1 ? 1 : -1, i & 2 ? 1 : -1, -1)
+        .unproject(overviewCamera);
+      const y = i & 4 ? SHADOW_CEILING : SHADOW_FLOOR;
+      shadowPoint.addScaledVector(shadowRay, (y - shadowPoint.y) / shadowRay.y);
+      addShadowPoint(shadowView, shadowPoint);
+    }
+    shadowView.expandByScalar(SHADOW_MARGIN);
+  }
+  shadowView.getSize(shadowSize);
+  shadowView.getCenter(shadowCenter);
+  const bounds = [0, 0, 0, 0];
+  for (const axis of [0, 1]) {
+    const key = axis ? "y" : "x",
+      low = villageShadow.min[key],
+      full = villageShadow.max[key] - low,
+      needed = Math.min(shadowSize[key] / full, 1);
+    // Grow at once; shrink only when the view fits well inside the smaller size.
+    let step = shadowStep[axis];
+    if (needed > SHADOW_STEPS[step])
+      step = SHADOW_STEPS.findIndex((s) => s >= needed);
+    else while (step > 0 && needed < SHADOW_STEPS[step - 1] * 0.96) step--;
+    shadowStep[axis] = step;
+    const extent = full * SHADOW_STEPS[step],
+      texel = extent / sun.shadow.mapSize[key],
+      start = THREE.MathUtils.clamp(
+        shadowCenter[key] - extent / 2,
+        low,
+        low + full - extent,
+      );
+    bounds[axis * 2] = Math.floor(start / texel) * texel;
+    bounds[axis * 2 + 1] = bounds[axis * 2] + extent;
+  }
+  const [left, right, bottom, top] = bounds;
+  if (
+    left !== shadowCamera.left ||
+    right !== shadowCamera.right ||
+    bottom !== shadowCamera.bottom ||
+    top !== shadowCamera.top
+  ) {
+    Object.assign(shadowCamera, { left, right, bottom, top });
+    shadowCamera.updateProjectionMatrix();
+  }
+}
 const fill = new THREE.DirectionalLight("#dae9ec", 0.6);
 fill.position.set(15, 14, -20);
 scene.add(fill);
@@ -503,6 +613,7 @@ function setFirstPerson(value) {
     pitch = -0.08;
   }
   firstPerson = value;
+  updateShadowMapSize();
   camera = firstPerson ? firstPersonCamera : overviewCamera;
   scenePass.camera = camera;
   life.player.visible = !firstPerson;
@@ -692,13 +803,7 @@ $("#quality").onchange = (e) => {
   world.water.setQuality(q);
   // The chosen quality is the scaler's ceiling.
   resetResolution(q);
-  sun.shadow.mapSize.setScalar(
-    q === "high" ? 4096 : q === "balanced" ? 2048 : 1024,
-  );
-  if (sun.shadow.map) {
-    sun.shadow.map.dispose();
-    sun.shadow.map = null;
-  }
+  updateShadowMapSize();
   bloom.enabled = q !== "performance";
   resize();
 };
@@ -1343,6 +1448,7 @@ function animate(now) {
         ? 1
         : 0,
   );
+  fitShadow();
   scene.updateMatrixWorld();
   renderer.info.reset();
   // RenderPass draws into readBuffer; water resolves refraction from that pass.
@@ -1390,6 +1496,15 @@ window.__willowmere = {
       mean: resolution.mean,
       upWindows: resolution.upWindows,
       drawingBuffer: [canvas.width, canvas.height],
+    },
+    shadow: {
+      mapSize: sun.shadow.mapSize.x,
+      bounds: [
+        shadowCamera.left,
+        shadowCamera.right,
+        shadowCamera.bottom,
+        shadowCamera.top,
+      ],
     },
     position: life.player.position.toArray(),
     camera: {

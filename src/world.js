@@ -168,17 +168,19 @@ export function createWorld(T, scene) {
   }
   // Sculpted meadow base, its floating soil rim discreetly visible at the wooded margins.
   // The channel is physically recessed, so refraction sees its bed rather than lawn.
-  box(soil, 0, -1.18, 0, 48, 0.34, 42);
+  // Ground slabs, roads and the riverbed only receive shadows. As casters they would
+  // fill the whole shadow map without darkening anything the camera can see.
+  const flat = [box(soil, 0, -1.18, 0, 48, 0.34, 42)];
   for (const [left, right] of [
     [-24, 9.7],
     [14.3, 24],
   ])
-    box(soil, (left + right) / 2, -0.58, 0, right - left, 1.06, 42);
+    flat.push(box(soil, (left + right) / 2, -0.58, 0, right - left, 1.06, 42));
   for (const [left, right] of [
     [-23.8, 9.7],
     [14.3, 23.8],
   ])
-    box(grass, (left + right) / 2, -0.1, 0, right - left, 0.3, 41.6);
+    flat.push(box(grass, (left + right) / 2, -0.1, 0, right - left, 0.3, 41.6));
   const groundH = (x, z) => 0.04;
   const shadowCanvas = document.createElement("canvas");
   shadowCanvas.width = shadowCanvas.height = 128;
@@ -231,6 +233,7 @@ export function createWorld(T, scene) {
     shape.closePath();
     const m = mesh(new T.ShapeGeometry(shape), path, x, 0.105, z);
     m.rotation.x = -Math.PI / 2;
+    flat.push(m);
   }
   road(-3, 3, 28, 3.2);
   road(-2, -1.8, 3.2, 12.5);
@@ -279,7 +282,8 @@ export function createWorld(T, scene) {
     );
   }
   bedGeometry.computeVertexNormals();
-  mesh(bedGeometry, bedMaterial, 12, 0, 0);
+  flat.push(mesh(bedGeometry, bedMaterial, 12, 0, 0));
+  for (const m of flat) m.castShadow = false;
   const pebbleColors = ["#9a987e", "#78877b", "#a8a088", "#677b72"].map(
     (c) => new T.Color(c),
   );
@@ -1206,7 +1210,7 @@ export function createWorld(T, scene) {
     particles.rotation.y = Math.sin(t * 0.04) * 0.015;
     particles.position.y = Math.sin(t * 0.3) * 0.1;
   });
-  // Bake static architectural and botanical meshes into one draw per material.
+  // Bake static architectural and botanical meshes into one draw per material and shadow role.
   scene.updateMatrixWorld(true);
   const batches = new Map(),
     remove = [];
@@ -1222,9 +1226,14 @@ export function createWorld(T, scene) {
     )
       return;
     const geometry = node.geometry.clone().applyMatrix4(node.matrixWorld);
-    const key = node.material.uuid;
+    const key = `${node.material.uuid}/${node.castShadow}/${node.receiveShadow}`;
     if (!batches.has(key))
-      batches.set(key, { material: node.material, geometries: [] });
+      batches.set(key, {
+        material: node.material,
+        castShadow: node.castShadow,
+        receiveShadow: node.receiveShadow,
+        geometries: [],
+      });
     batches
       .get(key)
       .geometries.push(geometry.index ? geometry.toNonIndexed() : geometry);
@@ -1232,12 +1241,12 @@ export function createWorld(T, scene) {
   }
   for (const root of [...scene.children])
     if (!initialChildren.has(root)) collect(root);
-  for (const { material, geometries } of batches.values()) {
+  for (const { material, castShadow, receiveShadow, geometries } of batches.values()) {
     const merged = mergeGeometries(geometries, false);
     if (merged) {
       const obj = new T.Mesh(merged, material);
-      obj.castShadow = true;
-      obj.receiveShadow = true;
+      obj.castShadow = castShadow;
+      obj.receiveShadow = receiveShadow;
       scene.add(obj);
     }
     for (const g of geometries) g.dispose();
