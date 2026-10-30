@@ -43,7 +43,7 @@ The new river dressing uses a separate random sequence and preserves the existin
 
 Call `water.addBody` during world creation with a unique `id`, centre (`x`, `y`, `z`), `depth`, and either `size: [width, length]` or `radius`. Optional settings include a central `hole`, obstacle circles in local coordinates, `flow`, `amplitude`, RGB absorption coefficients, scattering color, and roughness. Build the bed below the given surface height and enclose the edges. Register an impact using `addSource`, or use `addJet` with its start and landing point. Call `disturb(id, worldX, worldZ, strength, radius)` for a discrete interaction.
 
-The world already calls `water.update(dt)`. Immediately before the main scene render, call `water.render(renderer, camera, { dt, dusk, sun })`. If the caller disables `scene.matrixWorldAutoUpdate`, it must update scene transforms before calling `water.render`; otherwise water updates them before its captures. Surfaces are tagged as dynamic to exclude them from world static-geometry batching.
+The world already calls `water.update(dt)`. Immediately before the main scene render, call `water.render(renderer, camera, { dt, dusk, sun })`. If the caller disables `scene.matrixWorldAutoUpdate`, it must update scene transforms before calling `water.render`; otherwise water updates them before its captures. Surfaces are tagged as dynamic to exclude them from world static-geometry batching. Pass dense scenery that the captures barely resolve, such as individual leaves, to `water.excludeFromCaptures(...objects)`. Each listed object is hidden during refraction and reflection captures, then its own visibility is restored. It still casts shadows and appears in the main render.
 
 ## Verification
 

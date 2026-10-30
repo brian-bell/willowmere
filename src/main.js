@@ -95,6 +95,13 @@ const DEFAULT_VIEW_HEIGHT = 18,
   MIN_VIEW_HEIGHT = 10,
   MAX_VIEW_HEIGHT = 39,
   ZOOM_STEP = 3;
+// Beyond these, single leaves cover only a few pixels and trees draw coarser foliage.
+const COARSE_LEAVES_VIEW_HEIGHT = 24,
+  COARSE_LEAVES_DISTANCE = 18;
+const leafDetailFromEye = (center) =>
+  center.distanceTo(firstPersonCamera.position) > COARSE_LEAVES_DISTANCE
+    ? 1
+    : 0;
 let viewHeight = 29,
   targetViewHeight = 29;
 function updateZoomControls() {
@@ -1229,6 +1236,13 @@ function animate(now) {
   for (const material of glowMaterials)
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
   playerVisibility.update(camera, !photo && !firstPerson);
+  world.trees.setDetail(
+    firstPerson
+      ? leafDetailFromEye
+      : viewHeight > COARSE_LEAVES_VIEW_HEIGHT
+        ? 1
+        : 0,
+  );
   scene.updateMatrixWorld();
   renderer.info.reset();
   world.water.render(renderer, camera, { dt, dusk: duskMix, sun });
