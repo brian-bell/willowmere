@@ -734,7 +734,8 @@ export function createWorld(T, scene) {
     );
   }
   cyl(darkWood, 0, 0, 0, 0.18, 1.2, wheel);
-  animated.push((dt) => (wheel.rotation.y += dt * 0.18));
+  // Turn around the local axle after the wheel has been mounted vertically.
+  animated.push((dt) => wheel.rotateY(dt * 0.18));
   // Sealed stone walls enclose each pool below the rounded lip.
   function basinWall(x, y, z, inner, outer, height) {
     const ring = new T.Shape();
