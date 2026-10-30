@@ -104,3 +104,36 @@ test("village keeps a draw-call budget with live water and a planted garden", as
   expect(Math.max(...samples.map((s) => s.geometries))).toBeLessThan(320);
   expect(errors).toEqual([]);
 });
+
+test("scene antialiasing follows the drawing-buffer density", async ({
+  browser,
+}) => {
+  const page = await browser.newPage({
+    viewport: { width: 1200, height: 800 },
+    deviceScaleFactor: 2,
+  });
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/");
+  await page.waitForFunction(() => window.__willowmere?.getWater().frame > 3);
+  const settle = () =>
+    page.evaluate(async () => {
+      for (let i = 0; i < 3; i++) await new Promise(requestAnimationFrame);
+      return window.__willowmere.getDiagnostics();
+    });
+  // High quality at retina density supersamples edges, so 2x MSAA suffices.
+  expect((await settle()).sceneSamples).toBe(2);
+  await page.locator("#settings").click();
+  for (const [quality, samples] of [
+    ["balanced", 4],
+    ["performance", 4],
+    ["high", 2],
+  ]) {
+    await page.locator("#quality").selectOption(quality);
+    const diagnostics = await settle();
+    expect(diagnostics.sceneSamples).toBe(samples);
+    expect(diagnostics.drawCalls).toBeGreaterThan(0);
+  }
+  expect(errors).toEqual([]);
+  await page.close();
+});

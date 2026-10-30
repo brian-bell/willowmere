@@ -1,8 +1,7 @@
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { SoftBloomPass, BloomOutputPass } from "./bloom.js";
 import "./style.css";
 import { applyIcons } from "./icons.js";
 applyIcons();
@@ -22,7 +21,7 @@ scene.fog = new THREE.FogExp2("#b5c2a0", 0.0025);
 scene.matrixWorldAutoUpdate = false;
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  // The composer already renders into a multisampled target.
+  // The composer's scene target supplies antialiasing; see sceneSamples().
   antialias: false,
   powerPreference: "high-performance",
 });
@@ -252,14 +251,22 @@ const sceneTarget = new THREE.WebGLRenderTarget(innerWidth, innerHeight, {
 const composer = new EffectComposer(renderer, sceneTarget);
 const scenePass = new RenderPass(scene, camera);
 composer.addPass(scenePass);
-const bloom = new UnrealBloomPass(
-  new THREE.Vector2(innerWidth, innerHeight),
-  0.19,
-  0.65,
-  1.15,
-);
+const bloom = new SoftBloomPass(0.19, 0.65, 1.15);
 composer.addPass(bloom);
-composer.addPass(new OutputPass());
+composer.addPass(new BloomOutputPass(bloom));
+// A drawing buffer of 1.5 device pixels per CSS pixel or more already
+// supersamples edges, so 2x MSAA comes close to 4x there. Smaller buffers
+// keep 4x: with 2x, roof shingle grooves break into dashes and edges step.
+const sceneSamples = () => (renderer.getPixelRatio() >= 1.5 ? 2 : 4);
+function setSceneSamples(samples) {
+  // The composer renders into a clone of sceneTarget; both must change.
+  for (const target of [composer.renderTarget1, composer.renderTarget2]) {
+    if (target.samples === samples) continue;
+    target.samples = samples;
+    // Disposing makes the renderer reallocate the buffers with the new count.
+    target.dispose();
+  }
+}
 renderer.info.autoReset = false;
 const glowMaterials = new Set();
 scene.traverse((o) => {
@@ -1101,6 +1108,7 @@ function updateFrustum() {
 }
 function resize() {
   renderer.setSize(innerWidth, innerHeight);
+  setSceneSamples(sceneSamples());
   composer.setSize(innerWidth, innerHeight);
   updateFrustum();
   interior?.resize();
@@ -1363,6 +1371,7 @@ window.__willowmere = {
     objects: scene.children.length,
     drawCalls: renderer.info.render.calls,
     triangles: renderer.info.render.triangles,
+    sceneSamples: composer.renderTarget2.samples,
     geometries: renderer.info.memory.geometries,
     textures: renderer.info.memory.textures,
     colliders: colliders.length,

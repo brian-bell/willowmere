@@ -8,6 +8,8 @@ The village keeps its detailed geometry and animations while reducing the work s
 - Orthographic water reflections crop the mirrored camera to the pool's projected bounds, with a margin for displaced waves and normal distortion. Capture textures follow the visible footprint, rounded to 64-pixel increments and capped by the chosen quality. The reflection matrix and distortion scale preserve texture projection. Perspective study views retain the full mirrored view.
 - The village and bakery update scene transforms once before their rendering passes. The water system respects manually updated scenes and temporarily suppresses repeated automatic updates during its own captures. The bakery's ambient occlusion pass reuses the shadows produced by its color pass.
 - The final canvas does not request a second multisampled framebuffer or preserve its drawing buffer. The composer's multisampled scene target still supplies antialiasing. The starting quality and resolution policy are described below.
+- The village scene target uses 2x MSAA when the drawing buffer has at least 1.5 device pixels per CSS pixel, and 4x below that. Dense buffers already supersample edges, so 2x comes close to 4x there. At pixel ratios 1 and 1.25, 2x breaks roof shingle grooves into dashes and steps roof edges and the fountain rims. With no MSAA, the grooves dash even on retina screens. FXAA erases them. `resize()` applies the count to both composer targets and disposes them so the renderer reallocates. `getDiagnostics().sceneSamples` reports it.
+- Village bloom (`src/bloom.js`) runs every pass at quarter resolution or below: a thresholded downsample, five blurred levels, and a composite. `BloomOutputPass` adds the result while tone mapping. UnrealBloomPass blended its result back into the full-resolution multisampled scene target and composited at half resolution. The strength, radius, and threshold keep their UnrealBloomPass meaning, including that pass's alpha-weighted blend. On a synthetic HDR frame at 2800 × 1750, the total added light differs by 6%. Around lights 40 pixels and larger, the radial falloff agrees within 15%. A 4-pixel point light gets a slightly softer core. Performance quality still disables bloom. The bakery interior keeps UnrealBloomPass.
 
 ## Resolution and default quality
 
@@ -59,6 +61,28 @@ Default settings over 20 seconds with vsync, as a retina laptop would run them: 
 With vsync disabled, headless Chrome paces frames unevenly: even performance quality at 86 FPS has a p95 of 26 ms. The scaler therefore steps to its 0.75 floor in uncapped runs (80 FPS, against 31 FPS for the baseline default). Use `?resolution=fixed` for uncapped measurements.
 
 At device pixel ratio 1, `npm run benchmark` gives the same results before and after (high 55.7 → 57.2 FPS; balanced and performance at the 60 FPS vsync limit), because the caps only differ above a ratio of 1.25. The raw reports are `output/performance-{base,new}-*.json` (ignored build artifacts).
+
+## Antialiasing and bloom comparison (2026-10-29)
+
+Headless Chrome at 1600 × 1000 CSS pixels and device pixel ratio 2, launched with `--disable-frame-rate-limit --disable-gpu-vsync`. Runs alternated between `main` (`1a2624c`) and the branch, twice each. Other sessions were rendering on the same GPU, so absolute times are inflated and noisy. The table gives the range of the two mean frame intervals.
+
+| Quality (buffer)          | Frame ms main → branch | MSAA main → branch |
+| ------------------------- | ---------------------- | ------------------ |
+| High (2800 × 1750)        | 50.7–57.8 → 34.5–37.3  | 4x → 2x            |
+| Balanced (2000 × 1250)    | 29.0–33.8 → 22.3–25.3  | 4x → 4x            |
+| Performance (1600 × 1000) | 23.2–24.6 → 29.6–31.0  | 4x → 4x, no bloom  |
+
+Performance quality runs the same passes as before, plus one bloom-texture lookup in the output pass from a 1 × 1 texture. Its slower result is most likely contention, but this run cannot confirm that. The standard DPR 1 benchmark (`npm run benchmark`) was within noise: 39.3/32.0/32.0 FPS before and 36.8/33.0/29.8 after.
+
+Postprocessing alone, on a nearly empty 2800 × 1750 frame, measured with WebGL timer queries. Values are the median and 25th-percentile GPU ms per frame:
+
+| Pipeline                   | Bloom on   | Bloom off |
+| -------------------------- | ---------- | --------- |
+| UnrealBloomPass, 4x MSAA   | 23.3 (12.4) | 6.0 (3.0) |
+| Quarter-res bloom, 4x MSAA | 15.3 (7.7)  | —         |
+| Quarter-res bloom, 2x MSAA | 9.0 (2.9)   | 3.8 (1.8) |
+
+Repeat both comparisons on an idle machine before relying on the absolute values.
 
 ## Regression budgets
 
