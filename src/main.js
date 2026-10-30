@@ -44,6 +44,23 @@ const cameraDistance = cameraOffset.length(),
   TILT_STEP = 5;
 let tilt = DEFAULT_TILT,
   targetTilt = DEFAULT_TILT;
+const PAN_STEP = 3,
+  PAN_LIMIT = 18,
+  pan = new THREE.Vector2(),
+  targetPan = new THREE.Vector2(),
+  panOffset = new THREE.Vector3(),
+  viewTarget = new THREE.Vector3();
+function setPan(x, y) {
+  targetPan.set(
+    THREE.MathUtils.clamp(x, -PAN_LIMIT, PAN_LIMIT),
+    THREE.MathUtils.clamp(y, -PAN_LIMIT, PAN_LIMIT),
+  );
+  $("#pan-left").disabled = targetPan.x <= -PAN_LIMIT;
+  $("#pan-right").disabled = targetPan.x >= PAN_LIMIT;
+  $("#pan-up").disabled = targetPan.y <= -PAN_LIMIT;
+  $("#pan-down").disabled = targetPan.y >= PAN_LIMIT;
+  $("#pan-reset").disabled = targetPan.lengthSq() === 0;
+}
 function setTilt(angle) {
   targetTilt = THREE.MathUtils.clamp(angle, MIN_TILT, MAX_TILT);
   updateTiltControls();
@@ -284,6 +301,12 @@ updateTiltControls();
 $("#tilt-up").onclick = () => setTilt(targetTilt + TILT_STEP);
 $("#tilt-down").onclick = () => setTilt(targetTilt - TILT_STEP);
 $("#tilt-reset").onclick = () => setTilt(DEFAULT_TILT);
+setPan(0, 0);
+$("#pan-left").onclick = () => setPan(targetPan.x - PAN_STEP, targetPan.y);
+$("#pan-right").onclick = () => setPan(targetPan.x + PAN_STEP, targetPan.y);
+$("#pan-up").onclick = () => setPan(targetPan.x, targetPan.y - PAN_STEP);
+$("#pan-down").onclick = () => setPan(targetPan.x, targetPan.y + PAN_STEP);
+$("#pan-reset").onclick = () => setPan(0, 0);
 $("#start").onclick = () => {
   begin();
   toast("Follow the paths. A little adventure is all you need.");
@@ -983,8 +1006,17 @@ function animate(now) {
     cameraDistance * Math.sin(pitch),
     groundDistance * Math.cos(cameraHeading),
   );
-  camera.position.copy(cameraTarget).add(cameraOffset);
-  camera.lookAt(cameraTarget);
+  if (motion) pan.lerp(targetPan, 1 - Math.exp(-dt * 8));
+  else pan.copy(targetPan);
+  // Keep pan directions aligned with the screen on the village's ground plane.
+  panOffset.set(
+    screenRight.x * pan.x + screenDown.x * pan.y,
+    0,
+    screenRight.y * pan.x + screenDown.y * pan.y,
+  );
+  viewTarget.copy(cameraTarget).add(panOffset);
+  camera.position.copy(viewTarget).add(cameraOffset);
+  camera.lookAt(viewTarget);
   destination.visible = clickPath.length > 0;
   if (destination.visible) {
     destination.scale.setScalar(1 + Math.sin(elapsed * 4) * 0.12);
@@ -1044,6 +1076,8 @@ window.__willowmere = {
       targetTilt,
       viewHeight,
       offset: cameraOffset.toArray(),
+      pan: pan.toArray(),
+      targetPan: targetPan.toArray(),
     },
   }),
   blocked,

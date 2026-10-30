@@ -276,14 +276,17 @@ button:active {
   top: 50%;
   transform: translateY(-50%);
   display: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 132px;
   gap: 8px;
   align-items: flex-start;
 }
 .playing .view-controls {
-  display: flex;
+  display: grid;
 }
 .zoom-controls,
-.tilt-controls {
+.tilt-controls,
+.pan-controls {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -337,6 +340,41 @@ button:active {
 }
 .view-controls button:disabled:hover {
   transform: none;
+}
+.pan-controls {
+  grid-column: 1 / -1;
+}
+.pan-pad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.pan-pad button {
+  min-width: 0;
+}
+#pan-up {
+  grid-area: 1 / 2;
+}
+#pan-left {
+  grid-area: 2 / 1;
+}
+#pan-reset {
+  grid-area: 2 / 2;
+  font-size: 24px;
+}
+#pan-right {
+  grid-area: 2 / 3;
+}
+#pan-down {
+  grid-area: 3 / 2;
+}
+@media (max-height: 600px) and (min-width: 600px) {
+  .view-controls {
+    width: 272px;
+    grid-template-columns: 62px 62px 132px;
+  }
+  .pan-controls {
+    grid-column: auto;
+  }
 }
 .bottom-left {
   position: absolute;
