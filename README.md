@@ -45,7 +45,7 @@ Deployments are made with Wrangler. GitHub pushes alone do not publish a new ver
 | Explore / gather / plant / water | 1 / 2 / 3 / 4                     |
 | Journal                          | J                                 |
 | Photo mode                       | P; Escape to return               |
-| Zoom                             | Mouse wheel                       |
+| Zoom / reset zoom                | Mouse wheel or view buttons        |
 | Touch                            | Direction pad and Interact button |
 
 ## Your first afternoon

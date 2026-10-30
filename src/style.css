@@ -270,6 +270,51 @@ button:active {
   margin-right: 5px;
   font-size: 13px;
 }
+.zoom-controls {
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid #fff9de88;
+  border-radius: 12px;
+  background: #f5efdee8;
+  box-shadow: 0 6px 20px #2e4b2f20;
+  backdrop-filter: blur(12px);
+}
+.playing .zoom-controls {
+  display: flex;
+}
+.zoom-controls button {
+  min-width: 46px;
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 23px;
+  line-height: 1;
+}
+.zoom-controls #zoom-reset {
+  min-height: 35px;
+  border-top: 1px solid #8b9b8555;
+  border-radius: 0 0 8px 8px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.zoom-controls button:hover:not(:disabled) {
+  background: #d5debb;
+}
+.zoom-controls button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+.zoom-controls button:disabled:hover {
+  transform: none;
+}
 .bottom-left {
   position: absolute;
   bottom: 33px;
@@ -670,6 +715,9 @@ input[type="checkbox"] {
 .photo-mode #touch-controls {
   display: none !important;
 }
+.photo-mode .zoom-controls {
+  display: none !important;
+}
 #loading {
   position: absolute;
   inset: 0;
@@ -810,6 +858,9 @@ input[type="checkbox"] {
   }
   #location {
     display: none;
+  }
+  .zoom-controls {
+    right: 17px;
   }
   .welcome {
     left: 20px;

@@ -34,8 +34,21 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.2;
 const camera = new THREE.OrthographicCamera(-25, 25, 16, -16, 0.1, 160);
 const cameraOffset = new THREE.Vector3(27, 36, 44);
+const DEFAULT_VIEW_HEIGHT = 18,
+  MIN_VIEW_HEIGHT = 10,
+  MAX_VIEW_HEIGHT = 39,
+  ZOOM_STEP = 3;
 let viewHeight = 29,
   targetViewHeight = 29;
+function updateZoomControls() {
+  $("#zoom-in").disabled = targetViewHeight <= MIN_VIEW_HEIGHT;
+  $("#zoom-out").disabled = targetViewHeight >= MAX_VIEW_HEIGHT;
+  $("#zoom-reset").disabled = targetViewHeight === DEFAULT_VIEW_HEIGHT;
+}
+function setZoom(height) {
+  targetViewHeight = THREE.MathUtils.clamp(height, MIN_VIEW_HEIGHT, MAX_VIEW_HEIGHT);
+  updateZoomControls();
+}
 const target = new THREE.Vector3(0, 0, 1.5),
   cameraTarget = target.clone();
 const hemi = new THREE.HemisphereLight("#eaf2df", "#607b66", 1.5);
@@ -230,7 +243,7 @@ function leaveBakery() {
 $("#visit-bakery").onclick = enterBakery;
 $("#motion").checked = motion;
 function begin() {
-  if (!started) targetViewHeight = 18;
+  if (!started) setZoom(DEFAULT_VIEW_HEIGHT);
   started = true;
   $("#game").classList.add("playing");
   state.started = true;
@@ -241,8 +254,12 @@ function begin() {
 if (started) {
   $("#intro").classList.add("dismissed");
   $("#game").classList.add("playing");
-  viewHeight = targetViewHeight = 18;
+  viewHeight = targetViewHeight = DEFAULT_VIEW_HEIGHT;
 }
+updateZoomControls();
+$("#zoom-in").onclick = () => setZoom(targetViewHeight - ZOOM_STEP);
+$("#zoom-out").onclick = () => setZoom(targetViewHeight + ZOOM_STEP);
+$("#zoom-reset").onclick = () => setZoom(DEFAULT_VIEW_HEIGHT);
 $("#start").onclick = () => {
   begin();
   toast("Follow the paths. A little adventure is all you need.");
@@ -765,11 +782,7 @@ canvas.addEventListener(
   (e) => {
     if (interior?.active || interiorLoading) return;
     e.preventDefault();
-    targetViewHeight = THREE.MathUtils.clamp(
-      targetViewHeight + e.deltaY * 0.012,
-      10,
-      39,
-    );
+    setZoom(targetViewHeight + e.deltaY * 0.012);
   },
   { passive: false },
 );
