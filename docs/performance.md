@@ -34,17 +34,17 @@ Sequential headless Chrome runs at 1600 × 1000, DPR 1, with a fresh save and th
 
 High quality remains limited by rendering on this setup; lower submission cost does not guarantee 60 FPS. Re-run the benchmark on the target device, especially at higher device pixel ratios. The raw local reports are `output/performance-before.json` and `output/performance-after.json` (ignored build artifacts).
 
-## Water refraction from the main pass (2026-10-29)
+## Water refraction from the main pass (2026-10-30)
 
-Before is `1a2624c`; after renders refraction from the main pass. Runs alternated before and after (two pairs at DPR 1 with `npm run benchmark`, three pairs at DPR 2 with a copy of the script using `deviceScaleFactor: 2` and Chrome's `--disable-frame-rate-limit --disable-gpu-vsync`). Values are medians of the per-run means.
+Before is `1a2624c`; after renders refraction from the main pass. Runs alternated before and after while holding the shared GPU lock, so no other benchmark or test browser was rendering: two pairs at DPR 1 with `npm run benchmark`, and three pairs at DPR 2 with a copy of the script using `deviceScaleFactor: 2` and Chrome's `--disable-frame-rate-limit --disable-gpu-vsync`. Values are medians of the per-run means.
 
-| Quality     | DPR 1 frame ms | DPR 2 frame ms | Draw calls  | Triangles     |
-| ----------- | -------------- | -------------- | ----------- | ------------- |
-| High        | 55.7 → 36.4    | 75.4 → 45.2    | 1,262 → 875 | 3.85M → 2.82M |
-| Balanced    | 58.0 → 33.6    | 47.3 → 33.2    | 1,252 → 839 | 3.85M → 2.73M |
-| Performance | 54.7 → 29.7    | 23.5 → 19.2    | 1,197 → 778 | 3.74M → 2.55M |
+| Quality     | DPR 1 frame ms (FPS)      | DPR 2 uncapped frame ms (FPS) | Draw calls  | Triangles     |
+| ----------- | ------------------------- | ----------------------------- | ----------- | ------------- |
+| High        | 35.7 → 29.7 (28.0 → 33.7) | 52.5 → 40.4 (19.1 → 24.7)     | 1,268 → 878 | 3.86M → 2.83M |
+| Balanced    | 32.2 → 26.3 (31.1 → 38.0) | 32.8 → 26.8 (30.4 → 37.3)     | 1,246 → 844 | 3.85M → 2.76M |
+| Performance | 25.9 → 23.4 (38.6 → 42.8) | 20.5 → 16.8 (48.9 → 59.5)     | 1,159 → 767 | 3.57M → 2.51M |
 
-Other benchmarks and test suites shared the GPU during these runs, so absolute frame times are inflated and noisy; every paired run favored the after build. The draw and triangle reductions are deterministic: about 390 draws and 1.0–1.2M triangles per frame at the spawn view. Performance quality gains least because its separate capture was already at half resolution.
+Every paired run favored the after build. DPR 1 frame intervals snap to display refresh multiples, so the uncapped DPR 2 runs show the GPU saving more directly: 12 ms per frame at high quality. Each frame submits about 390 fewer draws and 1.0–1.1M fewer triangles at the spawn view. Performance quality saves the least time because its separate capture was already at half resolution.
 
 ## Regression budgets
 
