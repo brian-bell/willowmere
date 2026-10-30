@@ -34,7 +34,8 @@ try {
         }
       });
   });
-  await page.goto(url);
+  // Fixed resolution keeps each quality at its own pixel ratio.
+  await page.goto(new URL("/?resolution=fixed", url).href);
   await page.locator("#start").click();
   await page.waitForTimeout(2500);
   const results = {};

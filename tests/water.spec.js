@@ -76,7 +76,8 @@ test("every village pool shares the model across quality, lighting and paused mo
   page,
 }) => {
   const errors = recordErrors(page);
-  await page.goto("/");
+  // Refraction targets follow the drawing buffer, so keep its size fixed.
+  await page.goto("/?resolution=fixed");
   await page.waitForFunction(() =>
     window.__willowmere?.getWater().bodies.every((b) => b.reflectionReady),
   );
