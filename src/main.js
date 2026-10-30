@@ -1,8 +1,7 @@
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { SoftBloomPass, BloomOutputPass } from "./bloom.js";
 import "./style.css";
 import { applyIcons } from "./icons.js";
 applyIcons();
@@ -26,7 +25,112 @@ const renderer = new THREE.WebGLRenderer({
   antialias: false,
   powerPreference: "high-performance",
 });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+// Every pass fills the full drawing buffer, so the frame rate follows pixel
+// count. Each quality caps the pixel ratio; the scaler below lowers it while
+// frames run long. See docs/performance.md.
+const QUALITY_PIXEL_RATIO = { high: 1.25, balanced: 1.25, performance: 1 };
+// Retina laptops and large monitors start on balanced; 1x screens up to about
+// 1920 × 1200, and small windows on dense screens, start on high.
+const startQuality =
+  innerWidth < 760 || innerWidth * innerHeight * devicePixelRatio ** 2 > 2.6e6
+    ? "balanced"
+    : "high";
+const resolution = {
+  // ?resolution=fixed keeps the quality's pixel ratio for benchmarks and tests.
+  adaptive: new URLSearchParams(location.search).get("resolution") !== "fixed",
+  ceiling: Math.min(devicePixelRatio, QUALITY_PIXEL_RATIO[startQuality]),
+  floor: 0.75,
+  step: 0.125,
+  // Set with the starting quality below.
+  pixelRatio: 0,
+  samples: [],
+  windowStart: 0,
+  lastSample: 0,
+  p95: 0,
+  mean: 0,
+  // Frames before this time are not sampled: startup, or after a failed descent.
+  holdUntil: performance.now() + 3000,
+  holdFor: 30000,
+  goodWindows: 0,
+  // Consecutive good one-second windows needed to step up; doubles when a
+  // step up is undone straight away.
+  upWindows: 5,
+  lastUp: -Infinity,
+  // Mean interval when the current run of step downs began.
+  descentFrom: 0,
+};
+function applyPixelRatio(ratio) {
+  resolution.pixelRatio = ratio;
+  renderer.setPixelRatio(ratio);
+  composer.setPixelRatio(ratio);
+  resolution.samples.length = 0;
+}
+function resetResolution(quality) {
+  Object.assign(resolution, {
+    ceiling: Math.min(devicePixelRatio, QUALITY_PIXEL_RATIO[quality]),
+    goodWindows: 0,
+    upWindows: 5,
+    lastUp: -Infinity,
+    descentFrom: 0,
+  });
+  applyPixelRatio(resolution.ceiling);
+}
+function stepResolution(direction) {
+  const r = resolution;
+  applyPixelRatio(
+    THREE.MathUtils.clamp(
+      r.pixelRatio + direction * r.step,
+      Math.min(r.floor, r.ceiling),
+      r.ceiling,
+    ),
+  );
+  resize();
+}
+function updateResolution(now, interval) {
+  const r = resolution;
+  if (!r.adaptive || now < r.holdUntil) return;
+  // Start a fresh window after a hidden tab, the bakery, or a long stall.
+  if (interval > 250 || now - r.lastSample > 250) {
+    r.samples.length = 0;
+    r.windowStart = now;
+  }
+  r.lastSample = now;
+  r.samples.push(interval);
+  if (now - r.windowStart < 1000) return;
+  r.samples.sort((a, b) => a - b);
+  r.p95 = r.samples[Math.floor(r.samples.length * 0.95)];
+  r.mean = r.samples.reduce((a, b) => a + b, 0) / r.samples.length;
+  r.samples.length = 0;
+  r.windowStart = now;
+  const slow = r.p95 > 20;
+  if (!slow) r.descentFrom = 0;
+  if (slow) {
+    r.goodWindows = 0;
+    // Slow again soon after stepping up: wait longer before the next try.
+    if (now - r.lastUp < 10000) r.upWindows = Math.min(r.upWindows * 2, 60);
+    if (r.pixelRatio > Math.min(r.floor, r.ceiling)) {
+      r.descentFrom ||= r.mean;
+      stepResolution(-1);
+    } else if (r.descentFrom && r.mean > r.descentFrom * 0.95) {
+      // Even the floor did not shorten frames, so something else sets the
+      // pace (a 30 Hz cap or a busy CPU). Restore detail and retry later.
+      // Single steps are not judged: vsync can hold frames at 33 ms until
+      // the GPU fits within one refresh.
+      r.descentFrom = 0;
+      r.holdUntil = now + r.holdFor;
+      r.holdFor = Math.min(r.holdFor * 2, 300000);
+      applyPixelRatio(r.ceiling);
+      resize();
+    }
+  } else if (r.p95 < 18) {
+    if (++r.goodWindows >= r.upWindows && r.pixelRatio < r.ceiling) {
+      r.goodWindows = 0;
+      r.lastUp = now;
+      stepResolution(1);
+    }
+  } else r.goodWindows = 0;
+}
+renderer.setPixelRatio(resolution.ceiling);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -95,6 +199,13 @@ const DEFAULT_VIEW_HEIGHT = 18,
   MIN_VIEW_HEIGHT = 10,
   MAX_VIEW_HEIGHT = 39,
   ZOOM_STEP = 3;
+// Beyond these, single leaves cover only a few pixels and trees draw coarser foliage.
+const COARSE_LEAVES_VIEW_HEIGHT = 24,
+  COARSE_LEAVES_DISTANCE = 18;
+const leafDetailFromEye = (center) =>
+  center.distanceTo(firstPersonCamera.position) > COARSE_LEAVES_DISTANCE
+    ? 1
+    : 0;
 let viewHeight = 29,
   targetViewHeight = 29;
 function updateZoomControls() {
@@ -117,23 +228,133 @@ const hemi = new THREE.HemisphereLight("#eaf2df", "#607b66", 1.5);
 scene.add(hemi);
 const ambient = new THREE.AmbientLight("#ccdabb", 0.22);
 scene.add(ambient);
+// Eye-level views resolve finer shadow texels than the village overview.
+const SHADOW_MAP_SIZES = {
+  high: { overview: 2048, firstPerson: 4096 },
+  balanced: { overview: 1536, firstPerson: 2048 },
+  performance: { overview: 1024, firstPerson: 1024 },
+};
 const sun = new THREE.DirectionalLight("#fff0d6", 2.4);
 sun.position.set(-16, 32, 15);
 sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
-Object.assign(sun.shadow.camera, {
-  left: -35,
-  right: 35,
-  top: 32,
-  bottom: -32,
-  near: 1,
-  far: 85,
-});
+sun.shadow.mapSize.setScalar(SHADOW_MAP_SIZES.high.overview);
+Object.assign(sun.shadow.camera, { near: 1, far: 85 });
 sun.shadow.bias = -0.00015;
 sun.shadow.normalBias = 0.045;
-sun.shadow.radius = 3;
 scene.add(sun);
 scene.add(sun.target);
+// The sun never moves. Its shadow camera rolls with each yaw step so the overview's
+// footprint lines up with the map, and its bounds follow the receivers in view in
+// fixed sizes and whole-texel steps, so shadow edges hold still while the view
+// follows or pans and change only in small steps while it zooms.
+const shadowCamera = sun.shadow.camera;
+// The soil rim's base and the tallest canopy bound every receiver vertically.
+const SHADOW_FLOOR = -1.4,
+  SHADOW_CEILING = 9.5,
+  SHADOW_MARGIN = 1,
+  // Fractions of the whole village, about 12% apart.
+  SHADOW_STEPS = Array.from({ length: 11 }, (_, i) =>
+    i < 10 ? 0.32 * 1.12 ** i : 1,
+  );
+const shadowLight = sun.position.clone().sub(sun.target.position).normalize(),
+  shadowPoint = new THREE.Vector3(),
+  shadowRay = new THREE.Vector3(),
+  shadowSize = new THREE.Vector2(),
+  shadowCenter = new THREE.Vector2(),
+  shadowView = new THREE.Box2(),
+  villageShadow = new THREE.Box2(),
+  shadowStep = [SHADOW_STEPS.length - 1, SHADOW_STEPS.length - 1];
+let shadowYaw = null;
+function addShadowPoint(box, point) {
+  point.applyMatrix4(shadowCamera.matrixWorldInverse);
+  box.expandByPoint(shadowCenter.set(point.x, point.y));
+}
+function rollShadow(yaw) {
+  // Point light-space x along the screen's right edge, projected across the sunlight.
+  const heading = cameraHeading + THREE.MathUtils.degToRad(yaw);
+  shadowPoint.set(Math.cos(heading), 0, -Math.sin(heading));
+  shadowPoint
+    .addScaledVector(shadowLight, -shadowPoint.dot(shadowLight))
+    .normalize();
+  shadowCamera.up.crossVectors(shadowLight, shadowPoint);
+  shadowCamera.position.copy(sun.position);
+  shadowCamera.lookAt(sun.target.position);
+  shadowCamera.updateMatrixWorld();
+  villageShadow.makeEmpty();
+  for (let i = 0; i < 8; i++)
+    addShadowPoint(
+      villageShadow,
+      shadowPoint.set(
+        i & 1 ? 24.6 : -24.6,
+        i & 2 ? SHADOW_CEILING : SHADOW_FLOOR,
+        i & 4 ? 21 : -21,
+      ),
+    );
+  shadowYaw = yaw;
+}
+function updateShadowMapSize() {
+  const size =
+    SHADOW_MAP_SIZES[$("#quality").value][
+      firstPerson ? "firstPerson" : "overview"
+    ];
+  if (sun.shadow.mapSize.x === size) return;
+  sun.shadow.mapSize.setScalar(size);
+  sun.shadow.map?.dispose();
+  sun.shadow.map = null;
+}
+function fitShadow() {
+  if (shadowYaw !== targetYaw) rollShadow(targetYaw);
+  if (firstPerson) shadowView.copy(villageShadow);
+  else {
+    // Trace the overview's corner rays through every receiver height.
+    shadowView.makeEmpty();
+    overviewCamera.updateMatrixWorld();
+    overviewCamera.getWorldDirection(shadowRay);
+    for (let i = 0; i < 8; i++) {
+      shadowPoint
+        .set(i & 1 ? 1 : -1, i & 2 ? 1 : -1, -1)
+        .unproject(overviewCamera);
+      const y = i & 4 ? SHADOW_CEILING : SHADOW_FLOOR;
+      shadowPoint.addScaledVector(shadowRay, (y - shadowPoint.y) / shadowRay.y);
+      addShadowPoint(shadowView, shadowPoint);
+    }
+    shadowView.expandByScalar(SHADOW_MARGIN);
+  }
+  shadowView.getSize(shadowSize);
+  shadowView.getCenter(shadowCenter);
+  const bounds = [0, 0, 0, 0];
+  for (const axis of [0, 1]) {
+    const key = axis ? "y" : "x",
+      low = villageShadow.min[key],
+      full = villageShadow.max[key] - low,
+      needed = Math.min(shadowSize[key] / full, 1);
+    // Grow at once; shrink only when the view fits well inside the smaller size.
+    let step = shadowStep[axis];
+    if (needed > SHADOW_STEPS[step])
+      step = SHADOW_STEPS.findIndex((s) => s >= needed);
+    else while (step > 0 && needed < SHADOW_STEPS[step - 1] * 0.96) step--;
+    shadowStep[axis] = step;
+    const extent = full * SHADOW_STEPS[step],
+      texel = extent / sun.shadow.mapSize[key],
+      start = THREE.MathUtils.clamp(
+        shadowCenter[key] - extent / 2,
+        low,
+        low + full - extent,
+      );
+    bounds[axis * 2] = Math.floor(start / texel) * texel;
+    bounds[axis * 2 + 1] = bounds[axis * 2] + extent;
+  }
+  const [left, right, bottom, top] = bounds;
+  if (
+    left !== shadowCamera.left ||
+    right !== shadowCamera.right ||
+    bottom !== shadowCamera.bottom ||
+    top !== shadowCamera.top
+  ) {
+    Object.assign(shadowCamera, { left, right, bottom, top });
+    shadowCamera.updateProjectionMatrix();
+  }
+}
 const fill = new THREE.DirectionalLight("#dae9ec", 0.6);
 fill.position.set(15, 14, -20);
 scene.add(fill);
@@ -147,14 +368,9 @@ const sceneTarget = new THREE.WebGLRenderTarget(innerWidth, innerHeight, {
 const composer = new EffectComposer(renderer, sceneTarget);
 const scenePass = new RenderPass(scene, camera);
 composer.addPass(scenePass);
-const bloom = new UnrealBloomPass(
-  new THREE.Vector2(innerWidth, innerHeight),
-  0.19,
-  0.65,
-  1.15,
-);
+const bloom = new SoftBloomPass(0.19, 0.65, 1.15);
 composer.addPass(bloom);
-composer.addPass(new OutputPass());
+composer.addPass(new BloomOutputPass(bloom));
 renderer.info.autoReset = false;
 const glowMaterials = new Set();
 scene.traverse((o) => {
@@ -397,6 +613,7 @@ function setFirstPerson(value) {
     pitch = -0.08;
   }
   firstPerson = value;
+  updateShadowMapSize();
   camera = firstPerson ? firstPersonCamera : overviewCamera;
   scenePass.camera = camera;
   life.player.visible = !firstPerson;
@@ -584,20 +801,9 @@ $("#motion").onchange = (e) => (motion = e.target.checked);
 $("#quality").onchange = (e) => {
   const q = e.target.value;
   world.water.setQuality(q);
-  renderer.setPixelRatio(
-    Math.min(
-      devicePixelRatio,
-      q === "high" ? 1.75 : q === "balanced" ? 1.25 : 1,
-    ),
-  );
-  composer.setPixelRatio(renderer.getPixelRatio());
-  sun.shadow.mapSize.setScalar(
-    q === "high" ? 4096 : q === "balanced" ? 2048 : 1024,
-  );
-  if (sun.shadow.map) {
-    sun.shadow.map.dispose();
-    sun.shadow.map = null;
-  }
+  // The chosen quality is the scaler's ceiling.
+  resetResolution(q);
+  updateShadowMapSize();
   bloom.enabled = q !== "performance";
   resize();
 };
@@ -1005,11 +1211,15 @@ function resize() {
   updateFrustum();
   interior?.resize();
 }
-window.addEventListener("resize", resize);
-if (innerWidth < 760) {
-  $("#quality").value = "balanced";
-  $("#quality").dispatchEvent(new Event("change"));
-} else resize();
+window.addEventListener("resize", () => {
+  // Moving to a screen with another density changes the quality's ceiling.
+  const q = $("#quality").value;
+  if (Math.min(devicePixelRatio, QUALITY_PIXEL_RATIO[q]) !== resolution.ceiling)
+    resetResolution(q);
+  resize();
+});
+$("#quality").value = startQuality;
+$("#quality").dispatchEvent(new Event("change"));
 function scanNearby() {
   if (dialogue || photo || modalOpen()) {
     $("#interaction").hidden = true;
@@ -1080,7 +1290,8 @@ const screenRight = new THREE.Vector2(
   duskSky = new THREE.Color("#566782");
 function animate(now) {
   requestAnimationFrame(animate);
-  const dt = Math.min((now - last) / 1000, 0.045);
+  const interval = now - last;
+  const dt = Math.min(interval / 1000, 0.045);
   last = now;
   if (document.hidden) return;
   elapsed += dt;
@@ -1089,6 +1300,7 @@ function animate(now) {
     interior.update(dt, elapsed, motion);
     return;
   }
+  updateResolution(now, interval);
   // Take the shortest arc, including when rotation crosses the 0°/360° seam.
   const yawDelta = THREE.MathUtils.euclideanModulo(targetYaw - overviewYaw + 180, 360) - 180;
   overviewYaw = motion
@@ -1229,9 +1441,23 @@ function animate(now) {
   for (const material of glowMaterials)
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
   playerVisibility.update(camera, !photo && !firstPerson);
+  world.trees.setDetail(
+    firstPerson
+      ? leafDetailFromEye
+      : viewHeight > COARSE_LEAVES_VIEW_HEIGHT
+        ? 1
+        : 0,
+  );
+  fitShadow();
   scene.updateMatrixWorld();
   renderer.info.reset();
-  world.water.render(renderer, camera, { dt, dusk: duskMix, sun });
+  // RenderPass draws into readBuffer; water resolves refraction from that pass.
+  world.water.render(renderer, camera, {
+    dt,
+    dusk: duskMix,
+    sun,
+    target: composer.readBuffer,
+  });
   composer.render();
   if (frame === 3) {
     $("#loading").classList.add("loaded");
@@ -1262,6 +1488,25 @@ window.__willowmere = {
     textures: renderer.info.memory.textures,
     colliders: colliders.length,
     flowers: flowerGroups.size,
+    resolution: {
+      adaptive: resolution.adaptive,
+      pixelRatio: renderer.getPixelRatio(),
+      ceiling: resolution.ceiling,
+      floor: resolution.floor,
+      p95: resolution.p95,
+      mean: resolution.mean,
+      upWindows: resolution.upWindows,
+      drawingBuffer: [canvas.width, canvas.height],
+    },
+    shadow: {
+      mapSize: sun.shadow.mapSize.x,
+      bounds: [
+        shadowCamera.left,
+        shadowCamera.right,
+        shadowCamera.bottom,
+        shadowCamera.top,
+      ],
+    },
     position: life.player.position.toArray(),
     camera: {
       tilt,
@@ -1274,6 +1519,11 @@ window.__willowmere = {
       targetPan: targetPan.toArray(),
     },
   }),
+  setAdaptiveResolution: (on) => {
+    resolution.adaptive = on;
+    resetResolution($("#quality").value);
+    resize();
+  },
   blocked,
   findPath,
   project: (x, z) => {

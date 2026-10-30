@@ -165,3 +165,57 @@ test("distant trees can be culled independently while sharing materials", async 
   expect(result.visible).toBe(4);
   expect(result.sharedLeaves && result.sharedShadows).toBe(true);
 });
+
+test("distant canopies draw every other leaf as a coarser blade", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.__willowmere);
+  const result = await page.evaluate(async () => {
+    const T = await import("/node_modules/three/build/three.module.js");
+    const { createTrees } = await import("/src/trees.js");
+    const trees = createTrees([
+      [0, 0, 1],
+      [40, 0, 1],
+    ]);
+    const [near, far] = trees.foliage;
+    const full = near.count,
+      blade = near.geometry,
+      bounds = trees.canopyBounds.map((box) => box.clone());
+    const triangles = (mesh) => (mesh.geometry.index.count / 3) * mesh.count;
+    const detailed = triangles(near);
+    trees.setDetail((center) => (center.x > 20 ? 1 : 0));
+    const mixed = {
+      near: near.count === full && near.geometry === blade,
+      far: far.count === Math.ceil(far.instanceMatrix.count / 2),
+    };
+    trees.setDetail(1);
+    const coarse = triangles(near);
+    // The coarse blades stay within the culling sphere (wind sway included).
+    const sphere = near.boundingSphere,
+      matrix = new T.Matrix4(),
+      point = new T.Vector3();
+    let enclosed = true;
+    for (let i = 0; i < near.count; i++) {
+      near.getMatrixAt(i, matrix);
+      const p = near.geometry.attributes.position;
+      for (let v = 0; v < p.count; v++)
+        enclosed &&= sphere.containsPoint(
+          point.fromBufferAttribute(p, v).applyMatrix4(matrix),
+        );
+    }
+    trees.setDetail(0);
+    return {
+      mixed,
+      ratio: coarse / detailed,
+      enclosed,
+      restored: near.count === full && near.geometry === blade,
+      boundsKept: trees.canopyBounds.every((box, i) => box.equals(bounds[i])),
+      shared: near.material === far.material,
+    };
+  });
+  expect(result.mixed).toEqual({ near: true, far: true });
+  expect(result.ratio).toBeLessThan(0.3);
+  expect(result.enclosed).toBe(true);
+  expect(result.restored && result.boundsKept && result.shared).toBe(true);
+});
