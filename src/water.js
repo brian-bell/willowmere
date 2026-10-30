@@ -150,7 +150,9 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
   let disposed = false,
     lastCaptureCount = 0,
     totalSteps = 0,
-    wallTime = 0;
+    wallTime = 0,
+    shared = null,
+    refractionSource = "scene capture";
   let settings = QUALITY[quality] || QUALITY.high;
 
   function allocate(body) {
@@ -270,6 +272,10 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     mesh.name = `Water surface · ${config.id}`;
     mesh.position.set(config.x, config.y, config.z);
     mesh.receiveShadow = true;
+    // Draw after every other opaque object, so the first surface in the main pass
+    // can resolve the finished opaque scene into the refraction inputs.
+    mesh.renderOrder = 1e6;
+    mesh.onBeforeRender = resolveSharedScene;
     mesh.userData.waterBody = config.id;
     group.add(mesh);
     const body = {
@@ -566,13 +572,87 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     lastCaptureCount++;
   }
 
-  function render(renderer, camera, { dt = 0, dusk = 0, sun } = {}) {
+  // The caller's main pass can supply refraction when its target has a plain RGBA
+  // color attachment and a 24-bit depth buffer that blit into sceneTarget's formats.
+  function canShare(renderer, target) {
+    return (
+      gpuSimulation &&
+      target?.isWebGLRenderTarget === true &&
+      !target.isWebGLCubeRenderTarget &&
+      !target.isWebGL3DRenderTarget &&
+      !target.isWebGLArrayRenderTarget &&
+      target.textures.length === 1 &&
+      target.texture.format === T.RGBAFormat &&
+      !target.texture.generateMipmaps &&
+      target.depthBuffer &&
+      !target.stencilBuffer &&
+      (!target.depthTexture ||
+        target.depthTexture.type === T.UnsignedIntType) &&
+      // Reading a render-to-texture multisampled target ends its multisampling.
+      !(
+        target.samples > 0 &&
+        renderer.extensions.has("WEBGL_multisampled_render_to_texture")
+      )
+    );
+  }
+
+  // Runs as the first visible surface is drawn into the armed target: every opaque
+  // object is already rasterized, so one blit resolves its color and depth.
+  function resolveSharedScene(renderer, _scene, camera) {
+    if (
+      !shared ||
+      camera !== shared.camera ||
+      renderer.getRenderTarget() !== shared.target
+    )
+      return;
+    const gl = renderer.getContext(),
+      state = renderer.state;
+    const source = renderer.properties.get(shared.target);
+    const read =
+      source.__webglMultisampledFramebuffer || source.__webglFramebuffer;
+    const draw = renderer.properties.get(sceneTarget).__webglFramebuffer;
+    shared = null;
+    if (!read || !draw) return;
+    refractionSource = "main pass";
+    const scissor = renderer.getScissorTest();
+    if (scissor) state.setScissorTest(false);
+    state.bindFramebuffer(gl.READ_FRAMEBUFFER, read);
+    state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, draw);
+    gl.blitFramebuffer(
+      0,
+      0,
+      sceneTarget.width,
+      sceneTarget.height,
+      0,
+      0,
+      sceneTarget.width,
+      sceneTarget.height,
+      gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT,
+      gl.NEAREST,
+    );
+    state.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, read);
+    if (scissor) state.setScissorTest(true);
+  }
+
+  function setSceneTarget(renderer, width, height, type) {
+    if (sceneTarget.texture.type !== type) {
+      sceneTarget.texture.type = type;
+      sceneTarget.dispose();
+    }
+    if (sceneTarget.width !== width || sceneTarget.height !== height)
+      sceneTarget.setSize(width, height);
+    renderer.initRenderTarget(sceneTarget);
+  }
+
+  function render(renderer, camera, { dt = 0, dusk = 0, sun, target } = {}) {
+    shared = null;
     if (disposed) return;
     if (!initialized) {
       gpuSimulation = renderer.extensions.has("EXT_color_buffer_float");
       if (!gpuSimulation) {
-        // Keep the same optical/wave model on GPUs without float render attachments.
-        sceneTarget.texture.type = T.UnsignedByteType;
+        // Keep the same optical/wave model on GPUs without float render attachments;
+        // the refraction capture switches to bytes in setSceneTarget.
         for (const body of bodies)
           body.reflection.texture.type = T.UnsignedByteType;
       }
@@ -621,15 +701,33 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       pendingDt = 0;
       for (const body of bodies) body.mesh.visible = false;
       renderer.setClearColor(savedClear, previousClearAlpha);
-      const size = renderer.getDrawingBufferSize(drawingBufferSize);
-      const width = Math.max(1, Math.round(size.x * settings.refraction));
-      const height = Math.max(1, Math.round(size.y * settings.refraction));
-      if (sceneTarget.width !== width || sceneTarget.height !== height)
-        sceneTarget.setSize(width, height);
       renderer.clippingPlanes = [];
-      renderer.setRenderTarget(sceneTarget);
-      if (!renderer.autoClear) renderer.clear();
-      renderer.render(scene, camera);
+      let width, height;
+      if (canShare(renderer, target)) {
+        // The caller's pass rasterizes the opaque scene once; the surfaces resolve
+        // it at full resolution (a multisample resolve cannot scale). WebGL
+        // truncates fractional composer sizes, so the blit rectangles match.
+        width = Math.floor(target.width);
+        height = Math.floor(target.height);
+        setSceneTarget(renderer, width, height, target.texture.type);
+        shared = { target, camera };
+        // Confirmed by resolveSharedScene once the caller's pass draws a surface.
+        refractionSource = "unresolved";
+      } else {
+        const size = renderer.getDrawingBufferSize(drawingBufferSize);
+        width = Math.max(1, Math.round(size.x * settings.refraction));
+        height = Math.max(1, Math.round(size.y * settings.refraction));
+        setSceneTarget(
+          renderer,
+          width,
+          height,
+          gpuSimulation ? T.HalfFloatType : T.UnsignedByteType,
+        );
+        renderer.setRenderTarget(sceneTarget);
+        if (!renderer.autoClear) renderer.clear();
+        renderer.render(scene, camera);
+        refractionSource = "scene capture";
+      }
       // One scene reflection per frame after warmup; basins and river cache independently.
       const overdue = visible
         .filter((b) => wallTime - b.lastReflection >= settings.interval)
@@ -691,6 +789,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       captures: lastCaptureCount,
       frame: renderFrame,
       refraction: [sceneTarget.width, sceneTarget.height],
+      refractionSource,
       bodies: bodies.map((b) => ({
         id: b.config.id,
         resolution: [...b.resolution],
