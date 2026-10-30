@@ -1231,7 +1231,13 @@ function animate(now) {
   playerVisibility.update(camera, !photo && !firstPerson);
   scene.updateMatrixWorld();
   renderer.info.reset();
-  world.water.render(renderer, camera, { dt, dusk: duskMix, sun });
+  // RenderPass draws into readBuffer; water resolves refraction from that pass.
+  world.water.render(renderer, camera, {
+    dt,
+    dusk: duskMix,
+    sun,
+    target: composer.readBuffer,
+  });
   composer.render();
   if (frame === 3) {
     $("#loading").classList.add("loaded");

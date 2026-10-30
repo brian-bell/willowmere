@@ -7,6 +7,7 @@ The village keeps its detailed geometry and animations while reducing the work s
 - Each tree retains separate bark, detail, leaf, and litter bounds. Materials, leaf geometry, textures, and wind uniforms are shared. Offscreen trees can be rejected independently in the main camera, shadows, and water reflections.
 - Orthographic water reflections crop the mirrored camera to the pool's projected bounds, with a margin for displaced waves and normal distortion. Capture textures follow the visible footprint, rounded to 64-pixel increments and capped by the chosen quality. The reflection matrix and distortion scale preserve texture projection. Perspective study views retain the full mirrored view.
 - The village and bakery update scene transforms once before their rendering passes. The water system respects manually updated scenes and temporarily suppresses repeated automatic updates during its own captures. The bakery's ambient occlusion pass reuses the shadows produced by its color pass.
+- Water refraction reuses the main scene pass instead of rendering the scene a second time. Water surfaces draw last among opaque objects; the first one resolves the composer's multisampled color and depth into the refraction texture with a single blit. See [docs/water.md](water.md#refraction-from-the-main-pass).
 - The final canvas does not request a second multisampled framebuffer or preserve its drawing buffer. The composer's multisampled scene target still supplies antialiasing. Narrow screens select balanced quality before their first frame.
 
 ## Reproduce a benchmark
@@ -33,8 +34,20 @@ Sequential headless Chrome runs at 1600 × 1000, DPR 1, with a fresh save and th
 
 High quality remains limited by rendering on this setup; lower submission cost does not guarantee 60 FPS. Re-run the benchmark on the target device, especially at higher device pixel ratios. The raw local reports are `output/performance-before.json` and `output/performance-after.json` (ignored build artifacts).
 
+## Water refraction from the main pass (2026-10-29)
+
+Before is `1a2624c`; after renders refraction from the main pass. Runs alternated before and after (two pairs at DPR 1 with `npm run benchmark`, three pairs at DPR 2 with a copy of the script using `deviceScaleFactor: 2` and Chrome's `--disable-frame-rate-limit --disable-gpu-vsync`). Values are medians of the per-run means.
+
+| Quality     | DPR 1 frame ms | DPR 2 frame ms | Draw calls  | Triangles     |
+| ----------- | -------------- | -------------- | ----------- | ------------- |
+| High        | 55.7 → 36.4    | 75.4 → 45.2    | 1,262 → 875 | 3.85M → 2.82M |
+| Balanced    | 58.0 → 33.6    | 47.3 → 33.2    | 1,252 → 839 | 3.85M → 2.73M |
+| Performance | 54.7 → 29.7    | 23.5 → 19.2    | 1,197 → 778 | 3.74M → 2.55M |
+
+Other benchmarks and test suites shared the GPU during these runs, so absolute frame times are inflated and noisy; every paired run favored the after build. The draw and triangle reductions are deterministic: about 390 draws and 1.0–1.2M triangles per frame at the spawn view. Performance quality gains least because its separate capture was already at half resolution.
+
 ## Regression budgets
 
-`tests/performance.spec.js` checks preserved character geometry and animated joints, shared flower resources, independent plant growth, and draw/geometry budgets for a village with 30 planted bouquets. Tree tests check independent culling and shared wind materials. Water tests cover small fountain capture allocations and restoration of both automatic and manual scene-transform policies.
+`tests/performance.spec.js` checks preserved character geometry and animated joints, shared flower resources, independent plant growth, and draw/geometry budgets for a village with 30 planted bouquets. Tree tests check independent culling and shared wind materials. Water tests cover small fountain capture allocations, refraction resolved from the village's main pass, and restoration of both automatic and manual scene-transform policies.
 
 These tests assert rendering work and behavior instead of a machine-dependent FPS threshold. The village diagnostics expose `drawCalls`, `triangles`, `geometries`, and `textures`; water diagnostics include each pool's `reflectionSize`.

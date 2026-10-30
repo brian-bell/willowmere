@@ -89,6 +89,8 @@ test("every village pool shares the model across quality, lighting and paused mo
     "fountain-upper",
   ]);
   expect(initial.simulation).toBe("GPU RGBA16F");
+  // Refraction comes from the composer's own scene pass, not a second scene render.
+  expect(initial.refractionSource).toBe("main pass");
   for (const body of initial.bodies.filter((b) =>
     b.id.startsWith("fountain"),
   )) {
@@ -128,6 +130,9 @@ test("every village pool shares the model across quality, lighting and paused mo
   expect(
     await page.evaluate(() => window.__willowmere.getWater().refraction),
   ).toEqual([700, 950]);
+  expect(
+    await page.evaluate(() => window.__willowmere.getWater().refractionSource),
+  ).toBe("main pass");
   expect(errors).toEqual([]);
 });
 
@@ -182,6 +187,7 @@ test("water retains its optical model without float color attachments", async ({
   await page.waitForTimeout(250);
   const state = await page.evaluate(() => window.__waterStudy.diagnostics());
   expect(state.simulation).toBe("analytic fallback");
+  expect(state.refractionSource).toBe("scene capture");
   expect(state.steps).toBe(0);
   expect(state.time).toBeGreaterThan(0);
   expect(
