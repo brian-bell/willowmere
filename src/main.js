@@ -1,8 +1,7 @@
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { SoftBloomPass, BloomOutputPass } from "./bloom.js";
 import "./style.css";
 import { applyIcons } from "./icons.js";
 applyIcons();
@@ -252,14 +251,9 @@ const sceneTarget = new THREE.WebGLRenderTarget(innerWidth, innerHeight, {
 const composer = new EffectComposer(renderer, sceneTarget);
 const scenePass = new RenderPass(scene, camera);
 composer.addPass(scenePass);
-const bloom = new UnrealBloomPass(
-  new THREE.Vector2(innerWidth, innerHeight),
-  0.19,
-  0.65,
-  1.15,
-);
+const bloom = new SoftBloomPass(0.19, 0.65, 1.15);
 composer.addPass(bloom);
-composer.addPass(new OutputPass());
+composer.addPass(new BloomOutputPass(bloom));
 renderer.info.autoReset = false;
 const glowMaterials = new Set();
 scene.traverse((o) => {
