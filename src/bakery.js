@@ -1787,6 +1787,7 @@ export function createBakery() {
   return {
     scene,
     sun,
+    windowLight,
     layout: {
       bounds: { minX: -7.35, maxX: 7.35, minZ: -5.5, maxZ: 5.5 },
       spawn: { x: 4.8, z: 4.65, yaw: 0.93 },

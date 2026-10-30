@@ -266,3 +266,42 @@ test("touch walking and drag look work with reduced motion on a narrow screen", 
     await page.evaluate(() => window.__willowmere.getInterior().active),
   ).toBe(false);
 });
+
+// The lights are fixed, so their shadow maps are cached and the room renders
+// for the color and occlusion passes only. A single frame may also refresh one
+// map, so budgets use the median over many frames.
+test("bakery caches its shadows and keeps per-frame work within budget", async ({
+  page,
+}) => {
+  await page.goto("/?interior=bakery&resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere?.getInterior().active);
+  const measure = (quality) =>
+    page.evaluate(async (quality) => {
+      const select = document.querySelector("#quality");
+      select.value = quality;
+      select.dispatchEvent(new Event("change"));
+      const draws = [];
+      for (let i = 0; i < 40; i++) {
+        await new Promise(requestAnimationFrame);
+        draws.push(window.__willowmere.getInterior().drawCalls);
+      }
+      draws.sort((a, b) => a - b);
+      const { render } = window.__willowmere.getInterior();
+      return { render, draws: draws[20] };
+    }, quality);
+  const high = await measure("high");
+  expect(high.render).toMatchObject({
+    samples: 4,
+    ao: true,
+    aoWidth: Math.round(high.render.width / 2),
+    bloom: true,
+    sunShadow: 2048,
+    shadowAutoUpdate: false,
+  });
+  expect(high.draws).toBeLessThan(330);
+  const balanced = await measure("balanced");
+  expect(balanced.render).toMatchObject({ samples: 2, sunShadow: 1024 });
+  const performance = await measure("performance");
+  expect(performance.render).toMatchObject({ ao: false, bloom: false });
+  expect(performance.draws).toBeLessThan(180);
+});
