@@ -10,6 +10,25 @@ import { createInteriorWalker } from "./interior-movement.js";
 import "./interior.css";
 
 class InteriorAO extends SSAOPass {
+  // The blurred contact occlusion is soft, so half resolution keeps its look
+  // while quartering the normal pass, sampling and blur fill.
+  resolutionScale = 0.5;
+
+  setSize(width, height) {
+    super.setSize(
+      Math.max(1, Math.round(width * this.resolutionScale)),
+      Math.max(1, Math.round(height * this.resolutionScale)),
+    );
+  }
+
+  setKernelSize(size) {
+    if (this.kernel.length === size) return;
+    this.kernel.length = 0;
+    this._generateSampleKernel(size);
+    this.ssaoMaterial.defines.KERNEL_SIZE = size;
+    this.ssaoMaterial.needsUpdate = true;
+  }
+
   render(renderer, ...args) {
     // RenderPass already updated the shadows for this frame. The normal pass
     // needs only geometry, so reuse those same shadow maps.
@@ -52,13 +71,25 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
   bakery.scene.environmentIntensity = 0.24;
   environment.dispose();
   pmrem.dispose();
+  // Both shadowing lights are fixed and almost everything they light is merged
+  // static geometry. Their maps refresh in turn a few times a second for the
+  // slow cat and star mobile, instead of re-rendering the room twice a frame.
+  const shadowLights = [bakery.sun, bakery.windowLight];
+  for (const light of shadowLights) light.shadow.autoUpdate = false;
+  let shadowClock = 0,
+    shadowTurn = 0,
+    shadowMotion = true;
+  function refreshShadows() {
+    for (const light of shadowLights) light.shadow.needsUpdate = true;
+    shadowClock = 0;
+  }
   const renderTarget = new T.WebGLRenderTarget(innerWidth, innerHeight, {
-    samples: 4,
+    samples: 2,
     type: T.HalfFloatType,
   });
   const composer = new EffectComposer(renderer, renderTarget);
   composer.addPass(new RenderPass(bakery.scene, camera));
-  const ao = new InteriorAO(bakery.scene, camera, innerWidth, innerHeight, 16);
+  const ao = new InteriorAO(bakery.scene, camera, innerWidth, innerHeight, 12);
   ao.kernelRadius = 0.35;
   ao.minDistance = 0.001;
   ao.maxDistance = 0.035;
@@ -367,6 +398,8 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
     $("#bakery-light").setAttribute("aria-pressed", String(night));
   };
   panel.hidden = true;
+  // Benchmark overrides for attributing render cost; empty in normal play.
+  const overrides = {};
 
   return {
     get active() {
@@ -460,18 +493,39 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
       camera.fov = camera.aspect < 0.8 ? 78 : 66;
       camera.updateProjectionMatrix();
       const quality = document.querySelector("#quality").value;
-      ao.enabled = bloom.enabled = quality !== "performance";
+      ao.enabled = overrides.ao ?? quality !== "performance";
+      bloom.enabled = overrides.bloom ?? quality !== "performance";
+      ao.resolutionScale = overrides.aoScale ?? 0.5;
+      ao.setKernelSize(overrides.aoSamples ?? 12);
       const shadowSize =
-        quality === "high" ? 4096 : quality === "balanced" ? 2048 : 1024;
+        overrides.sunShadow ?? (quality === "high" ? 2048 : 1024);
       if (bakery.sun.shadow.mapSize.x !== shadowSize) {
         bakery.sun.shadow.mapSize.setScalar(shadowSize);
         bakery.sun.shadow.map?.dispose();
         bakery.sun.shadow.map = null;
       }
+      bakery.windowLight.castShadow = overrides.windowShadow ?? true;
+      for (const light of shadowLights)
+        light.shadow.autoUpdate = overrides.shadowRefresh === 0;
+      refreshShadows();
+      const samples = overrides.samples ?? 2;
+      for (const target of [composer.renderTarget1, composer.renderTarget2])
+        if (target.samples !== samples) {
+          target.samples = samples;
+          target.dispose();
+        }
+      // Retina interiors are fill-rate bound; 1.25 keeps edges clean with MSAA.
       composer.setPixelRatio(
-        Math.min(renderer.getPixelRatio(), innerWidth < 760 ? 1.25 : 1.5),
+        overrides.pixelRatio ?? Math.min(renderer.getPixelRatio(), 1.25),
       );
       composer.setSize(innerWidth, innerHeight);
+    },
+    tune(settings) {
+      for (const [key, value] of Object.entries(settings))
+        if (value == null) delete overrides[key];
+        else overrides[key] = value;
+      this.resize();
+      return this.diagnostics().render;
     },
     update(dt, time, motion) {
       let moved = 0;
@@ -505,6 +559,16 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
         if (noteRemaining <= 0) $("#bakery-note").hidden = true;
       }
       scanNearby();
+      shadowClock += dt;
+      if (motion !== shadowMotion) {
+        // Reduced motion poses the cat and mobile at rest; capture that once.
+        shadowMotion = motion;
+        refreshShadows();
+      } else if (motion && shadowClock > (overrides.shadowRefresh ?? 0.125)) {
+        shadowLights[shadowTurn].shadow.needsUpdate = true;
+        shadowTurn = (shadowTurn + 1) % shadowLights.length;
+        shadowClock = 0;
+      }
       bakery.update(time, motion);
       bakery.scene.updateMatrixWorld();
       renderer.toneMappingExposure = 1.05;
@@ -524,6 +588,18 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
       pointerLocked: document.pointerLockElement === canvas,
       drawCalls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
+      render: {
+        pixelRatio: composer._pixelRatio,
+        width: composer.renderTarget1.width,
+        height: composer.renderTarget1.height,
+        samples: composer.renderTarget1.samples,
+        ao: ao.enabled,
+        aoWidth: ao.width,
+        aoSamples: ao.kernel.length,
+        bloom: bloom.enabled,
+        sunShadow: bakery.sun.shadow.mapSize.x,
+        shadowAutoUpdate: bakery.sun.shadow.autoUpdate,
+      },
     }),
   };
 }

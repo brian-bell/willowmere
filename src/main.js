@@ -1252,6 +1252,7 @@ window.__willowmere = {
     pointerLocked: document.pointerLockElement === canvas,
   }),
   getInterior: () => interior?.diagnostics() ?? { active: false },
+  tuneInterior: (settings) => interior?.tune(settings),
   getWater: () => world.water.diagnostics(),
   getDiagnostics: () => ({
     objects: scene.children.length,
