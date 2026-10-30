@@ -76,11 +76,38 @@
       <div id="location">
         <span>⌖</span> <span id="location-name">The village green</span>
       </div>
-      <div class="zoom-controls" role="group" aria-label="View zoom">
-        <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
-        <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+      <div class="zoom-controls" role="group" aria-label="Camera view">
+        <button
+          id="view-toggle"
+          type="button"
+          aria-pressed="false"
+          title="Switch camera view (V)"
+        >
+          First person <kbd>V</kbd>
+        </button>
+        <button
+          id="free-look"
+          type="button"
+          aria-pressed="false"
+          title="Capture mouse to look around; Escape releases it"
+          hidden
+        >
+          Free look
+        </button>
+        <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">
+          +
+        </button>
+        <button
+          id="zoom-out"
+          type="button"
+          aria-label="Zoom out"
+          title="Zoom out"
+        >
+          −
+        </button>
         <button id="zoom-reset" type="button" title="Reset zoom">Reset</button>
       </div>
+      <div id="view-help" hidden>WASD walk · Drag to look · ← → turn</div>
       <div id="interaction" hidden><kbd>E</kbd><span>Say hello</span></div>
       <div id="toast" role="status"></div>
       <div class="bottom-left">
@@ -215,7 +242,9 @@
         >
         <p>
           WASD / arrows to walk · Shift to run<br />E to interact · 1–4 tools ·
-          J journal<br />P photo mode · Esc close · Scroll or use the view buttons to zoom
+          J journal · V switch camera view<br />P photo mode · Esc close ·
+          Scroll or use the view buttons to zoom<br />First person: drag to look
+          · ← → turn · Page Up / Down look up / down
         </p>
         <button id="reset-position" class="soft-button">
           Return to the village green
@@ -229,11 +258,11 @@
         <h2>A little world is waking up…</h2>
       </div>
       <div id="touch-controls">
-        <button data-key="ArrowUp" aria-label="Walk up">↑</button>
+        <button data-key="w" aria-label="Walk forward">↑</button>
         <div>
-          <button data-key="ArrowLeft" aria-label="Walk left">←</button
-          ><button data-key="ArrowDown" aria-label="Walk down">↓</button
-          ><button data-key="ArrowRight" aria-label="Walk right">→</button>
+          <button data-key="a" aria-label="Walk left">←</button
+          ><button data-key="s" aria-label="Walk backward">↓</button
+          ><button data-key="d" aria-label="Walk right">→</button>
         </div>
         <button id="touch-interact">Interact</button>
       </div>

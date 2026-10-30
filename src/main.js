@@ -32,7 +32,19 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.2;
-const camera = new THREE.OrthographicCamera(-25, 25, 16, -16, 0.1, 160);
+const overviewCamera = new THREE.OrthographicCamera(-25, 25, 16, -16, 0.1, 160),
+  firstPersonCamera = new THREE.PerspectiveCamera(
+    66,
+    innerWidth / innerHeight,
+    0.06,
+    160,
+  );
+firstPersonCamera.rotation.order = "YXZ";
+let camera = overviewCamera,
+  firstPerson = false,
+  yaw = 0,
+  pitch = 0,
+  dragging = null;
 const cameraOffset = new THREE.Vector3(27, 36, 44);
 const DEFAULT_VIEW_HEIGHT = 18,
   MIN_VIEW_HEIGHT = 10,
@@ -41,12 +53,17 @@ const DEFAULT_VIEW_HEIGHT = 18,
 let viewHeight = 29,
   targetViewHeight = 29;
 function updateZoomControls() {
-  $("#zoom-in").disabled = targetViewHeight <= MIN_VIEW_HEIGHT;
-  $("#zoom-out").disabled = targetViewHeight >= MAX_VIEW_HEIGHT;
-  $("#zoom-reset").disabled = targetViewHeight === DEFAULT_VIEW_HEIGHT;
+  $("#zoom-in").disabled = firstPerson || targetViewHeight <= MIN_VIEW_HEIGHT;
+  $("#zoom-out").disabled = firstPerson || targetViewHeight >= MAX_VIEW_HEIGHT;
+  $("#zoom-reset").disabled =
+    firstPerson || targetViewHeight === DEFAULT_VIEW_HEIGHT;
 }
 function setZoom(height) {
-  targetViewHeight = THREE.MathUtils.clamp(height, MIN_VIEW_HEIGHT, MAX_VIEW_HEIGHT);
+  targetViewHeight = THREE.MathUtils.clamp(
+    height,
+    MIN_VIEW_HEIGHT,
+    MAX_VIEW_HEIGHT,
+  );
   updateZoomControls();
 }
 const target = new THREE.Vector3(0, 0, 1.5),
@@ -83,7 +100,8 @@ const sceneTarget = new THREE.WebGLRenderTarget(innerWidth, innerHeight, {
   type: THREE.HalfFloatType,
 });
 const composer = new EffectComposer(renderer, sceneTarget);
-composer.addPass(new RenderPass(scene, camera));
+const scenePass = new RenderPass(scene, camera);
+composer.addPass(scenePass);
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(innerWidth, innerHeight),
   0.19,
@@ -202,6 +220,7 @@ let interior = null,
 async function enterBakery() {
   if (interiorLoading || interior?.active) return;
   interiorLoading = true;
+  releaseLook();
   begin();
   if (photo) setPhoto(false);
   keys.clear();
@@ -238,6 +257,7 @@ function leaveBakery() {
   const url = new URL(location.href);
   url.searchParams.delete("interior");
   history.replaceState(null, "", url);
+  updateViewUI();
   resize();
 }
 $("#visit-bakery").onclick = enterBakery;
@@ -283,11 +303,109 @@ $$(".tool").forEach(
 const keys = new Set(),
   velocity = new THREE.Vector2(),
   clickPath = [];
+function releaseLook() {
+  if (dragging && canvas.hasPointerCapture(dragging.id))
+    canvas.releasePointerCapture(dragging.id);
+  dragging = null;
+  if (document.pointerLockElement === canvas) document.exitPointerLock();
+}
+function updateViewUI() {
+  $("#game").classList.toggle("first-person", firstPerson);
+  $("#view-toggle").setAttribute("aria-pressed", String(firstPerson));
+  $("#view-toggle").innerHTML = firstPerson
+    ? "Village view <kbd>V</kbd>"
+    : "First person <kbd>V</kbd>";
+  $("#free-look").hidden = !firstPerson;
+  $("#view-help").hidden = !firstPerson;
+  $("#photo-hint span").textContent = firstPerson
+    ? "Drag to look · V to switch views · Press P or Esc to return"
+    : "Scroll to frame · Press P or Esc to return";
+  canvas.setAttribute(
+    "aria-label",
+    firstPerson
+      ? "First-person village. WASD to walk, drag to look, arrow keys to turn, Page Up and Page Down to look up and down, E to interact, V to switch views."
+      : "Interactive village. Move with WASD or arrow keys, interact with E. V for first person.",
+  );
+  updateZoomControls();
+}
+function setFirstPerson(value) {
+  releaseLook();
+  keys.clear();
+  velocity.set(0, 0);
+  clickPath.length = 0;
+  if (value && !firstPerson) {
+    yaw = life.player.rotation.y + Math.PI;
+    pitch = -0.08;
+  }
+  firstPerson = value;
+  camera = firstPerson ? firstPersonCamera : overviewCamera;
+  scenePass.camera = camera;
+  life.player.visible = !firstPerson;
+  state.viewMode = firstPerson ? "first-person" : "overview";
+  updateViewUI();
+  save();
+  canvas.focus({ preventScroll: true });
+}
+setFirstPerson(state.viewMode === "first-person");
+$("#view-toggle").onclick = () => {
+  begin();
+  setFirstPerson(!firstPerson);
+};
+$("#free-look").onclick = async () => {
+  if (!canLook()) return;
+  if (document.pointerLockElement === canvas) return releaseLook();
+  try {
+    if (!canvas.requestPointerLock) throw new Error("Pointer lock unavailable");
+    await canvas.requestPointerLock();
+  } catch {
+    toast(
+      "Drag the scene to look around. You can also turn with the arrow keys.",
+    );
+  }
+};
+function canLook() {
+  return (
+    firstPerson &&
+    !interior?.active &&
+    !interiorLoading &&
+    !dialogue &&
+    !modalOpen()
+  );
+}
+function look(dx, dy) {
+  yaw -= dx * 0.0035;
+  pitch = THREE.MathUtils.clamp(pitch - dy * 0.0035, -1.35, 1.35);
+}
+document.addEventListener("pointerlockchange", () => {
+  if (interior?.active) return;
+  const locked = document.pointerLockElement === canvas;
+  $("#free-look").setAttribute("aria-pressed", String(locked));
+  if (!locked) {
+    keys.clear();
+    velocity.set(0, 0);
+  }
+});
+document.addEventListener("pointermove", (e) => {
+  if (!canLook()) return;
+  if (document.pointerLockElement === canvas) look(e.movementX, e.movementY);
+  else if (dragging?.id === e.pointerId) {
+    look(e.clientX - dragging.x, e.clientY - dragging.y);
+    dragging.x = e.clientX;
+    dragging.y = e.clientY;
+  }
+});
+const stopLook = (e) => {
+  if (dragging?.id === e.pointerId) dragging = null;
+};
+canvas.addEventListener("pointerup", stopLook);
+canvas.addEventListener("pointercancel", stopLook);
+canvas.addEventListener("lostpointercapture", stopLook);
 let lastStep = 0;
 function modalOpen() {
   return !!document.querySelector("dialog[open]");
 }
 function openDialogue(name, lines, onFinish) {
+  releaseLook();
   dialogue = { name, lines, index: 0, onFinish };
   $("#speaker").textContent = name;
   $("#dialogue-text").textContent = lines[0];
@@ -349,6 +467,7 @@ function refreshJournal() {
   );
 }
 function openModal(id) {
+  releaseLook();
   keys.clear();
   clickPath.length = 0;
   const d = $(id);
@@ -475,8 +594,9 @@ function interact() {
       toast("Your seed pouch is empty. Finn has a few to spare.");
       return;
     }
-    let fx = p.x + Math.sin(life.player.rotation.y) * 0.8,
-      fz = p.z + Math.cos(life.player.rotation.y) * 0.8;
+    const facing = firstPerson ? yaw + Math.PI : life.player.rotation.y;
+    let fx = p.x + Math.sin(facing) * 0.8,
+      fz = p.z + Math.cos(facing) * 0.8;
     if (!openGrass(fx, fz)) {
       toast("Find a little more room for those roots.");
       return;
@@ -597,8 +717,9 @@ window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k))
     e.preventDefault();
-  if (e.repeat && ["e", "j", "p", "escape"].includes(k)) return;
+  if (e.repeat && ["e", "j", "p", "v", "escape"].includes(k)) return;
   if (k === "escape") {
+    releaseLook();
     if (photo) setPhoto(false);
     if (dialogue) {
       dialogue = null;
@@ -612,6 +733,12 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (dialogue) return;
+  if (k === "v") {
+    begin();
+    setFirstPerson(!firstPerson);
+    return;
+  }
+  if (firstPerson && ["pageup", "pagedown"].includes(k)) e.preventDefault();
   if (k === "j") {
     $("#journal-button").click();
     return;
@@ -644,12 +771,14 @@ window.addEventListener("keyup", (e) => {
   interior?.keyUp(e);
 });
 window.addEventListener("blur", () => {
+  releaseLook();
   keys.clear();
   velocity.set(0, 0);
   interior?.blur();
 });
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
+    releaseLook();
     keys.clear();
     velocity.set(0, 0);
     interior?.blur();
@@ -660,11 +789,13 @@ $$("[data-key]").forEach((b) => {
     e.preventDefault();
     b.setPointerCapture(e.pointerId);
     keys.add(b.dataset.key.toLowerCase());
+    clickPath.length = 0;
     begin();
   });
   const release = () => keys.delete(b.dataset.key.toLowerCase());
   b.addEventListener("pointerup", release);
   b.addEventListener("pointercancel", release);
+  b.addEventListener("lostpointercapture", release);
 });
 $("#touch-interact").onclick = interact;
 // A grid search gives point-and-click movement a route around cottages and across the bridge.
@@ -762,6 +893,14 @@ canvas.addEventListener("pointerdown", (e) => {
   if (interior?.active || interiorLoading) return;
   if (e.button !== 0 || dialogue || modalOpen()) return;
   begin();
+  if (firstPerson) {
+    if (document.pointerLockElement === canvas) interact();
+    else if (!dragging) {
+      dragging = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      canvas.setPointerCapture(e.pointerId);
+    }
+    return;
+  }
   const r = canvas.getBoundingClientRect();
   mouse.set(
     ((e.clientX - r.left) / r.width) * 2 - 1,
@@ -780,7 +919,7 @@ canvas.addEventListener("pointerdown", (e) => {
 canvas.addEventListener(
   "wheel",
   (e) => {
-    if (interior?.active || interiorLoading) return;
+    if (interior?.active || interiorLoading || firstPerson) return;
     e.preventDefault();
     setZoom(targetViewHeight + e.deltaY * 0.012);
   },
@@ -791,11 +930,14 @@ function updateFrustum() {
     h = innerHeight;
   const aspect = w / h;
   const height = aspect < 0.9 ? viewHeight * 1.35 : viewHeight;
-  camera.left = (-height * aspect) / 2;
-  camera.right = (height * aspect) / 2;
-  camera.top = height / 2;
-  camera.bottom = -height / 2;
-  camera.updateProjectionMatrix();
+  overviewCamera.left = (-height * aspect) / 2;
+  overviewCamera.right = (height * aspect) / 2;
+  overviewCamera.top = height / 2;
+  overviewCamera.bottom = -height / 2;
+  overviewCamera.updateProjectionMatrix();
+  firstPersonCamera.aspect = aspect;
+  firstPersonCamera.fov = aspect < 0.8 ? 78 : 66;
+  firstPersonCamera.updateProjectionMatrix();
 }
 function resize() {
   renderer.setSize(innerWidth, innerHeight);
@@ -890,16 +1032,34 @@ function animate(now) {
   const p = life.player.position;
   input.set(0, 0);
   if (!dialogue && !modalOpen()) {
+    if (firstPerson) {
+      yaw +=
+        ((keys.has("arrowleft") ? 1 : 0) - (keys.has("arrowright") ? 1 : 0)) *
+        dt *
+        1.65;
+      pitch = THREE.MathUtils.clamp(
+        pitch +
+          ((keys.has("pageup") ? 1 : 0) - (keys.has("pagedown") ? 1 : 0)) * dt,
+        -1.35,
+        1.35,
+      );
+    }
     const horiz =
-        (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
-        (keys.has("a") || keys.has("arrowleft") ? 1 : 0),
+        (keys.has("d") || (!firstPerson && keys.has("arrowright")) ? 1 : 0) -
+        (keys.has("a") || (!firstPerson && keys.has("arrowleft")) ? 1 : 0),
       vert =
         (keys.has("s") || keys.has("arrowdown") ? 1 : 0) -
         (keys.has("w") || keys.has("arrowup") ? 1 : 0);
-    input
-      .copy(screenRight)
-      .multiplyScalar(horiz)
-      .addScaledVector(screenDown, vert);
+    if (firstPerson)
+      input.set(
+        Math.cos(yaw) * horiz + Math.sin(yaw) * vert,
+        -Math.sin(yaw) * horiz + Math.cos(yaw) * vert,
+      );
+    else
+      input
+        .copy(screenRight)
+        .multiplyScalar(horiz)
+        .addScaledVector(screenDown, vert);
     if (input.lengthSq() > 0) input.normalize();
     else if (clickPath.length) {
       let dest = clickPath[0];
@@ -947,8 +1107,10 @@ function animate(now) {
     updateFrustum();
   }
   cameraTarget.lerp(target, 1 - Math.exp(-dt * 1.8));
-  camera.position.copy(cameraTarget).add(cameraOffset);
-  camera.lookAt(cameraTarget);
+  overviewCamera.position.copy(cameraTarget).add(cameraOffset);
+  overviewCamera.lookAt(cameraTarget);
+  firstPersonCamera.position.copy(p).y += 1.65;
+  firstPersonCamera.rotation.set(pitch, yaw, 0, "YXZ");
   destination.visible = clickPath.length > 0;
   if (destination.visible) {
     destination.scale.setScalar(1 + Math.sin(elapsed * 4) * 0.12);
@@ -978,7 +1140,7 @@ function animate(now) {
   if (frame % 8 === 0) scanNearby();
   for (const material of glowMaterials)
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
-  playerVisibility.update(camera, !photo);
+  playerVisibility.update(camera, !photo && !firstPerson);
   scene.updateMatrixWorld();
   renderer.info.reset();
   world.water.render(renderer, camera, { dt, dusk: duskMix, sun });
@@ -992,6 +1154,15 @@ requestAnimationFrame(animate);
 window.__willowmere = {
   getState: () => structuredClone(state),
   getPlayer: () => ({ x: life.player.position.x, z: life.player.position.z }),
+  getView: () => ({
+    mode: firstPerson ? "first-person" : "overview",
+    camera: camera.type,
+    position: camera.position.toArray(),
+    yaw,
+    pitch,
+    playerVisible: life.player.visible,
+    pointerLocked: document.pointerLockElement === canvas,
+  }),
   getInterior: () => interior?.diagnostics() ?? { active: false },
   getWater: () => world.water.diagnostics(),
   getDiagnostics: () => ({
