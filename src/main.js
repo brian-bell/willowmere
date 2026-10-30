@@ -21,7 +21,7 @@ scene.fog = new THREE.FogExp2("#b5c2a0", 0.0025);
 scene.matrixWorldAutoUpdate = false;
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  // The composer's scene target supplies antialiasing; see sceneSamples().
+  // The composer already renders into a multisampled target.
   antialias: false,
   powerPreference: "high-performance",
 });
@@ -254,19 +254,6 @@ composer.addPass(scenePass);
 const bloom = new SoftBloomPass(0.19, 0.65, 1.15);
 composer.addPass(bloom);
 composer.addPass(new BloomOutputPass(bloom));
-// A drawing buffer of 1.5 device pixels per CSS pixel or more already
-// supersamples edges, so 2x MSAA comes close to 4x there. Smaller buffers
-// keep 4x: with 2x, roof shingle grooves break into dashes and edges step.
-const sceneSamples = () => (renderer.getPixelRatio() >= 1.5 ? 2 : 4);
-function setSceneSamples(samples) {
-  // The composer renders into a clone of sceneTarget; both must change.
-  for (const target of [composer.renderTarget1, composer.renderTarget2]) {
-    if (target.samples === samples) continue;
-    target.samples = samples;
-    // Disposing makes the renderer reallocate the buffers with the new count.
-    target.dispose();
-  }
-}
 renderer.info.autoReset = false;
 const glowMaterials = new Set();
 scene.traverse((o) => {
@@ -1108,7 +1095,6 @@ function updateFrustum() {
 }
 function resize() {
   renderer.setSize(innerWidth, innerHeight);
-  setSceneSamples(sceneSamples());
   composer.setSize(innerWidth, innerHeight);
   updateFrustum();
   interior?.resize();
@@ -1371,7 +1357,6 @@ window.__willowmere = {
     objects: scene.children.length,
     drawCalls: renderer.info.render.calls,
     triangles: renderer.info.render.triangles,
-    sceneSamples: composer.renderTarget2.samples,
     geometries: renderer.info.memory.geometries,
     textures: renderer.info.memory.textures,
     colliders: colliders.length,
