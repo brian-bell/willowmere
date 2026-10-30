@@ -34,6 +34,26 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.2;
 const camera = new THREE.OrthographicCamera(-25, 25, 16, -16, 0.1, 160);
 const cameraOffset = new THREE.Vector3(27, 36, 44);
+const cameraDistance = cameraOffset.length(),
+  cameraHeading = Math.atan2(cameraOffset.x, cameraOffset.z),
+  DEFAULT_TILT = THREE.MathUtils.radToDeg(
+    Math.asin(cameraOffset.y / cameraDistance),
+  ),
+  MIN_TILT = 20,
+  MAX_TILT = 75,
+  TILT_STEP = 5;
+let tilt = DEFAULT_TILT,
+  targetTilt = DEFAULT_TILT;
+function setTilt(angle) {
+  targetTilt = THREE.MathUtils.clamp(angle, MIN_TILT, MAX_TILT);
+  updateTiltControls();
+}
+function updateTiltControls() {
+  $("#tilt-up").disabled = targetTilt >= MAX_TILT;
+  $("#tilt-down").disabled = targetTilt <= MIN_TILT;
+  $("#tilt-angle").textContent = `${Math.round(targetTilt)}°`;
+  $("#tilt-reset").disabled = targetTilt === DEFAULT_TILT;
+}
 const DEFAULT_VIEW_HEIGHT = 18,
   MIN_VIEW_HEIGHT = 10,
   MAX_VIEW_HEIGHT = 39,
@@ -260,6 +280,10 @@ updateZoomControls();
 $("#zoom-in").onclick = () => setZoom(targetViewHeight - ZOOM_STEP);
 $("#zoom-out").onclick = () => setZoom(targetViewHeight + ZOOM_STEP);
 $("#zoom-reset").onclick = () => setZoom(DEFAULT_VIEW_HEIGHT);
+updateTiltControls();
+$("#tilt-up").onclick = () => setTilt(targetTilt + TILT_STEP);
+$("#tilt-down").onclick = () => setTilt(targetTilt - TILT_STEP);
+$("#tilt-reset").onclick = () => setTilt(DEFAULT_TILT);
 $("#start").onclick = () => {
   begin();
   toast("Follow the paths. A little adventure is all you need.");
@@ -594,6 +618,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (interiorLoading) return;
   if (e.target.matches("input,select,textarea")) return;
+  if (e.target.closest(".view-controls") && [" ", "Enter"].includes(e.key)) return;
   const k = e.key.toLowerCase();
   if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k))
     e.preventDefault();
@@ -947,6 +972,17 @@ function animate(now) {
     updateFrustum();
   }
   cameraTarget.lerp(target, 1 - Math.exp(-dt * 1.8));
+  tilt = motion
+    ? THREE.MathUtils.lerp(tilt, targetTilt, 1 - Math.exp(-dt * 8))
+    : targetTilt;
+  // Pitch around the view's horizontal axis, preserving heading and distance.
+  const pitch = THREE.MathUtils.degToRad(tilt),
+    groundDistance = cameraDistance * Math.cos(pitch);
+  cameraOffset.set(
+    groundDistance * Math.sin(cameraHeading),
+    cameraDistance * Math.sin(pitch),
+    groundDistance * Math.cos(cameraHeading),
+  );
   camera.position.copy(cameraTarget).add(cameraOffset);
   camera.lookAt(cameraTarget);
   destination.visible = clickPath.length > 0;
@@ -1003,6 +1039,12 @@ window.__willowmere = {
     colliders: colliders.length,
     flowers: flowerGroups.size,
     position: life.player.position.toArray(),
+    camera: {
+      tilt,
+      targetTilt,
+      viewHeight,
+      offset: cameraOffset.toArray(),
+    },
   }),
   blocked,
   findPath,

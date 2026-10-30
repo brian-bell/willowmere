@@ -76,10 +76,34 @@
       <div id="location">
         <span>⌖</span> <span id="location-name">The village green</span>
       </div>
-      <div class="zoom-controls" role="group" aria-label="View zoom">
-        <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
-        <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
-        <button id="zoom-reset" type="button" title="Reset zoom">Reset</button>
+      <div class="view-controls" role="group" aria-label="Map view">
+        <div class="zoom-controls" role="group" aria-label="View zoom">
+          <span class="view-label">Zoom</span>
+          <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+          <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+          <button id="zoom-reset" type="button" title="Reset zoom">Reset</button>
+        </div>
+        <div class="tilt-controls" role="group" aria-label="Map tilt">
+          <span class="view-label">Tilt</span>
+          <button
+            id="tilt-up"
+            type="button"
+            aria-label="Tilt toward overhead"
+            title="Tilt toward overhead"
+          ><span aria-hidden="true">↑</span></button>
+          <button
+            id="tilt-down"
+            type="button"
+            aria-label="Tilt toward ground"
+            title="Tilt toward ground"
+          ><span aria-hidden="true">↓</span></button>
+          <button
+            id="tilt-reset"
+            type="button"
+            aria-label="Reset tilt"
+            title="Reset tilt to original angle"
+          ><span id="tilt-angle">35°</span><small>Reset</small></button>
+        </div>
       </div>
       <div id="interaction" hidden><kbd>E</kbd><span>Say hello</span></div>
       <div id="toast" role="status"></div>
@@ -215,7 +239,7 @@
         >
         <p>
           WASD / arrows to walk · Shift to run<br />E to interact · 1–4 tools ·
-          J journal<br />P photo mode · Esc close · Scroll or use the view buttons to zoom
+          J journal<br />P photo mode · Esc close · Scroll to zoom<br />Use the Zoom and Tilt buttons to adjust the map view
         </p>
         <button id="reset-position" class="soft-button">
           Return to the village green

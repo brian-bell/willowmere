@@ -270,25 +270,38 @@ button:active {
   margin-right: 5px;
   font-size: 13px;
 }
-.zoom-controls {
+.view-controls {
   position: absolute;
   right: 30px;
   top: 50%;
   transform: translateY(-50%);
   display: none;
+  gap: 8px;
+  align-items: flex-start;
+}
+.playing .view-controls {
+  display: flex;
+}
+.zoom-controls,
+.tilt-controls {
+  display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 5px;
   border: 1px solid #fff9de88;
-  border-radius: 12px;
+  border-radius: 13px;
   background: #f5efdee8;
   box-shadow: 0 6px 20px #2e4b2f20;
   backdrop-filter: blur(12px);
 }
-.playing .zoom-controls {
-  display: flex;
+.view-label {
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  padding: 5px 0;
 }
-.zoom-controls button {
+.view-controls button {
   min-width: 46px;
   min-height: 42px;
   border: 0;
@@ -297,22 +310,32 @@ button:active {
   color: var(--ink);
   font-size: 23px;
   line-height: 1;
+  transition: background 150ms, transform 150ms;
 }
-.zoom-controls #zoom-reset {
-  min-height: 35px;
+.view-controls #zoom-reset,
+.view-controls #tilt-reset {
+  min-height: 44px;
   border-top: 1px solid #8b9b8555;
   border-radius: 0 0 8px 8px;
   font-size: 10px;
   font-weight: 600;
 }
-.zoom-controls button:hover:not(:disabled) {
+#tilt-reset small {
+  display: block;
+  font-size: 9px;
+  margin-top: 4px;
+}
+.view-controls button:hover:not(:disabled) {
   background: #d5debb;
 }
-.zoom-controls button:disabled {
+.view-controls button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.view-controls button:disabled {
   cursor: default;
   opacity: 0.4;
 }
-.zoom-controls button:disabled:hover {
+.view-controls button:disabled:hover {
   transform: none;
 }
 .bottom-left {
@@ -715,7 +738,7 @@ input[type="checkbox"] {
 .photo-mode #touch-controls {
   display: none !important;
 }
-.photo-mode .zoom-controls {
+.photo-mode .view-controls {
   display: none !important;
 }
 #loading {
@@ -859,7 +882,7 @@ input[type="checkbox"] {
   #location {
     display: none;
   }
-  .zoom-controls {
+  .view-controls {
     right: 17px;
   }
   .welcome {
