@@ -76,7 +76,8 @@
       <div id="location">
         <span>⌖</span> <span id="location-name">The village green</span>
       </div>
-      <div class="zoom-controls" role="group" aria-label="Camera view">
+      <div class="view-controls" role="group" aria-label="Map view">
+        <div class="camera-mode-controls" role="group" aria-label="Camera mode">
         <button
           id="view-toggle"
           type="button"
@@ -94,18 +95,50 @@
         >
           Free look
         </button>
-        <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">
-          +
-        </button>
-        <button
-          id="zoom-out"
-          type="button"
-          aria-label="Zoom out"
-          title="Zoom out"
-        >
-          −
-        </button>
-        <button id="zoom-reset" type="button" title="Reset zoom">Reset</button>
+        </div>
+        <div class="zoom-controls" role="group" aria-label="View zoom">
+          <span class="view-label">Zoom</span>
+          <button id="zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+          <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+          <button id="zoom-reset" type="button" title="Reset zoom">Reset</button>
+        </div>
+        <div class="tilt-controls" role="group" aria-label="Map tilt">
+          <span class="view-label">Tilt</span>
+          <button
+            id="tilt-up"
+            type="button"
+            aria-label="Tilt toward overhead"
+            title="Tilt toward overhead"
+          ><span aria-hidden="true">↑</span></button>
+          <button
+            id="tilt-down"
+            type="button"
+            aria-label="Tilt toward ground"
+            title="Tilt toward ground"
+          ><span aria-hidden="true">↓</span></button>
+          <button
+            id="tilt-reset"
+            type="button"
+            aria-label="Reset tilt"
+            title="Reset tilt to original angle"
+          ><span id="tilt-angle">35°</span><small>Reset</small></button>
+        </div>
+        <div class="yaw-controls" role="group" aria-label="Map yaw">
+          <span class="view-label">Yaw</span>
+          <button id="yaw-left" type="button" aria-label="Rotate view left" title="Rotate view left"><span aria-hidden="true">↶</span></button>
+          <button id="yaw-reset" type="button" aria-label="Reset yaw" title="Reset to original heading"><span id="yaw-angle">0°</span><small>Reset</small></button>
+          <button id="yaw-right" type="button" aria-label="Rotate view right" title="Rotate view right"><span aria-hidden="true">↷</span></button>
+        </div>
+        <div class="pan-controls" role="group" aria-label="Map pan">
+          <span class="view-label">Pan</span>
+          <div class="pan-pad">
+            <button id="pan-up" type="button" aria-label="Pan up" title="Pan up"><span aria-hidden="true">↑</span></button>
+            <button id="pan-left" type="button" aria-label="Pan left" title="Pan left"><span aria-hidden="true">←</span></button>
+            <button id="pan-reset" type="button" aria-label="Center on player" title="Center on player"><span aria-hidden="true">⌖</span></button>
+            <button id="pan-right" type="button" aria-label="Pan right" title="Pan right"><span aria-hidden="true">→</span></button>
+            <button id="pan-down" type="button" aria-label="Pan down" title="Pan down"><span aria-hidden="true">↓</span></button>
+          </div>
+        </div>
       </div>
       <div id="view-help" hidden>WASD walk · Drag to look · ← → turn</div>
       <div id="interaction" hidden><kbd>E</kbd><span>Say hello</span></div>
@@ -242,9 +275,7 @@
         >
         <p>
           WASD / arrows to walk · Shift to run<br />E to interact · 1–4 tools ·
-          J journal · V switch camera view<br />P photo mode · Esc close ·
-          Scroll or use the view buttons to zoom<br />First person: drag to look
-          · ← → turn · Page Up / Down look up / down
+          J journal · V switch camera view<br />P photo mode · Esc close · Scroll to zoom<br />Use Zoom, Tilt, Yaw, and Pan to adjust the map view<br />First person: drag to look · ← → turn · Page Up / Down look up / down
         </p>
         <button id="reset-position" class="soft-button">
           Return to the village green

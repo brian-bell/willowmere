@@ -46,6 +46,51 @@ let camera = overviewCamera,
   pitch = 0,
   dragging = null;
 const cameraOffset = new THREE.Vector3(27, 36, 44);
+const cameraDistance = cameraOffset.length(),
+  cameraHeading = Math.atan2(cameraOffset.x, cameraOffset.z),
+  DEFAULT_TILT = THREE.MathUtils.radToDeg(
+    Math.asin(cameraOffset.y / cameraDistance),
+  ),
+  MIN_TILT = 20,
+  MAX_TILT = 75,
+  TILT_STEP = 5;
+let tilt = DEFAULT_TILT,
+  targetTilt = DEFAULT_TILT;
+const YAW_STEP = 15;
+let overviewYaw = 0,
+  targetYaw = 0;
+function setYaw(angle) {
+  targetYaw = THREE.MathUtils.euclideanModulo(angle, 360);
+  $("#yaw-angle").textContent = `${Math.round(targetYaw)}°`;
+  $("#yaw-reset").disabled = targetYaw === 0;
+}
+const PAN_STEP = 3,
+  PAN_LIMIT = 18,
+  pan = new THREE.Vector2(),
+  targetPan = new THREE.Vector2(),
+  panOffset = new THREE.Vector3(),
+  viewTarget = new THREE.Vector3();
+function setPan(x, y) {
+  targetPan.set(
+    THREE.MathUtils.clamp(x, -PAN_LIMIT, PAN_LIMIT),
+    THREE.MathUtils.clamp(y, -PAN_LIMIT, PAN_LIMIT),
+  );
+  $("#pan-left").disabled = targetPan.x <= -PAN_LIMIT;
+  $("#pan-right").disabled = targetPan.x >= PAN_LIMIT;
+  $("#pan-up").disabled = targetPan.y <= -PAN_LIMIT;
+  $("#pan-down").disabled = targetPan.y >= PAN_LIMIT;
+  $("#pan-reset").disabled = targetPan.lengthSq() === 0;
+}
+function setTilt(angle) {
+  targetTilt = THREE.MathUtils.clamp(angle, MIN_TILT, MAX_TILT);
+  updateTiltControls();
+}
+function updateTiltControls() {
+  $("#tilt-up").disabled = targetTilt >= MAX_TILT;
+  $("#tilt-down").disabled = targetTilt <= MIN_TILT;
+  $("#tilt-angle").textContent = `${Math.round(targetTilt)}°`;
+  $("#tilt-reset").disabled = targetTilt === DEFAULT_TILT;
+}
 const DEFAULT_VIEW_HEIGHT = 18,
   MIN_VIEW_HEIGHT = 10,
   MAX_VIEW_HEIGHT = 39,
@@ -280,6 +325,20 @@ updateZoomControls();
 $("#zoom-in").onclick = () => setZoom(targetViewHeight - ZOOM_STEP);
 $("#zoom-out").onclick = () => setZoom(targetViewHeight + ZOOM_STEP);
 $("#zoom-reset").onclick = () => setZoom(DEFAULT_VIEW_HEIGHT);
+updateTiltControls();
+$("#tilt-up").onclick = () => setTilt(targetTilt + TILT_STEP);
+$("#tilt-down").onclick = () => setTilt(targetTilt - TILT_STEP);
+$("#tilt-reset").onclick = () => setTilt(DEFAULT_TILT);
+setYaw(0);
+$("#yaw-left").onclick = () => setYaw(targetYaw - YAW_STEP);
+$("#yaw-right").onclick = () => setYaw(targetYaw + YAW_STEP);
+$("#yaw-reset").onclick = () => setYaw(0);
+setPan(0, 0);
+$("#pan-left").onclick = () => setPan(targetPan.x - PAN_STEP, targetPan.y);
+$("#pan-right").onclick = () => setPan(targetPan.x + PAN_STEP, targetPan.y);
+$("#pan-up").onclick = () => setPan(targetPan.x, targetPan.y - PAN_STEP);
+$("#pan-down").onclick = () => setPan(targetPan.x, targetPan.y + PAN_STEP);
+$("#pan-reset").onclick = () => setPan(0, 0);
 $("#start").onclick = () => {
   begin();
   toast("Follow the paths. A little adventure is all you need.");
@@ -714,6 +773,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (interiorLoading) return;
   if (e.target.matches("input,select,textarea")) return;
+  if (e.target.closest(".view-controls") && [" ", "Enter"].includes(e.key)) return;
   const k = e.key.toLowerCase();
   if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k))
     e.preventDefault();
@@ -1029,6 +1089,14 @@ function animate(now) {
     interior.update(dt, elapsed, motion);
     return;
   }
+  // Take the shortest arc, including when rotation crosses the 0°/360° seam.
+  const yawDelta = THREE.MathUtils.euclideanModulo(targetYaw - overviewYaw + 180, 360) - 180;
+  overviewYaw = motion
+    ? THREE.MathUtils.euclideanModulo(overviewYaw + yawDelta * (1 - Math.exp(-dt * 8)), 360)
+    : targetYaw;
+  const heading = cameraHeading + THREE.MathUtils.degToRad(overviewYaw);
+  screenRight.set(Math.cos(heading), -Math.sin(heading));
+  screenDown.set(Math.sin(heading), Math.cos(heading));
   const p = life.player.position;
   input.set(0, 0);
   if (!dialogue && !modalOpen()) {
@@ -1107,8 +1175,28 @@ function animate(now) {
     updateFrustum();
   }
   cameraTarget.lerp(target, 1 - Math.exp(-dt * 1.8));
-  overviewCamera.position.copy(cameraTarget).add(cameraOffset);
-  overviewCamera.lookAt(cameraTarget);
+  tilt = motion
+    ? THREE.MathUtils.lerp(tilt, targetTilt, 1 - Math.exp(-dt * 8))
+    : targetTilt;
+  // Pitch around the view's horizontal axis, preserving heading and distance.
+  const overviewPitch = THREE.MathUtils.degToRad(tilt),
+    groundDistance = cameraDistance * Math.cos(overviewPitch);
+  cameraOffset.set(
+    groundDistance * Math.sin(heading),
+    cameraDistance * Math.sin(overviewPitch),
+    groundDistance * Math.cos(heading),
+  );
+  if (motion) pan.lerp(targetPan, 1 - Math.exp(-dt * 8));
+  else pan.copy(targetPan);
+  // Keep pan directions aligned with the screen on the village's ground plane.
+  panOffset.set(
+    screenRight.x * pan.x + screenDown.x * pan.y,
+    0,
+    screenRight.y * pan.x + screenDown.y * pan.y,
+  );
+  viewTarget.copy(cameraTarget).add(panOffset);
+  overviewCamera.position.copy(viewTarget).add(cameraOffset);
+  overviewCamera.lookAt(viewTarget);
   firstPersonCamera.position.copy(p).y += 1.65;
   firstPersonCamera.rotation.set(pitch, yaw, 0, "YXZ");
   destination.visible = clickPath.length > 0;
@@ -1174,6 +1262,16 @@ window.__willowmere = {
     colliders: colliders.length,
     flowers: flowerGroups.size,
     position: life.player.position.toArray(),
+    camera: {
+      tilt,
+      targetTilt,
+      yaw: overviewYaw,
+      targetYaw,
+      viewHeight,
+      offset: cameraOffset.toArray(),
+      pan: pan.toArray(),
+      targetPan: targetPan.toArray(),
+    },
   }),
   blocked,
   findPath,
