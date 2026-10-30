@@ -1,6 +1,6 @@
 # Willowmere
 
-A playable cozy village built with Three.js. The fixed orthographic camera presents a 2D play field using dimensional scenery, animated characters, lighting, shadows, and procedural materials.
+A playable cozy village built with Three.js. Explore from the orthographic village view or switch to first person to walk among the dimensional scenery, animated characters, lighting, shadows, and procedural materials.
 
 ## Play
 
@@ -45,6 +45,9 @@ Deployments are made with Wrangler. GitHub pushes alone do not publish a new ver
 | Explore / gather / plant / water | 1 / 2 / 3 / 4                     |
 | Journal                          | J                                 |
 | Photo mode                       | P; Escape to return               |
+| Switch village / first-person view | V or the camera view button     |
+| Look around in first person      | Drag; Free look captures the mouse; Escape releases it |
+| First-person keyboard navigation | WASD walk / strafe; ↑ / ↓ walk; ← / → turn; Page Up / Down look vertically |
 | Zoom / reset zoom                | Mouse wheel or view buttons        |
 | Touch                            | Direction pad and Interact button |
 
@@ -55,6 +58,8 @@ Meet Mabel beside the fountain. Gather three of the wildflower bouquets marked b
 The journal records the welcome objectives. Progress, collected flowers, planted flowers, seeds, and petal currency save to this browser on this device. Browser data clearing removes this save. Different browser origins have separate saves. In private browsing, persistence may be unavailable.
 
 Settings include afternoon / blue hour, ambient audio volume, decorative motion, visual quality, and return to the village green. Ambient wind and birds start only when sound is enabled.
+
+Press **V** or choose **First person** beside the zoom controls to see the village at the traveler’s eye level. Walking follows the direction you are looking, with the same collisions, raised bridge, tools, and interactions. Drag the scene to look around on desktop or touch screens, or choose **Free look** to capture the mouse. **Escape** releases it for using the interface. Switch back with **V** or **Village view**. The camera preference saves with your visit and is restored when you leave the bakery.
 
 ## Inside The Daily Loaf
 

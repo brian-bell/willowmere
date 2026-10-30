@@ -305,6 +305,39 @@ button:active {
   font-size: 10px;
   font-weight: 600;
 }
+.zoom-controls #view-toggle,
+.zoom-controls #free-look {
+  min-height: 44px;
+  padding: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.zoom-controls #view-toggle[aria-pressed="true"] {
+  background: #d5debb;
+}
+.first-person .zoom-controls :is(#zoom-in, #zoom-out, #zoom-reset) {
+  display: none;
+}
+.first-person #scene {
+  touch-action: none;
+  cursor: grab;
+}
+.first-person #scene:active {
+  cursor: grabbing;
+}
+#view-help {
+  position: absolute;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 9px 14px;
+  border-radius: 20px;
+  background: #f5efdee8;
+  color: var(--ink);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .zoom-controls button:hover:not(:disabled) {
   background: #d5debb;
 }
@@ -715,7 +748,8 @@ input[type="checkbox"] {
 .photo-mode #touch-controls {
   display: none !important;
 }
-.photo-mode .zoom-controls {
+.photo-mode .zoom-controls,
+.photo-mode #view-help {
   display: none !important;
 }
 #loading {
@@ -862,6 +896,10 @@ input[type="checkbox"] {
   .zoom-controls {
     right: 17px;
   }
+  #view-help {
+    top: 315px;
+    font-size: 10px;
+  }
   .welcome {
     left: 20px;
     bottom: 200px;
@@ -954,6 +992,23 @@ input[type="checkbox"] {
     width: 80px;
     font-size: 10px;
     height: 29px;
+  }
+  .first-person #touch-controls button {
+    width: 44px;
+    height: 44px;
+  }
+  .first-person #touch-controls #touch-interact {
+    width: 80px;
+    height: 44px;
+  }
+  .first-person #touch-controls {
+    bottom: 156px;
+  }
+  .first-person #interaction {
+    bottom: 320px;
+  }
+  .first-person #free-look {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
