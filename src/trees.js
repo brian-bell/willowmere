@@ -10,22 +10,23 @@ function random(seed) {
 }
 
 // The folded blade has a pointed tip and an actual raised midrib. There are no
-// opaque canopy balls or alpha cards underneath the leaves.
-function leafGeometry() {
+// opaque canopy balls or alpha cards underneath the leaves. Distant trees use
+// a longer, broader diamond with the same fold for every other leaf.
+function leafGeometry(widths = [0, 0.31, 0.25, 0], length = 1) {
   const positions = [],
     uvs = [],
     colors = [],
     indices = [];
-  const widths = [0, 0.31, 0.25, 0];
+  const veins = 0.31 / Math.max(...widths);
   for (let row = 0; row < widths.length; row++) {
     const t = row / (widths.length - 1);
     for (let side = -1; side <= 1; side++) {
       positions.push(
         widths[row] * side,
         Math.sin(t * Math.PI) * (side === 0 ? 0.095 : -0.025) + t * t * 0.09,
-        t,
+        t * length,
       );
-      uvs.push(0.5 + side * widths[row], t);
+      uvs.push(0.5 + side * widths[row] * veins, t);
       const shade = side === 0 ? 1 : side < 0 ? 0.86 : 0.94;
       colors.push(shade, shade, shade * 0.96);
     }
@@ -131,7 +132,9 @@ export function createTrees(placements) {
     leafRecords = [],
     litterRecords = [];
   const canopyBounds = [],
-    specimens = [];
+    specimens = [],
+    foliage = [],
+    lods = [];
   const dummy = new T.Object3D();
   const bark = barkTexture();
   const woodMaterial = new T.MeshStandardMaterial({
@@ -743,8 +746,15 @@ export function createTrees(placements) {
     group.add(mesh);
   }
   const blade = leafGeometry();
+  const coarseBlade = leafGeometry([0, 0.55, 0], 1.3);
   function instances(records, material, name, wind = false) {
     if (!records.length) return;
+    // Even-numbered leaves come first, so a shorter count keeps an even spread.
+    if (wind)
+      records = [
+        ...records.filter((_, i) => i % 2 === 0),
+        ...records.filter((_, i) => i % 2),
+      ];
     const mesh = new T.InstancedMesh(blade, material, records.length);
     mesh.name = name;
     for (let i = 0; i < records.length; i++) {
@@ -759,7 +769,10 @@ export function createTrees(placements) {
     mesh.castShadow = wind;
     mesh.receiveShadow = true;
     if (wind) mesh.customDepthMaterial = depthMaterial;
+    // The coarse blade encloses the detailed one; bound both, plus wind sway.
+    mesh.geometry = coarseBlade;
     mesh.computeBoundingSphere();
+    mesh.geometry = blade;
     mesh.boundingSphere.radius += 0.12;
     mesh.matrixAutoUpdate = false;
     group.add(mesh);
@@ -779,7 +792,18 @@ export function createTrees(placements) {
         detailMaterial,
         "Tree hollows, moss and woodland details",
       );
-    instances(specimen.leaves, leafMaterial, "Living folded leaves", true);
+    const mesh = instances(
+      specimen.leaves,
+      leafMaterial,
+      "Living folded leaves",
+      true,
+    );
+    foliage.push(mesh);
+    lods.push({
+      mesh,
+      center: canopyBounds[lods.length].getCenter(new T.Vector3()),
+      level: 0,
+    });
     instances(
       specimen.litter,
       litterMaterial,
@@ -799,8 +823,22 @@ export function createTrees(placements) {
   return {
     group,
     canopyBounds,
+    foliage,
     update: (elapsed) => {
       time.value = elapsed;
+    },
+    // Level 0 draws every leaf. Level 1 draws every other leaf as the coarse
+    // blade, for canopies that cover few pixels. A function picks the level
+    // for each tree from its canopy center.
+    setDetail(level) {
+      for (const lod of lods) {
+        const next = typeof level === "function" ? level(lod.center) : level;
+        if (next === lod.level) continue;
+        lod.level = next;
+        const total = lod.mesh.instanceMatrix.count;
+        lod.mesh.geometry = next ? coarseBlade : blade;
+        lod.mesh.count = next ? Math.ceil(total / 2) : total;
+      }
     },
   };
 }

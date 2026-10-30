@@ -95,7 +95,9 @@ export function createBushes() {
     stems = [],
     flowers = [];
   const dummy = new T.Object3D(),
-    up = new T.Vector3(0, 1, 0);
+    up = new T.Vector3(0, 1, 0),
+    facing = new T.Vector3(),
+    outward = new T.Vector3();
   const palettes = [
     ["#35583e", "#4b7147", "#64834e", "#7c9259"],
     ["#60795b", "#7c926b", "#91a378", "#a0ab80"],
@@ -161,6 +163,11 @@ export function createBushes() {
         );
         const length = range(0.13, 0.23) * Math.sqrt(spread);
         dummy.scale.set(length * (variety === 1 ? 0.85 : 1), length, length);
+        // Single-sided blades turn their upper face out of the crown, so the
+        // shell that faces the viewer stays as full as the double-sided one.
+        facing.copy(up).applyQuaternion(dummy.quaternion);
+        if (facing.dot(outward.copy(dummy.position).sub(center)) < 0)
+          dummy.rotateZ(Math.PI);
         dummy.updateMatrix();
         const color = new T.Color(
           palettes[variety][
@@ -183,8 +190,9 @@ export function createBushes() {
     leafGeometry(),
     new T.MeshStandardMaterial({
       vertexColors: true,
-      side: T.DoubleSide,
       roughness: 0.87,
+      // Thin blades cast from both faces; FrontSide would default to back faces.
+      shadowSide: T.DoubleSide,
     }),
     leaves.length,
   );
@@ -230,6 +238,7 @@ export function createBushes() {
   });
   for (const mesh of [foliage, wood, blooms]) {
     mesh.castShadow = mesh.receiveShadow = true;
+    mesh.matrixAutoUpdate = false;
     mesh.computeBoundingSphere();
     group.add(mesh);
   }

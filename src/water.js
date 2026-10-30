@@ -103,6 +103,8 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
   group.userData.dynamic = true;
   scene.add(group);
   const bodies = [];
+  // Dense scenery that the captures barely resolve, such as individual leaves.
+  const captureExcluded = new Set();
   const zero = new T.DataTexture(new Uint8Array(4), 1, 1);
   zero.needsUpdate = true;
   const sceneTarget = new T.WebGLRenderTarget(1, 1, { type: T.HalfFloatType });
@@ -685,6 +687,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       previousScissorTest = renderer.getScissorTest();
     const previousClearAlpha = renderer.getClearAlpha();
     const surfaceVisibility = bodies.map((body) => body.mesh.visible);
+    const excludedVisibility = [...captureExcluded].map((o) => [o, o.visible]);
     renderer.getClearColor(savedClear);
     renderer.getViewport(savedViewport);
     renderer.getScissor(savedScissor);
@@ -700,6 +703,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       }
       pendingDt = 0;
       for (const body of bodies) body.mesh.visible = false;
+      for (const object of captureExcluded) object.visible = false;
       renderer.setClearColor(savedClear, previousClearAlpha);
       renderer.clippingPlanes = [];
       let width, height;
@@ -759,6 +763,8 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       bodies.forEach((body, i) => {
         body.mesh.visible = surfaceVisibility[i];
       });
+      for (const [object, wasVisible] of excludedVisibility)
+        object.visible = wasVisible;
       renderer.clippingPlanes = previousClipping;
       renderer.toneMapping = previousToneMapping;
       renderer.shadowMap.autoUpdate = previousShadow;
@@ -770,6 +776,11 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       renderer.setScissor(savedScissor);
       renderer.setScissorTest(previousScissorTest);
     }
+  }
+
+  // Hidden from refraction and reflection captures, kept in shadows and the main view.
+  function excludeFromCaptures(...objects) {
+    for (const object of objects) if (object) captureExcluded.add(object);
   }
 
   function setQuality(value) {
@@ -879,6 +890,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     disturb,
     update,
     render,
+    excludeFromCaptures,
     setQuality,
     diagnostics,
     inspect,

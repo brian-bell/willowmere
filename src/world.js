@@ -970,6 +970,8 @@ export function createWorld(T, scene) {
   // Shrub pockets follow cottage fences, garden corners and woodland understory.
   const bushes = createBushes();
   scene.add(bushes.group);
+  // Pools barely resolve single leaves; their captures skip the dense foliage.
+  water.excludeFromCaptures(...trees.foliage, bushes.group);
   for (const footprint of bushes.footprints) {
     colliders.push(footprint);
     contact(footprint.x, footprint.z, footprint.r * 2.5, footprint.r * 2.1);
@@ -1252,6 +1254,7 @@ export function createWorld(T, scene) {
     getGroundHeight,
     isPlantable,
     colliders,
+    trees,
     treeCanopies: trees.canopyBounds,
     interactables,
     spawn: { x: -2.8, z: 6.2 },

@@ -206,3 +206,62 @@ test("water retains its optical model without float color attachments", async ({
     ),
   ).toEqual([]);
 });
+
+test("excluded scenery stays out of captures and keeps its visibility", async ({
+  page,
+}) => {
+  // The probe imports its own Three.js module, which warns about duplicates.
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  await page.goto("/water-study.html");
+  await page.waitForFunction(() => window.__waterStudy);
+  const result = await page.evaluate(async () => {
+    const T = await import("/node_modules/three/build/three.module.js");
+    const { createWaterSystem } = await import("/src/water.js");
+    const renderer = new T.WebGLRenderer();
+    renderer.setSize(64, 64);
+    const scene = new T.Scene();
+    const camera = new T.PerspectiveCamera(45, 1, 0.1, 20);
+    camera.position.set(0, 3, 3);
+    camera.lookAt(0, 0, 0);
+    const system = createWaterSystem(scene, { quality: "performance" });
+    system.addBody({ id: "pool", x: 0, y: 0, z: 0, radius: 1, depth: 0.2 });
+    const box = () =>
+      new T.Mesh(new T.BoxGeometry(0.3, 0.3, 0.3), new T.MeshBasicMaterial());
+    const kept = box(),
+      excluded = box(),
+      hidden = box();
+    kept.position.set(-0.5, 0.5, 0);
+    excluded.position.set(0.5, 0.5, 0);
+    hidden.visible = false;
+    const draws = new Map([
+      [kept, 0],
+      [excluded, 0],
+    ]);
+    for (const mesh of [kept, excluded, hidden]) {
+      mesh.onBeforeRender = () => draws.set(mesh, (draws.get(mesh) || 0) + 1);
+      scene.add(mesh);
+    }
+    system.excludeFromCaptures(excluded, hidden);
+    system.render(renderer, camera, { dt: 1 / 60 });
+    const result = {
+      captures: system.diagnostics().captures,
+      kept: draws.get(kept),
+      excluded: draws.get(excluded),
+      visible: excluded.visible && !hidden.visible,
+    };
+    renderer.render(scene, camera);
+    result.mainPass = draws.get(excluded);
+    system.dispose();
+    renderer.dispose();
+    return result;
+  });
+  // Refraction plus a first reflection draw the kept box, never the excluded one.
+  expect(result.captures).toBeGreaterThan(0);
+  expect(result.kept).toBeGreaterThanOrEqual(2);
+  expect(result.excluded).toBe(0);
+  expect(result.visible).toBe(true);
+  expect(result.mainPass).toBe(1);
+  expect(errors).toEqual([]);
+});
