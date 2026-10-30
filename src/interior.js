@@ -2,9 +2,8 @@ import * as T from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { SoftBloomPass, BloomOutputPass } from "./bloom.js";
 import { createBakery } from "./bakery.js";
 import { createInteriorWalker } from "./interior-movement.js";
 import "./interior.css";
@@ -94,14 +93,9 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
   ao.minDistance = 0.001;
   ao.maxDistance = 0.035;
   composer.addPass(ao);
-  const bloom = new UnrealBloomPass(
-    new T.Vector2(innerWidth, innerHeight),
-    0.13,
-    0.4,
-    1.3,
-  );
+  const bloom = new SoftBloomPass(0.13, 0.4, 1.3);
   composer.addPass(bloom);
-  composer.addPass(new OutputPass());
+  composer.addPass(new BloomOutputPass(bloom));
 
   const panel = document.createElement("section");
   panel.id = "bakery-view";
@@ -508,16 +502,15 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
       for (const light of shadowLights)
         light.shadow.autoUpdate = overrides.shadowRefresh === 0;
       refreshShadows();
-      const samples = overrides.samples ?? 2;
+      // 2x MSAA slightly steps curved edges at these ratios; high keeps 4x.
+      const samples = overrides.samples ?? (quality === "high" ? 4 : 2);
       for (const target of [composer.renderTarget1, composer.renderTarget2])
         if (target.samples !== samples) {
           target.samples = samples;
           target.dispose();
         }
-      // Retina interiors are fill-rate bound; 1.25 keeps edges clean with MSAA.
-      composer.setPixelRatio(
-        overrides.pixelRatio ?? Math.min(renderer.getPixelRatio(), 1.25),
-      );
+      // The village sets its quality's full pixel ratio while the bakery is open.
+      composer.setPixelRatio(overrides.pixelRatio ?? renderer.getPixelRatio());
       composer.setSize(innerWidth, innerHeight);
     },
     tune(settings) {

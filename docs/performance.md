@@ -9,18 +9,18 @@ The village keeps its detailed geometry and animations while reducing the work s
 - Each tree's leaves are ordered so that even-numbered leaves come first. `trees.setDetail()` can draw only that half, using a broader 4-triangle diamond blade with the same fold instead of the 8-triangle detailed blade, so canopy coverage and wind motion stay similar. The village switches every tree to this coarse level above an orthographic view height of 24 (the default is 18). In first person, it switches trees whose canopy center is more than 18 m from the eye. Canopy bounds for player visibility are unchanged, and leaf culling spheres enclose both blades.
 - Shrub leaves are single-sided. Each blade turns its upper face away from its crown's center, so the side facing the viewer stays as full as before. Their material casts shadows from both faces. Shrub leaves cost less than 1 ms per frame in total, so they keep their own shadows instead of using proxy volumes, which would darken each crown's interior.
 - Orthographic water reflections crop the mirrored camera to the pool's projected bounds, with a margin for displaced waves and normal distortion. Capture textures follow the visible footprint, rounded to 64-pixel increments and capped by the chosen quality. The reflection matrix and distortion scale preserve texture projection. Perspective study views retain the full mirrored view.
-- The village and bakery update scene transforms once before their rendering passes. The water system respects manually updated scenes and temporarily suppresses repeated automatic updates during its own captures. The bakery's ambient occlusion pass reuses the shadows produced by its color pass.
+- The village and bakery update scene transforms once before their rendering passes. The water system respects manually updated scenes and temporarily suppresses repeated automatic updates during its own captures. The bakery's costs are described under [Bakery interior](#bakery-interior).
 - Water refraction reuses the main scene pass instead of rendering the scene a second time. Water surfaces draw last among opaque objects; the first one resolves the composer's multisampled color and depth into the refraction texture with a single blit. See [docs/water.md](water.md#refraction-from-the-main-pass).
 - The sun's shadow map covers only the receivers the overview can see. See [Outdoor shadows](#outdoor-shadows).
 - The final canvas does not request a second multisampled framebuffer or preserve its drawing buffer. The composer's multisampled scene target still supplies antialiasing. The starting quality and resolution policy are described below.
 - The village scene target keeps 4x MSAA at every quality. Every quality now caps the pixel ratio at 1.25 or below. At ratios of 1 and 1.25, 2x visibly steps roof edges and the fountain rims and breaks roof shingle grooves into dashes. Without MSAA, the grooves dash even at a pixel ratio of 1.75, and FXAA erases them. At a ratio of 1.75, 2x came close to 4x.
-- Village bloom (`src/bloom.js`) runs every pass at quarter resolution or below: a thresholded downsample, five blurred levels, and a composite. `BloomOutputPass` adds the result while tone mapping. UnrealBloomPass blended its result back into the full-resolution multisampled scene target and composited at half resolution. The strength, radius, and threshold keep their UnrealBloomPass meaning, including that pass's alpha-weighted blend. On a synthetic HDR frame at 2800 × 1750, the total added light differs by 6%. Around lights 40 pixels and larger, the radial falloff agrees within 15%. A 4-pixel point light gets a slightly softer core. Performance quality still disables bloom. The bakery interior keeps UnrealBloomPass.
+- Village bloom (`src/bloom.js`) runs every pass at quarter resolution or below: a thresholded downsample, five blurred levels, and a composite. `BloomOutputPass` adds the result while tone mapping. UnrealBloomPass blended its result back into the full-resolution multisampled scene target and composited at half resolution. The strength, radius, and threshold keep their UnrealBloomPass meaning, including that pass's alpha-weighted blend. On a synthetic HDR frame at 2800 × 1750, the total added light differs by 6%. Around lights 40 pixels and larger, the radial falloff agrees within 15%. A 4-pixel point light gets a slightly softer core. Performance quality still disables bloom. The bakery interior uses the same pass.
 
 ## Resolution and default quality
 
 The outdoor view submits the scene about three times per frame: shadows, a water reflection at a limited interval, and the multisampled main pass plus bloom. The main pass also supplies water refraction. Most passes fill the full drawing buffer, so frame time follows pixel count more than JavaScript work, which takes 4–5 ms per frame.
 
-- **Pixel ratio caps.** High and balanced render at `min(devicePixelRatio, 1.25)`; performance renders at `min(devicePixelRatio, 1)`. High previously used 1.75, which gives a 2800 × 1750 buffer on a 1600 × 1000 retina window. The caps are defined in `QUALITY_PIXEL_RATIO` in `src/main.js`. The bakery's composer takes the renderer's current ratio, capped at 1.5, so the cap applies indoors too.
+- **Pixel ratio caps.** High and balanced render at `min(devicePixelRatio, 1.25)`; performance renders at `min(devicePixelRatio, 1)`. High previously used 1.75, which gives a 2800 × 1750 buffer on a 1600 × 1000 retina window. The caps are defined in `QUALITY_PIXEL_RATIO` in `src/main.js`. The bakery renders at its quality's cap; see [Bakery interior](#bakery-interior).
 - **Starting quality.** Screens narrower than 760 CSS pixels, or with more than 2.6 million native pixels (`innerWidth × innerHeight × devicePixelRatio²`), start on balanced. Other screens start on high. Under this rule, retina laptops and 1440p monitors start on balanced. 1x screens up to about 1920 × 1200, and small windows on dense screens, start on high. Changing the setting overrides the default for the session.
 - **Dynamic resolution.** `updateResolution` collects outdoor frame intervals in one-second windows. It starts 3 seconds after load and skips the bakery and hidden tabs. A window whose p95 exceeds 20 ms lowers the pixel ratio by 0.125, down to 0.75. Five consecutive windows with a p95 under 18 ms raise it by one step, up to the chosen quality's cap. When a window is slow within 10 seconds of a step up, the required run doubles, up to 60 windows. A single step down is not judged, because vsync can keep frames at 33 ms until the GPU fits within one refresh. If the mean frame time is no better once the floor is reached, the scaler concludes that something other than fill rate sets the pace (for example a 30 Hz cap or a busy CPU). It restores the cap and pauses for 30 seconds, doubling the pause on each later failed descent up to 5 minutes. Changing quality resets the ratio to the new cap.
 - **Opting out.** Add `?resolution=fixed` to the URL, or call `window.__willowmere.setAdaptiveResolution(false)`, to keep each quality at its cap. `npm run benchmark` uses the query parameter. `getDiagnostics().resolution` reports `adaptive`, `pixelRatio`, `ceiling`, `floor`, the last window's `p95` and `mean`, `upWindows`, and `drawingBuffer`.
@@ -169,9 +169,70 @@ A fixed whole-village frustum would keep a cache valid but would give up the fit
 
 The shadow fit is approximate in one place. Water reflections can show casters just beyond the screen's top edge. Beyond the one-unit margin, their reflected surfaces have no sun shadow.
 
+## Bakery interior
+
+The walkable bakery (`src/bakery.js`, `src/interior.js`) shares the village's renderer and its quality setting. Its static props are merged by material, but one render of the room is still about 135 draws and 600,000 triangles, so each extra scene render is expensive. Before these changes, every frame rendered the room four times: the sun's shadow map, the window light's shadow map, the multisampled color pass, and the normal and depth pass for ambient occlusion. That is 460 draws and 2.30 million triangles per frame. Postprocessing then ran 16-sample SSAO at full resolution and UnrealBloomPass.
+
+- **Cached shadow maps.** The sun and the window spot light never move, and nearly everything they light is static. Their shadow maps have `autoUpdate` off. The interior renders both maps on entry, after any resize or quality change, and when reduced motion is turned on or off. While motion is on, it refreshes one map every 0.125 seconds, alternating, so each map follows the sleeping cat and the star mobile four times a second. Both move slowly enough that this is not visible. With reduced motion they are still, so neither map renders again. A frame now renders the room about twice: 285 draws and 1.23 million triangles on high and balanced.
+- **Half-resolution ambient occlusion.** `InteriorAO` renders its normal and depth pass, its 12-sample SSAO, and its blur at half the scene target's width and height. The result is upsampled when it is blended. The occlusion radius is a few centimeters and the result is blurred, so contact shadows under the chairs, table, bench and counter keep their shape.
+- **Shadow map sizes.** The sun's map is 2048 on high and 1024 on balanced and performance (formerly 4096 and 2048). The window light keeps its 1024 map. With the maps cached, size changes rendering time very little (4096 measured about 0.3 ms slower). A 4096 map takes about 128 MB of GPU memory, as RGBA color plus a depth buffer; a 2048 map takes a quarter of that.
+- **MSAA by quality.** High keeps 4x MSAA. Balanced and performance use 2x. At a pixel ratio of 1.25, 2x makes the chair's curved back and the round window's diagonals step a little when zoomed in; otherwise the frames match.
+- **Bloom.** The interior uses the village's quarter-resolution `SoftBloomPass` and `BloomOutputPass` with its own settings (strength 0.13, radius 0.4, threshold 1.3). Performance quality still disables bloom and ambient occlusion.
+- **Pixel ratio.** The outdoor resolution scaler does not measure the bakery. On entry the village applies the quality's full ratio (1.25 on high and balanced, 1 on performance, never above the device ratio). On exit it restores the ratio the scaler had reached outdoors. Without this, a visit after a slow stretch outdoors stayed at whatever lower ratio the scaler had reached, as low as 0.75.
+
+`window.__willowmere.getInterior().render` reports the composer's pixel ratio, target size, MSAA samples, the AO target width and kernel size, whether bloom is on, the sun's shadow map size, and whether the shadow maps update every frame. `window.__willowmere.tuneInterior(settings)` overrides these for measurements: `ao`, `bloom`, `samples`, `sunShadow`, `windowShadow`, `aoScale`, `aoSamples`, `pixelRatio`, and `shadowRefresh` (seconds between map refreshes; 0 renders both every frame). Pass `null` to restore a default. Normal play never calls it.
+
+### Measure the interior
+
+Start `npm run dev`, then run:
+
+```sh
+BENCHMARK_URL=http://127.0.0.1:5173 node scripts/benchmark-interior.mjs label --ablate
+```
+
+The script opens `/?interior=bakery&resolution=fixed` at 1600 × 1000 CSS pixels, at device scale 1 and then 2 (`BENCHMARK_SCALES` overrides this). Chrome is launched with `--disable-frame-rate-limit --disable-gpu-vsync`, so frame intervals show throughput above 60 FPS. The view stays at the entrance, facing the counter and the room. Each configuration settles for 0.8 seconds and records 2 seconds. Four rounds (`BENCHMARK_ROUNDS`) cycle through all configurations, so drift is spread across them. It reports the mean and p95 frame interval, callback CPU time, draw calls, and triangles, and saves `output/interior-label.json`. `--ablate` adds rows on high that undo one optimization or change or remove one feature. Revisions without `tuneInterior` can still run the three presets.
+
+The callback CPU time tracks the frame interval because the driver blocks on the queued GPU work, so it does not measure JavaScript cost. Headless Chrome paces uncapped frames unevenly, so p95 values are high even for fast configurations; compare means. GPU timer queries (`EXT_disjoint_timer_query_webgl2`) are available on ANGLE Metal, but they returned elapsed times longer than the frame interval, so the script does not use them.
+
+### Interior comparison (2026-10-30)
+
+Apple M5, headless Chrome 156. The baseline is `origin/main` at `8226960`; the after runs are this branch merged with it. Both were served side by side and run alternately three times, with no other test browsers. The machine's speed drifted between pairs, and both revisions slowed together. The table gives the range of mean frame intervals over the three pairs. The before drawing buffer was already 2000 × 1250 at scale 2 on high and balanced, because the village caps the pixel ratio at 1.25.
+
+| Quality     | Scale | Draws / triangles before → after | Frame ms before → after |
+| ----------- | ----- | -------------------------------- | ----------------------- |
+| High        | 1     | 460 / 2.30M → 285 / 1.23M        | 16.7–21.3 → 14.5–15.3   |
+| Balanced    | 1     | 460 / 2.30M → 284 / 1.22M        | 16.3–20.5 → 13.0–13.3   |
+| Performance | 1     | 323 / 1.72M → 146 / 0.63M        | 11.0–13.4 → 9.9–10.2    |
+| High        | 2     | 460 / 2.30M → 288 / 1.24M        | 25.3–28.6 → 18.9–20.0   |
+| Balanced    | 2     | 460 / 2.30M → 286 / 1.23M        | 25.1–26.9 → 16.7–17.4   |
+| Performance | 2     | 323 / 1.72M → 146 / 0.63M        | 13.0–14.1 → 9.9–10.6    |
+
+Within each pair, frame time fell 13–33% on high, 20–38% on balanced and 9–28% on performance. The smallest reductions came from the first pair at scale 1, run while the machine was quieter. Performance quality has no AO or bloom, so only the shadow cache applies to it.
+
+Ablations on high at scale 2 (2000 × 1250, one run, 18.9 ms with all changes):
+
+| Change from the new defaults | Frame ms | Difference |
+| ---------------------------- | -------- | ---------- |
+| Full-resolution 16-sample AO | 21.8     | +2.9       |
+| Both shadow maps every frame | 20.8     | +1.9       |
+| Sun shadow map 4096          | 19.2     | +0.3       |
+| 2x MSAA                      | 16.8     | −2.2       |
+| Bloom off                    | 17.9     | −1.0       |
+| AO off                       | 15.3     | −3.7       |
+| MSAA off                     | 13.7     | −5.2       |
+| Pixel ratio 1 (1600 × 1000)  | 14.6     | −4.3       |
+
+At scale 1 (1600 × 1000, 14.5 ms), full-resolution AO added 1.9 ms, per-frame shadows 2.6 ms, and the 4096 sun map 0.3 ms. 2x MSAA saved 1.5 ms, turning AO off 2.5 ms, and turning MSAA off 3.6 ms.
+
+What remains on high is mostly the multisampled color pass at 2000 × 1250 and the AO normal pass. That pass renders the full 600,000-triangle room again, even at half resolution. Baking occlusion into the merged furniture's vertex colors would remove it. That would require a ray-cast bake over about 600,000 vertices when the bakery opens, or a stored asset, and it would lose the occlusion on the cat and the mobile.
+
+Screenshots at device scale 2 with reduced motion compare the counter, the oven corner and the display case in front of the arched window, in the golden afternoon and after hours. Before and after match within a mean absolute difference of 1.5–2.2 levels out of 255. Under 1.5% of pixels differ by more than 16 levels, mostly along edges where the 2x MSAA used on balanced resolves differently. The warm oven glow, the window's light on the floor, and the soft contact shadows under the furniture are unchanged.
+
 ## Regression budgets
 
 `tests/performance.spec.js` checks preserved character geometry and animated joints, shared flower resources, independent plant growth, and draw/geometry budgets for a village with 30 planted bouquets. Tree tests check independent culling, shared wind materials, and that coarse leaf detail halves the drawn leaves without changing canopy bounds. Water tests cover small fountain capture allocations, refraction resolved from the village's main pass, excluded scenery staying out of captures, and restoration of both automatic and manual scene-transform policies. `tests/resolution.spec.js` covers the starting quality on 1x and 2x screens, the pixel ratio caps, and the scaler's step down and backoff, using synthetic frame timestamps.
+
+`tests/interior.spec.js` checks that the bakery's shadow maps stay cached, that its AO runs at half the scene target's width, the MSAA and sun-map size for each quality, and median draw budgets of under 330 on high and under 180 on performance.
 
 `tests/shadows.spec.js` checks that the sun's shadow bounds keep their size and move in whole texels while the player walks, shrink when zoomed in, grow when zoomed out, and switch to the finer first-person map and back.
 

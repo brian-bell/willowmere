@@ -11,31 +11,20 @@ if (!/^[a-zA-Z0-9_-]+$/.test(label))
   throw Error("Use a simple filename for the report label.");
 const scales = (process.env.BENCHMARK_SCALES || "1,2").split(",").map(Number);
 const rounds = Number(process.env.BENCHMARK_ROUNDS || 4);
-// Settings before the interior optimization, and each change reverted alone.
-const legacy = (quality) => ({
-  aoScale: 1,
-  aoSamples: 16,
-  samples: 4,
-  sunShadow: { high: 4096, balanced: 2048, performance: 1024 }[quality],
-  shadowRefresh: 0,
-  pixelRatio: 1.5,
-});
+// Ablations on high: undo one optimization, or change or remove one feature.
 const ablations = {
   "full-res 16-sample AO": { aoScale: 1, aoSamples: 16 },
-  "MSAA 4": { samples: 4 },
+  "MSAA 2": { samples: 2 },
   "sun shadow 4096": { sunShadow: 4096 },
   "shadows every frame": { shadowRefresh: 0 },
-  "pixel ratio 1.5": { pixelRatio: 1.5 },
+  "pixel ratio 1": { pixelRatio: 1 },
   "no AO": { ao: false },
   "no bloom": { bloom: false },
   "no MSAA": { samples: 0 },
 };
 const configs = [];
 for (const quality of ["high", "balanced", "performance"])
-  configs.push(
-    { name: quality, quality, tune: {} },
-    { name: `${quality}, legacy`, quality, tune: legacy(quality) },
-  );
+  configs.push({ name: quality, quality, tune: {} });
 if (ablate)
   for (const [name, tune] of Object.entries(ablations))
     configs.push({ name: `high, ${name}`, quality: "high", tune });
@@ -57,50 +46,22 @@ try {
     page.on("pageerror", (error) => errors.push(error.message));
     await page.addInitScript(() => {
       const requestFrame = window.requestAnimationFrame;
-      const pending = [];
-      let gl, timer;
       window.__benchmarkSamples = [];
-      window.__benchmarkGpu = [];
       window.requestAnimationFrame = (callback) =>
         requestFrame.call(window, (now) => {
-          const interior = window.__willowmere?.getInterior();
-          const recording = interior?.active && window.__benchmarkRecording;
-          gl ??= document.querySelector("canvas")?.getContext("webgl2");
-          timer ??= gl?.getExtension("EXT_disjoint_timer_query_webgl2");
-          // GPU elapsed time for the whole frame, independent of CPU contention.
-          let query;
-          if (recording && timer) {
-            query = gl.createQuery();
-            gl.beginQuery(timer.TIME_ELAPSED_EXT, query);
-          }
           const start = performance.now();
           callback(now);
-          const cpuMs = performance.now() - start;
-          if (query) {
-            gl.endQuery(timer.TIME_ELAPSED_EXT);
-            pending.push(query);
-          }
-          while (
-            pending.length &&
-            gl.getQueryParameter(pending[0], gl.QUERY_RESULT_AVAILABLE)
-          ) {
-            const done = pending.shift();
-            if (!gl.getParameter(timer.GPU_DISJOINT_EXT))
-              window.__benchmarkGpu.push(
-                gl.getQueryParameter(done, gl.QUERY_RESULT) / 1e6,
-              );
-            gl.deleteQuery(done);
-          }
-          if (recording)
+          const interior = window.__willowmere?.getInterior();
+          if (interior?.active && window.__benchmarkRecording)
             window.__benchmarkSamples.push({
               now,
-              cpuMs,
+              cpuMs: performance.now() - start,
               drawCalls: interior.drawCalls,
               triangles: interior.triangles,
             });
         });
     });
-    await page.goto(`${url}/?interior=bakery`);
+    await page.goto(`${url}/?interior=bakery&resolution=fixed`);
     await page.waitForFunction(
       () => window.__willowmere?.getInterior().active,
       null,
@@ -117,8 +78,8 @@ try {
     for (let round = 0; round < rounds; round++)
       for (const { name, quality, tune } of configs) {
         if (
-          (name.includes("legacy") && !ablate) ||
-          (name.includes("pixel ratio") && tune.pixelRatio > deviceScaleFactor)
+          name.includes("pixel ratio") &&
+          tune.pixelRatio >= deviceScaleFactor
         )
           continue;
         const render = await page.evaluate(
@@ -153,41 +114,34 @@ try {
         await page.waitForTimeout(800);
         await page.evaluate(() => {
           window.__benchmarkSamples = [];
-          window.__benchmarkGpu = [];
           window.__benchmarkRecording = true;
         });
         await page.waitForTimeout(2000);
-        const { samples, gpu } = await page.evaluate(() => {
+        const samples = await page.evaluate(() => {
           window.__benchmarkRecording = false;
-          return {
-            samples: window.__benchmarkSamples,
-            gpu: window.__benchmarkGpu,
-          };
+          return window.__benchmarkSamples;
         });
-        raw[name] ??= { render, samples: [], frameMs: [], gpu: [] };
+        raw[name] ??= { render, samples: [], frameMs: [] };
         raw[name].samples.push(...samples);
         raw[name].frameMs.push(
           ...samples.slice(1).map((s, i) => s.now - samples[i].now),
         );
-        raw[name].gpu.push(...gpu);
       }
     const summary = (values) => {
       values.sort((a, b) => a - b);
       return {
         mean: values.reduce((a, b) => a + b, 0) / values.length,
-        p10: values[Math.floor(values.length * 0.1)],
         p50: values[Math.floor(values.length * 0.5)],
         p95: values[Math.floor(values.length * 0.95)],
       };
     };
     const results = {};
-    for (const [name, { render, samples, frameMs, gpu }] of Object.entries(raw))
+    for (const [name, { render, samples, frameMs }] of Object.entries(raw))
       results[name] = {
         render,
         frames: samples.length,
         frameMs: summary(frameMs),
         cpuMs: summary(samples.map((s) => s.cpuMs)),
-        gpuMs: summary(gpu),
         drawCalls: Math.round(summary(samples.map((s) => s.drawCalls)).mean),
         triangles: Math.round(summary(samples.map((s) => s.triangles)).mean),
       };
@@ -199,9 +153,9 @@ try {
         config: name,
         target: r.render.width ? `${r.render.width}×${r.render.height}` : "?",
         fps: (1000 / r.frameMs.mean).toFixed(1),
-        "GPU p50 (ms)": r.gpuMs.p50.toFixed(2),
-        "GPU p10 (ms)": r.gpuMs.p10.toFixed(2),
-        "CPU (ms)": r.cpuMs.p50.toFixed(2),
+        "frame mean (ms)": r.frameMs.mean.toFixed(2),
+        "frame p95 (ms)": r.frameMs.p95.toFixed(2),
+        "CPU mean (ms)": r.cpuMs.mean.toFixed(2),
         draws: r.drawCalls,
         triangles: r.triangles,
       })),

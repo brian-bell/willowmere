@@ -58,6 +58,8 @@ const resolution = {
   lastUp: -Infinity,
   // Mean interval when the current run of step downs began.
   descentFrom: 0,
+  // The village's ratio while the bakery is open.
+  outdoor: 0,
 };
 function applyPixelRatio(ratio) {
   resolution.pixelRatio = ratio;
@@ -499,6 +501,10 @@ async function enterBakery() {
         onInteract: () => audio.chime(),
       });
     }
+    // The scaler only measures the village, so the bakery uses the quality's
+    // full ratio; the village resumes at its own ratio on the way out.
+    resolution.outdoor = resolution.pixelRatio;
+    applyPixelRatio(resolution.ceiling);
     interior.enter();
     const url = new URL(location.href);
     url.searchParams.set("interior", "bakery");
@@ -513,6 +519,7 @@ async function enterBakery() {
 }
 function leaveBakery() {
   interior?.exit();
+  applyPixelRatio(Math.min(resolution.outdoor, resolution.ceiling));
   keys.clear();
   velocity.set(0, 0);
   const url = new URL(location.href);
