@@ -1,5 +1,6 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createTrees } from "./trees.js";
+import { createBushes } from "./bushes.js";
 import { createReeds } from "./reeds.js";
 import { createRiverbank } from "./riverbank.js";
 import { createWaterSystem, sampleWaterField } from "./water.js";
@@ -965,23 +966,14 @@ export function createWorld(T, scene) {
   fence(-10.4, -3.2, -10.4, -7);
   fence(-18, -0.7, -15.6, -0.7);
   fence(-13.7, -0.7, -12.5, -0.7);
-  // Bushes and garden border flowers, instanced for a dense but efficient painterly meadow.
-  const bPositions = [];
-  for (let i = 0; i < 45; i++) {
-    const a = (i / 45) * Math.PI * 2;
-    bPositions.push([Math.cos(a) * 21.8, Math.sin(a) * 18.7, range(0.55, 1)]);
+  // Shrub pockets follow cottage fences, garden corners and woodland understory.
+  const bushes = createBushes();
+  scene.add(bushes.group);
+  for (const footprint of bushes.footprints) {
+    colliders.push(footprint);
+    contact(footprint.x, footprint.z, footprint.r * 2.5, footprint.r * 2.1);
   }
-  for (let i = 0; i < 9; i++) bPositions.push([-10 + i * 0.7, -9.1, 0.5]);
-  for (const [x, z, s] of bPositions)
-    orb(
-      plantMats[Math.floor(rand() * 3)],
-      x,
-      s * 0.43,
-      z,
-      s,
-      s * 0.7,
-      s * 0.78,
-    );
+  // Garden border flowers and meadow grass.
   const blades = new T.InstancedMesh(
     new T.ConeGeometry(0.035, 0.32, 3),
     mat("#66834a"),
@@ -1059,7 +1051,11 @@ export function createWorld(T, scene) {
         zz = z + range(-0.25, 0.25),
         h = range(0.45, 0.85);
       // Settle into the shallows on the waterward side of the bank stones.
-      reedPlacements.push({ x: xx + (x < 12 ? 0.22 : -0.22), z: zz, height: h });
+      reedPlacements.push({
+        x: xx + (x < 12 ? 0.22 : -0.22),
+        z: zz,
+        height: h,
+      });
     }
   }
   const reeds = createReeds(reedPlacements, (x, z) => {
