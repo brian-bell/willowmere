@@ -25,14 +25,16 @@ Open `/water-study.html` to examine the river, millrace, and fountain at close r
 
 The `willowmere` Worker serves the production build through Cloudflare's static asset hosting. Its configuration is in `wrangler.jsonc`.
 
-Authenticate to the Cloudflare account that owns the Worker, then build and publish:
+Pushing to `main` on GitHub triggers Cloudflare's automatic build and deployment, so merging to `main` is the release. Check the live site after the deployment finishes.
+
+To publish manually, for example when the automatic deployment is unavailable, authenticate to the Cloudflare account that owns the Worker, then build and publish:
 
 ```sh
 npx wrangler login
 npm run deploy
 ```
 
-Deployments are made with Wrangler. GitHub pushes alone do not publish a new version. Credentials and local Wrangler state are excluded from Git.
+Credentials and local Wrangler state are excluded from Git.
 
 ## Controls
 
@@ -109,4 +111,4 @@ Run `npm test` to check the complete welcome quest, planting and watering, journ
 
 The interior tests also cover walking to the bakery door, traversing the room, furniture collision, interacting with Crumb and Cinnamon, leaving through the entrance, mouse capture, pause and photo modes, preserved village state, repeat visits, and touch controls with reduced motion.
 
-For repeatable frame-time and rendering-work measurements, run `npm run benchmark` with the local dev server running. See [Rendering performance](docs/performance.md) for the method and regression budgets.
+For repeatable frame-time and rendering-work measurements, run `npm run benchmark` for the village or `node scripts/benchmark-interior.mjs` for the bakery with the local dev server running. See [Rendering performance](docs/performance.md) for how a frame is built, where its time goes, the measurement method, and the regression budgets.

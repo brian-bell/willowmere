@@ -1,6 +1,79 @@
 # Rendering performance
 
-The village keeps its detailed geometry and animations while reducing the work submitted for each view.
+Willowmere is GPU bound. JavaScript, including movement, collision, route finding and character animation, takes about 4 ms per frame; the rest of the frame is rasterization, and it scales with the drawing buffer's pixel count and with how many times the scene is submitted. This document records how each frame is built, where its time goes, how to measure a change, and what to keep in mind when adding scenery, lights or passes. [Water rendering](water.md) covers the water system's own costs.
+
+## Frame anatomy
+
+The outdoor view, in the order `animate()` in `src/main.js` runs it each frame:
+
+1. **Simulation and bookkeeping (JavaScript, about 4 ms).** Input, player collision against `colliders`, `life.update` for residents, cats, puppy, birds and butterflies, `world.update` for the mill, reeds and water bookkeeping, planting growth, dusk blending, `playerVisibility`, `fitShadow`, `trees.setDetail` by zoom or distance, and `updateResolution`. The scene has `matrixWorldAutoUpdate` off, so `scene.updateMatrixWorld()` runs once here and every pass reuses the transforms. Nearby-interactable scanning runs every eighth frame.
+2. **Water (`world.water.render`).** The GPU shallow-water simulation steps each visible pool in small ping-pong targets (a few draws). At most one pool whose reflection is overdue re-renders the mirrored scene into a cropped reflection target; tree leaves and shrubs are hidden for that capture. Refraction is not rendered here: the call arms a one-shot resolve for the main pass.
+3. **Shadow pass.** The sun's shadow map (2048 on high in the overview, 4096 in first person) is rendered every frame over a frustum fitted to the receivers in view. Ground slabs, roads and the riverbed receive only.
+4. **Main pass (`RenderPass`).** The opaque scene draws into a 4x multisampled half-float target. Water surfaces have the highest `renderOrder`; the first one blits the target's color and depth into the refraction texture, then the surfaces and transparent objects draw on top.
+5. **Bloom and output.** `SoftBloomPass` runs entirely at quarter resolution or below, and `BloomOutputPass` adds it while tone mapping to the canvas. Nothing touches the multisampled target again at full resolution.
+
+At the default view this is roughly 790 draw calls and 2.3 million submitted triangles per frame on high quality, spread over the shadow, reflection and main passes. First person submits about 400 draws and 1.6 million triangles. The bakery interior has its own chain, described under [Bakery interior](#bakery-interior).
+
+## Where the time goes (2026-10-30)
+
+Measured on the merged `main` at `08aca42` on an Apple M5 in headless Chrome 156, 1600 × 1000 CSS pixels, `?resolution=fixed`, with `--disable-frame-rate-limit --disable-gpu-vsync` so throughput above 60 FPS is visible, and with no other browser or benchmark using the GPU. Each row changes one thing from the high preset at the default spawn view and records three seconds. Values are mean frame intervals in milliseconds; the saving in parentheses is against the baseline row.
+
+| High quality, one change at a time | DPR 2 (2000 × 1250) ms | DPR 1 (1600 × 1000) ms |
+| ---------------------------------- | ---------------------- | ---------------------- |
+| Baseline                           | 8.8                    | 7.1                    |
+| MSAA off (4x → none)               | 6.3 (−2.5)             | 5.4 (−1.7)             |
+| Tree leaf instances hidden         | 6.7 (−2.1)             | 5.3 (−1.8)             |
+| All instanced meshes hidden        | 6.2 (−2.6)             | 4.9 (−2.2)             |
+| Pixel ratio forced to 1            | 7.0 (−1.8)             | same as baseline       |
+| Water simulation and reflection skipped | 7.6 (−1.2)        | 6.3 (−0.8)             |
+| Shadow map frozen                  | 7.8 (−1.0)             | 6.4 (−0.7)             |
+| Bloom off                          | 8.8 (0)                | 7.0 (−0.1)             |
+| Shadows, water and bloom all off   | 6.9 (−1.9)             | 5.8 (−1.3)             |
+| First-person view                  | 5.4                    | 4.4                    |
+| Overview zoomed out (height 39)    | 9.3                    | 8.0                    |
+
+The same method on the previous `main` (`1a2624c`), measured earlier the same day, gave 22.1 ms at DPR 2 (high rendered at pixel ratio 1.75, a 2800 × 1750 buffer) and 12.5 ms at DPR 1. Part of the DPR 2 gain is the pixel-ratio cap; the rest is the single scene submission for refraction, the quarter-resolution bloom, the fitted shadow map and the foliage changes. Balanced measured 8.6 ms and performance 6.5 ms at DPR 2.
+
+With vsync on and dynamic resolution enabled, as a retina laptop runs it, all three presets hold 60 FPS at the default view with a frame p95 of 16.7–16.8 ms, and the animation callback takes 3.8–4.0 ms.
+
+What this table says about the next change:
+
+- **Multisampling is now the largest single GPU cost.** The village keeps 4x because 2x visibly steps roof edges and dashes shingle grooves at pixel ratios of 1 and 1.25 (see the antialiasing notes below). A cheaper edge treatment that preserves those grooves would be worth more than any other single pass.
+- **Foliage is next.** The remaining detailed tree leaves are about 2 ms at the default view. The coarse level already applies when zoomed out or far away; a further level for the default view, or fewer leaves per tree, is the remaining lever.
+- **The frame is no longer purely fill bound.** JavaScript plus draw submission is about 4–6 ms, against 7–9 ms of total frame time uncapped. From here, GPU-only savings return less, and submission cost (about 790 draws) and per-frame JavaScript matter as much. In the uncapped runs above, the measured callback time tracks the frame interval because the driver blocks on queued GPU work, so JavaScript cost can only be read from vsync-on runs.
+- **Bloom, shadows and water are small.** Each is around 1 ms at retina. They have been reduced as far as their current designs allow; the shadow section explains why a static shadow cache does not pay.
+
+Startup is not optimized and has no regression test: from navigation to the loading screen dismissing takes 1.1–1.6 s in headless Chrome on this machine (DOM content loaded at about 0.7 s), spent generating procedural textures, building and baking the village, and uploading about 53,000 leaf instances. The production bundle is about 540 KB of Three.js (139 KB gzipped) plus about 230 KB (85 KB gzipped) of game code split into village, world, interior and water-study chunks.
+
+Not yet measured: mobile GPUs, Windows integrated graphics, Safari and Firefox, and thermal throttling over long sessions. The narrow-screen path starts on balanced and relies on the resolution scaler. Measure on those devices before tightening budgets or changing the presets.
+
+## Measuring
+
+Measure before and after every rendering change, on an idle machine, and compare differences rather than absolute times.
+
+- **Standard benchmark.** Start `npm run dev`, then run `npm run benchmark -- label` in another terminal. Set `BENCHMARK_URL` if the server is on another port, for example `BENCHMARK_URL=http://127.0.0.1:5174 npm run benchmark -- after`. The script uses the same Chrome selection as the regression tests (`CHROME_PATH`, installed Chrome on macOS, or Playwright Chromium). It opens a fresh browser at 1600 × 1000 and device pixel ratio 1 with `?resolution=fixed`, enters the village, lets the view settle, and samples four seconds at each quality setting. It reports frame intervals, animation-callback CPU duration, draw calls, and submitted triangles, then saves the measurements in `output/performance-label.json`.
+- **Retina and uncapped runs.** The standard benchmark runs at pixel ratio 1 with vsync, so it saturates at 60 FPS and never exercises the retina caps. For a change that affects fill rate, copy `scripts/benchmark.mjs` to a scratch file, set `deviceScaleFactor: 2`, and launch Chrome with `--disable-frame-rate-limit --disable-gpu-vsync`. Keep `?resolution=fixed`, or the scaler will step down during the run. Headless Chrome paces uncapped frames unevenly, so compare means, not p95.
+- **Interior.** `node scripts/benchmark-interior.mjs label --ablate` measures the bakery at both device scales and can undo each optimization in turn through `window.__willowmere.tuneInterior`. See [Measure the interior](#measure-the-interior).
+- **Outdoor ablation.** There is no outdoor equivalent of `tuneInterior` yet. The table above was produced with a temporary export of `renderer`, `composer`, `bloom`, `sun`, `scene` and `world` from `src/main.js` onto `window.__willowmere`, toggled from a Playwright script between three-second samples. Adding a permanent `tune()` for the village would make that repeatable.
+- **Deterministic counters.** `window.__willowmere.getDiagnostics()` reports `drawCalls`, `triangles`, `geometries`, `textures`, the `resolution` state and the sun's `shadow` bounds. Draw calls and triangles do not depend on machine load, so quote them alongside any timing; they are what the regression tests assert.
+- **Contention.** Numbers taken while another browser, test run or benchmark is rendering are inflated and noisy. Several of the dated comparisons under [Change history](#change-history) were taken that way and say so; the table above was not.
+- **What does not work here.** WebGL timer queries (`EXT_disjoint_timer_query_webgl2`) return elapsed times longer than the frame because Apple's tile-based GPU overlaps passes, so they cannot isolate a pass. Updating shadows on alternate frames raises p95 frame time through uneven workload. FPS from any single machine does not transfer; re-run on the target device, especially at higher device pixel ratios.
+
+## Checklist for changes
+
+Each item names the mechanism in the code that a new change has to work with.
+
+- **Static scenery.** Add plain meshes under `createWorld`; the bake at the end of `src/world.js` merges them into one draw per material and shadow role, and removes the originals. Animated or later-modified objects must set `userData.dynamic = true` or they are frozen into the bake. Transparent materials and instanced meshes are not merged. Give flat receivers (ground, roads, beds) `castShadow = false`; the bake honors per-mesh flags.
+- **Materials.** Reuse shared materials; every distinct material is at least one extra draw per pass. Avoid cloning materials per object. Materials with emissive color are collected into `glowMaterials` at startup for the dusk glow, so new lanterns need no extra code.
+- **Dense instanced detail.** Keep `matrixAutoUpdate = false` and tight bounding spheres so each instanced mesh culls as a unit. Register it with `water.excludeFromCaptures()` unless it must appear in reflections. Prefer `FrontSide` with `shadowSide: DoubleSide` for thin blades. If it covers few pixels at the default view, give it a coarse level like `trees.setDetail()`.
+- **Lights.** Each shadow-casting light renders the whole scene again every frame. The village has one; the bakery caches its two because they never move. A new shadow caster outdoors needs the same fitting and caching argument as `fitShadow()`, or a measured budget.
+- **Post-processing.** Do not add a full-resolution pass that reads or writes the multisampled scene target. Follow `src/bloom.js`: work at quarter resolution and composite in the output pass.
+- **Water.** Read [docs/water.md](water.md) first. Each pool adds simulation targets and a reflection capture at the quality's interval; refraction comes from the main pass and costs a blit, not a render.
+- **Resolution.** Never call `renderer.setPixelRatio` directly outdoors. Go through `QUALITY_PIXEL_RATIO`, `resetResolution` and the scaler, and keep `?resolution=fixed` working for the benchmark and tests. The bakery applies its quality's cap on entry and restores the scaler's ratio on exit.
+- **Per-frame JavaScript.** No allocations, `scene.traverse`, or material changes inside `animate()`. Precompute at build time; throttle scans the way `scanNearby` runs every eighth frame.
+- **Verify and record.** Run the standard benchmark and a retina run before and after, quote draw calls and triangles, update the budgets in `tests/performance.spec.js`, `tests/trees.spec.js`, `tests/shadows.spec.js` and `tests/interior.spec.js` only when the new work is intended, and add the result to this document.
+
+## Work reduction in the current build
 
 - Character parts with the same roughness and shadow settings are baked together within each rigid joint. Colors become vertex colors. The detailed inhabitants and wildlife use 151 meshes and about 64,000 triangles. Arms, legs, ears, paws, tails, scarf, and leash anchors retain their original transforms.
 - Wildflower and planted bouquets share three baked geometries and materials. Each bouquet needs three draws instead of 35, plus a shared halo for gatherable flowers. Planting does not allocate another set of petal geometry.
@@ -12,7 +85,7 @@ The village keeps its detailed geometry and animations while reducing the work s
 - The village and bakery update scene transforms once before their rendering passes. The water system respects manually updated scenes and temporarily suppresses repeated automatic updates during its own captures. The bakery's costs are described under [Bakery interior](#bakery-interior).
 - Water refraction reuses the main scene pass instead of rendering the scene a second time. Water surfaces draw last among opaque objects; the first one resolves the composer's multisampled color and depth into the refraction texture with a single blit. See [docs/water.md](water.md#refraction-from-the-main-pass).
 - The sun's shadow map covers only the receivers the overview can see. See [Outdoor shadows](#outdoor-shadows).
-- The final canvas does not request a second multisampled framebuffer or preserve its drawing buffer. The composer's multisampled scene target still supplies antialiasing. The starting quality and resolution policy are described below.
+- The final canvas does not request a second multisampled framebuffer or preserve its drawing buffer. The composer's multisampled scene target still supplies antialiasing. The starting quality and resolution policy are described under [Resolution and default quality](#resolution-and-default-quality).
 - The village scene target keeps 4x MSAA at every quality. Every quality now caps the pixel ratio at 1.25 or below. At ratios of 1 and 1.25, 2x visibly steps roof edges and the fountain rims and breaks roof shingle grooves into dashes. Without MSAA, the grooves dash even at a pixel ratio of 1.75, and FXAA erases them. At a ratio of 1.75, 2x came close to 4x.
 - Village bloom (`src/bloom.js`) runs every pass at quarter resolution or below: a thresholded downsample, five blurred levels, and a composite. `BloomOutputPass` adds the result while tone mapping. UnrealBloomPass blended its result back into the full-resolution multisampled scene target and composited at half resolution. The strength, radius, and threshold keep their UnrealBloomPass meaning, including that pass's alpha-weighted blend. On a synthetic HDR frame at 2800 × 1750, the total added light differs by 6%. Around lights 40 pixels and larger, the radial falloff agrees within 15%. A 4-pixel point light gets a slightly softer core. Performance quality still disables bloom. The bakery interior uses the same pass.
 
@@ -24,95 +97,6 @@ The outdoor view submits the scene about three times per frame: shadows, a water
 - **Starting quality.** Screens narrower than 760 CSS pixels, or with more than 2.6 million native pixels (`innerWidth × innerHeight × devicePixelRatio²`), start on balanced. Other screens start on high. Under this rule, retina laptops and 1440p monitors start on balanced. 1x screens up to about 1920 × 1200, and small windows on dense screens, start on high. Changing the setting overrides the default for the session.
 - **Dynamic resolution.** `updateResolution` collects outdoor frame intervals in one-second windows. It starts 3 seconds after load and skips the bakery and hidden tabs. A window whose p95 exceeds 20 ms lowers the pixel ratio by 0.125, down to 0.75. Five consecutive windows with a p95 under 18 ms raise it by one step, up to the chosen quality's cap. When a window is slow within 10 seconds of a step up, the required run doubles, up to 60 windows. A single step down is not judged, because vsync can keep frames at 33 ms until the GPU fits within one refresh. If the mean frame time is no better once the floor is reached, the scaler concludes that something other than fill rate sets the pace (for example a 30 Hz cap or a busy CPU). It restores the cap and pauses for 30 seconds, doubling the pause on each later failed descent up to 5 minutes. Changing quality resets the ratio to the new cap.
 - **Opting out.** Add `?resolution=fixed` to the URL, or call `window.__willowmere.setAdaptiveResolution(false)`, to keep each quality at its cap. `npm run benchmark` uses the query parameter. `getDiagnostics().resolution` reports `adaptive`, `pixelRatio`, `ceiling`, `floor`, the last window's `p95` and `mean`, `upWindows`, and `drawingBuffer`.
-
-## Reproduce a benchmark
-
-Start `npm run dev`, then run `npm run benchmark -- label` in another terminal. Set `BENCHMARK_URL` if the server is on another port; for example:
-
-```sh
-BENCHMARK_URL=http://127.0.0.1:5174 npm run benchmark -- after
-```
-
-The script uses the same Chrome selection as the regression tests (`CHROME_PATH`, installed Chrome on macOS, or Playwright Chromium). It opens a fresh browser at 1600 × 1000 and device pixel ratio 1 with `?resolution=fixed`, enters the village, lets the view settle, and samples four seconds at each quality setting. It reports frame intervals, animation-callback CPU duration, draw calls, and submitted triangles, then saves the measurements in `output/performance-label.json`.
-
-Compare revisions sequentially on the same machine. Stop other test browsers before measuring. FPS depends on GPU load, browser, thermal state, screen size, and view; CPU duration measures the callback and driver submission, not GPU execution time. Draw counts also include water simulation, reflections, refraction, shadows, and postprocessing. Moving cameras and different plants change the work visible to each pass.
-
-## Local comparison (2026-10-29)
-
-Sequential headless Chrome runs at 1600 × 1000, DPR 1, with a fresh save and the camera settled at spawn. The baseline was commit `d52ccce`; the after run used these optimizations. Values are means except the last column.
-
-| Quality     | FPS before → after | CPU ms before → after | Draw calls before → after | Triangles before → after | Frame p95 ms before → after |
-| ----------- | ------------------ | --------------------- | ------------------------- | ------------------------ | --------------------------- |
-| High        | 26.1 → 30.3        | 37.9 → 7.6            | 2,768 → 1,034             | 3.78M → 2.70M            | 50.1 → 50.0                 |
-| Balanced    | 26.2 → 44.1        | 37.9 → 6.9            | 2,753 → 986               | 3.78M → 2.61M            | 50.1 → 50.0                 |
-| Performance | 41.5 → 47.7        | 23.1 → 4.6            | 2,367 → 931               | 3.32M → 2.50M            | 49.9 → 33.4                 |
-
-High quality remains limited by rendering on this setup; lower submission cost does not guarantee 60 FPS. Re-run the benchmark on the target device, especially at higher device pixel ratios. The raw local reports are `output/performance-before.json` and `output/performance-after.json` (ignored build artifacts).
-
-## Resolution comparison (2026-10-29)
-
-Headless Chrome at 1600 × 1000 CSS pixels and device pixel ratio 2, on an Apple M5. The baseline is commit `1a2624c` (high at pixel ratio 1.75); the after runs use the policy above. Baseline and branch were served side by side and measured alternately. Other test browsers were running on the machine, so absolute values vary between rounds. The figures below come from the two quietest rounds, where CPU time per frame returned to 4–5 ms.
-
-Fixed resolution (`?resolution=fixed`), Chrome launched with `--disable-frame-rate-limit --disable-gpu-vsync`, four seconds per quality:
-
-| Quality     | Drawing buffer before → after | FPS before → after       | Frame p95 ms before → after |
-| ----------- | ----------------------------- | ------------------------ | --------------------------- |
-| High        | 2800 × 1750 → 2000 × 1250     | 32.5, 32.1 → 44.7, 47.6  | 63.1, 64.0 → 44.3, 50.7     |
-| Balanced    | 2000 × 1250 (unchanged)       | 54.8, 54.6 → 52.1, 55.4  | 26.6, 24.5 → 26.6, 33.2     |
-| Performance | 1600 × 1000 (unchanged)       | 85.2, 86.5 → 83.8, 86.3  | 26.6, 26.0 → 26.6, 26.6     |
-
-Default settings over 20 seconds with vsync, as a retina laptop would run them: the baseline started on high at 2800 × 1750 and ran 22.9, 30.9 and 31.8 FPS (frame p95 33–67 ms). The branch starts on balanced with dynamic resolution and ran 59.1, 58.4 and 58.3 FPS (frame p95 16.7–16.8 ms). It settled between pixel ratios 0.875 and 1.125 in those runs.
-
-With vsync disabled, headless Chrome paces frames unevenly: even performance quality at 86 FPS has a p95 of 26 ms. The scaler therefore steps to its 0.75 floor in uncapped runs (80 FPS, against 31 FPS for the baseline default). Use `?resolution=fixed` for uncapped measurements.
-
-At device pixel ratio 1, `npm run benchmark` gives the same results before and after (high 55.7 → 57.2 FPS; balanced and performance at the 60 FPS vsync limit), because the caps only differ above a ratio of 1.25. The raw reports are `output/performance-{base,new}-*.json` (ignored build artifacts).
-
-## Antialiasing and bloom comparison (2026-10-29)
-
-Headless Chrome at 1600 × 1000 CSS pixels and device pixel ratio 2, launched with `--disable-frame-rate-limit --disable-gpu-vsync`. Runs alternated between `1a2624c` and the bloom change, twice each. These runs predate the 1.25 pixel-ratio cap. The high row also used 2x MSAA at a pixel ratio of 1.75, a change later dropped because no quality reaches that ratio now. The balanced row isolates the bloom change at the 2000 × 1250 buffer that high and balanced now use. Other sessions were rendering on the same GPU, so absolute times are inflated and noisy. The table gives the range of the two mean frame intervals.
-
-| Quality (buffer)          | Frame ms before → after | MSAA before → after |
-| ------------------------- | ----------------------- | ------------------- |
-| High (2800 × 1750)        | 50.7–57.8 → 34.5–37.3   | 4x → 2x             |
-| Balanced (2000 × 1250)    | 29.0–33.8 → 22.3–25.3   | 4x → 4x             |
-| Performance (1600 × 1000) | 23.2–24.6 → 29.6–31.0   | 4x → 4x, no bloom   |
-
-Performance quality runs the same passes as before, plus one bloom-texture lookup in the output pass from a 1 × 1 texture. Its slower result is most likely contention, but this run cannot confirm that. The standard DPR 1 benchmark (`npm run benchmark`) was within noise: 39.3/32.0/32.0 FPS before and 36.8/33.0/29.8 after.
-
-Postprocessing alone, on a nearly empty 2800 × 1750 frame, measured with WebGL timer queries. Values are the median and 25th-percentile GPU ms per frame:
-
-| Pipeline                   | Bloom on   | Bloom off |
-| -------------------------- | ---------- | --------- |
-| UnrealBloomPass, 4x MSAA   | 23.3 (12.4) | 6.0 (3.0) |
-| Quarter-res bloom, 4x MSAA | 15.3 (7.7)  | —         |
-| Quarter-res bloom, 2x MSAA | 9.0 (2.9)   | 3.8 (1.8) |
-
-Repeat both comparisons on an idle machine before relying on the absolute values.
-
-## Water refraction from the main pass (2026-10-30)
-
-Before is `1a2624c`; after renders refraction from the main pass. Both predate the resolution and bloom changes above, so high quality ran at pixel ratio 1.75. Runs alternated before and after while holding the shared GPU lock, so no other benchmark or test browser was rendering: two pairs at DPR 1 with `npm run benchmark`, and three pairs at DPR 2 with a copy of the script using `deviceScaleFactor: 2` and Chrome's `--disable-frame-rate-limit --disable-gpu-vsync`. Values are medians of the per-run means.
-
-| Quality     | DPR 1 frame ms (FPS)      | DPR 2 uncapped frame ms (FPS) | Draw calls  | Triangles     |
-| ----------- | ------------------------- | ----------------------------- | ----------- | ------------- |
-| High        | 35.7 → 29.7 (28.0 → 33.7) | 52.5 → 40.4 (19.1 → 24.7)     | 1,268 → 878 | 3.86M → 2.83M |
-| Balanced    | 32.2 → 26.3 (31.1 → 38.0) | 32.8 → 26.8 (30.4 → 37.3)     | 1,246 → 844 | 3.85M → 2.76M |
-| Performance | 25.9 → 23.4 (38.6 → 42.8) | 20.5 → 16.8 (48.9 → 59.5)     | 1,159 → 767 | 3.57M → 2.51M |
-
-Every paired run favored the after build. DPR 1 frame intervals snap to display refresh multiples, so the uncapped DPR 2 runs show the GPU saving more directly: 12 ms per frame at high quality. Each frame submits about 390 fewer draws and 1.0–1.1M fewer triangles at the spawn view. Performance quality saves the least time because its separate capture was already at half resolution.
-
-## Foliage comparison (2026-10-30)
-
-These are sequential headless Chrome runs at 1600 × 1000, with frame-rate limiting and vsync disabled. Before is `1a2624c` and after is the foliage change alone, so both predate the refraction, resolution, and bloom changes above. The two changes overlap: the refraction saving here came from removing foliage from a refraction capture that the main pass now supplies, so foliage exclusion now saves only its share of the reflection captures and the fallback capture. Each sampled frame ends with a one-pixel `readPixels`, so the time covers GPU completion. Values are medians of two runs at high quality. In these runs, frames on unchanged code varied by about ±1 ms.
-
-| View                     | DPR 1 ms before → after | DPR 2 ms before → after | Triangles before → after |
-| ------------------------ | ----------------------- | ----------------------- | ------------------------ |
-| Default (view height 18) | 37.1 → 32.8             | 59.8 → 55.8             | 3.86M → 3.09M            |
-| Zoomed in (10)           | 28.4 → 28.1             | 47.7 → 45.7             | 3.19M → 2.63M            |
-| Zoomed out (39)          | 39.8 → 32.8             | 58.6 → 48.3             | 4.45M → 2.86M            |
-| First person             | 25.4 → 21.7             | 39.0 → 34.9             | 2.82M → 2.08M            |
-
-Interleaved A/B toggles in a single page measured each change's share at DPR 1, default view. Leaving foliage out of the water captures saved 3.6 ms (5.7 ms at DPR 2). Coarse leaves at maximum zoom-out saved 3.5 ms (4.6 ms at DPR 2). At the default view, the remaining detailed tree leaves cost about 3.5 ms, and all shrub leaves together cost about 0.7 ms. Absolute times include contention from other local GPU work, so compare the differences rather than the totals.
 
 ## Outdoor shadows
 
@@ -237,3 +221,83 @@ Screenshots at device scale 2 with reduced motion compare the counter, the oven 
 `tests/shadows.spec.js` checks that the sun's shadow bounds keep their size and move in whole texels while the player walks, shrink when zoomed in, grow when zoomed out, and switch to the finer first-person map and back.
 
 These tests assert rendering work and behavior instead of a machine-dependent FPS threshold. The village diagnostics expose `drawCalls`, `triangles`, `geometries`, `textures`, and `shadow` (`mapSize` and light-space `bounds`); water diagnostics include each pool's `reflectionSize`.
+## Change history
+
+Per-change measurements, each against the previous `main` (`1a2624c`) at the time, in the order the changes landed. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the current combined baseline.
+
+### Local comparison (2026-10-29)
+
+Sequential headless Chrome runs at 1600 × 1000, DPR 1, with a fresh save and the camera settled at spawn. The baseline was commit `d52ccce`; the after run used these optimizations. Values are means except the last column.
+
+| Quality     | FPS before → after | CPU ms before → after | Draw calls before → after | Triangles before → after | Frame p95 ms before → after |
+| ----------- | ------------------ | --------------------- | ------------------------- | ------------------------ | --------------------------- |
+| High        | 26.1 → 30.3        | 37.9 → 7.6            | 2,768 → 1,034             | 3.78M → 2.70M            | 50.1 → 50.0                 |
+| Balanced    | 26.2 → 44.1        | 37.9 → 6.9            | 2,753 → 986               | 3.78M → 2.61M            | 50.1 → 50.0                 |
+| Performance | 41.5 → 47.7        | 23.1 → 4.6            | 2,367 → 931               | 3.32M → 2.50M            | 49.9 → 33.4                 |
+
+High quality remains limited by rendering on this setup; lower submission cost does not guarantee 60 FPS. Re-run the benchmark on the target device, especially at higher device pixel ratios. The raw local reports are `output/performance-before.json` and `output/performance-after.json` (ignored build artifacts).
+
+### Resolution comparison (2026-10-29)
+
+Headless Chrome at 1600 × 1000 CSS pixels and device pixel ratio 2, on an Apple M5. The baseline is commit `1a2624c` (high at pixel ratio 1.75); the after runs use the policy above. Baseline and branch were served side by side and measured alternately. Other test browsers were running on the machine, so absolute values vary between rounds. The figures below come from the two quietest rounds, where CPU time per frame returned to 4–5 ms.
+
+Fixed resolution (`?resolution=fixed`), Chrome launched with `--disable-frame-rate-limit --disable-gpu-vsync`, four seconds per quality:
+
+| Quality     | Drawing buffer before → after | FPS before → after       | Frame p95 ms before → after |
+| ----------- | ----------------------------- | ------------------------ | --------------------------- |
+| High        | 2800 × 1750 → 2000 × 1250     | 32.5, 32.1 → 44.7, 47.6  | 63.1, 64.0 → 44.3, 50.7     |
+| Balanced    | 2000 × 1250 (unchanged)       | 54.8, 54.6 → 52.1, 55.4  | 26.6, 24.5 → 26.6, 33.2     |
+| Performance | 1600 × 1000 (unchanged)       | 85.2, 86.5 → 83.8, 86.3  | 26.6, 26.0 → 26.6, 26.6     |
+
+Default settings over 20 seconds with vsync, as a retina laptop would run them: the baseline started on high at 2800 × 1750 and ran 22.9, 30.9 and 31.8 FPS (frame p95 33–67 ms). The branch starts on balanced with dynamic resolution and ran 59.1, 58.4 and 58.3 FPS (frame p95 16.7–16.8 ms). It settled between pixel ratios 0.875 and 1.125 in those runs.
+
+With vsync disabled, headless Chrome paces frames unevenly: even performance quality at 86 FPS has a p95 of 26 ms. The scaler therefore steps to its 0.75 floor in uncapped runs (80 FPS, against 31 FPS for the baseline default). Use `?resolution=fixed` for uncapped measurements.
+
+At device pixel ratio 1, `npm run benchmark` gives the same results before and after (high 55.7 → 57.2 FPS; balanced and performance at the 60 FPS vsync limit), because the caps only differ above a ratio of 1.25. The raw reports are `output/performance-{base,new}-*.json` (ignored build artifacts).
+
+### Antialiasing and bloom comparison (2026-10-29)
+
+Headless Chrome at 1600 × 1000 CSS pixels and device pixel ratio 2, launched with `--disable-frame-rate-limit --disable-gpu-vsync`. Runs alternated between `1a2624c` and the bloom change, twice each. These runs predate the 1.25 pixel-ratio cap. The high row also used 2x MSAA at a pixel ratio of 1.75, a change later dropped because no quality reaches that ratio now. The balanced row isolates the bloom change at the 2000 × 1250 buffer that high and balanced now use. Other sessions were rendering on the same GPU, so absolute times are inflated and noisy. The table gives the range of the two mean frame intervals.
+
+| Quality (buffer)          | Frame ms before → after | MSAA before → after |
+| ------------------------- | ----------------------- | ------------------- |
+| High (2800 × 1750)        | 50.7–57.8 → 34.5–37.3   | 4x → 2x             |
+| Balanced (2000 × 1250)    | 29.0–33.8 → 22.3–25.3   | 4x → 4x             |
+| Performance (1600 × 1000) | 23.2–24.6 → 29.6–31.0   | 4x → 4x, no bloom   |
+
+Performance quality runs the same passes as before, plus one bloom-texture lookup in the output pass from a 1 × 1 texture. Its slower result is most likely contention, but this run cannot confirm that. The standard DPR 1 benchmark (`npm run benchmark`) was within noise: 39.3/32.0/32.0 FPS before and 36.8/33.0/29.8 after.
+
+Postprocessing alone, on a nearly empty 2800 × 1750 frame, measured with WebGL timer queries. Values are the median and 25th-percentile GPU ms per frame:
+
+| Pipeline                   | Bloom on   | Bloom off |
+| -------------------------- | ---------- | --------- |
+| UnrealBloomPass, 4x MSAA   | 23.3 (12.4) | 6.0 (3.0) |
+| Quarter-res bloom, 4x MSAA | 15.3 (7.7)  | —         |
+| Quarter-res bloom, 2x MSAA | 9.0 (2.9)   | 3.8 (1.8) |
+
+Repeat both comparisons on an idle machine before relying on the absolute values.
+
+### Water refraction from the main pass (2026-10-30)
+
+Before is `1a2624c`; after renders refraction from the main pass. Both predate the resolution and bloom changes above, so high quality ran at pixel ratio 1.75. Runs alternated before and after while holding the shared GPU lock, so no other benchmark or test browser was rendering: two pairs at DPR 1 with `npm run benchmark`, and three pairs at DPR 2 with a copy of the script using `deviceScaleFactor: 2` and Chrome's `--disable-frame-rate-limit --disable-gpu-vsync`. Values are medians of the per-run means.
+
+| Quality     | DPR 1 frame ms (FPS)      | DPR 2 uncapped frame ms (FPS) | Draw calls  | Triangles     |
+| ----------- | ------------------------- | ----------------------------- | ----------- | ------------- |
+| High        | 35.7 → 29.7 (28.0 → 33.7) | 52.5 → 40.4 (19.1 → 24.7)     | 1,268 → 878 | 3.86M → 2.83M |
+| Balanced    | 32.2 → 26.3 (31.1 → 38.0) | 32.8 → 26.8 (30.4 → 37.3)     | 1,246 → 844 | 3.85M → 2.76M |
+| Performance | 25.9 → 23.4 (38.6 → 42.8) | 20.5 → 16.8 (48.9 → 59.5)     | 1,159 → 767 | 3.57M → 2.51M |
+
+Every paired run favored the after build. DPR 1 frame intervals snap to display refresh multiples, so the uncapped DPR 2 runs show the GPU saving more directly: 12 ms per frame at high quality. Each frame submits about 390 fewer draws and 1.0–1.1M fewer triangles at the spawn view. Performance quality saves the least time because its separate capture was already at half resolution.
+
+### Foliage comparison (2026-10-30)
+
+These are sequential headless Chrome runs at 1600 × 1000, with frame-rate limiting and vsync disabled. Before is `1a2624c` and after is the foliage change alone, so both predate the refraction, resolution, and bloom changes above. The two changes overlap: the refraction saving here came from removing foliage from a refraction capture that the main pass now supplies, so foliage exclusion now saves only its share of the reflection captures and the fallback capture. Each sampled frame ends with a one-pixel `readPixels`, so the time covers GPU completion. Values are medians of two runs at high quality. In these runs, frames on unchanged code varied by about ±1 ms.
+
+| View                     | DPR 1 ms before → after | DPR 2 ms before → after | Triangles before → after |
+| ------------------------ | ----------------------- | ----------------------- | ------------------------ |
+| Default (view height 18) | 37.1 → 32.8             | 59.8 → 55.8             | 3.86M → 3.09M            |
+| Zoomed in (10)           | 28.4 → 28.1             | 47.7 → 45.7             | 3.19M → 2.63M            |
+| Zoomed out (39)          | 39.8 → 32.8             | 58.6 → 48.3             | 4.45M → 2.86M            |
+| First person             | 25.4 → 21.7             | 39.0 → 34.9             | 2.82M → 2.08M            |
+
+Interleaved A/B toggles in a single page measured each change's share at DPR 1, default view. Leaving foliage out of the water captures saved 3.6 ms (5.7 ms at DPR 2). Coarse leaves at maximum zoom-out saved 3.5 ms (4.6 ms at DPR 2). At the default view, the remaining detailed tree leaves cost about 3.5 ms, and all shrub leaves together cost about 0.7 ms. Absolute times include contention from other local GPU work, so compare the differences rather than the totals.
