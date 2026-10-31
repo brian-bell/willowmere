@@ -6,6 +6,7 @@ import {
   chunkRandom,
   inVillage,
   regionAt,
+  terrainField,
   terrainHeight,
 } from "../src/world-layout.js";
 
@@ -77,13 +78,26 @@ test("chunk seeds are independent of build order", () => {
   }
 });
 
-test("terrain is flat until a region brings height data", () => {
+test("terrain is flat in the village and rises only around the millpond", () => {
   for (const [x, z] of [
     [0, 0],
     [-24, -21],
     [24, 21],
     [12.3, -4.7],
+    [12, -21],
+    [-30, -30],
+    [35, 10],
     [100, -100],
   ])
     expect(terrainHeight(x, z)).toBe(0);
+  for (let x = -24; x <= 24; x += 1)
+    for (let z = -21; z <= 21; z += 1) expect(terrainHeight(x, z)).toBe(0);
+  // The pond's bank rises about half a metre; its bed lies below the lawn.
+  expect(terrainHeight(17.6, -26.5)).toBeGreaterThan(0.35);
+  expect(terrainHeight(12.5, -31.2)).toBeLessThan(-0.3);
+  expect(terrainField.max).toBeGreaterThan(0.35);
+  expect(terrainField.max).toBeLessThan(0.6);
+  expect(regionAt(12.5, -31).name).toBe("The millpond");
+  expect(regionAt(7, -28).name).toBe("The millpond");
+  expect(regionAt(12, -20.5).name).toBe("The willow brook");
 });

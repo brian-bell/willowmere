@@ -1,3 +1,9 @@
+import {
+  MILLPOND,
+  inMillpondGround,
+  millpondGround,
+} from "./regions/millpond-layout.js";
+
 // One description of the map's extent, its chunk grid, its named regions and
 // its ground height. Movement, routing, the overview camera, shadows, scatter
 // and planting read their limits from here instead of keeping their own copies.
@@ -104,7 +110,11 @@ export const REGIONS = [
   { id: "green", name: "The village green" },
 ]
   .map(withinVillage)
-  .concat({ id: "fields", name: "The open fields" });
+  .concat(
+    // The pond, its banks and the brook up to it, north of the village.
+    { id: "millpond", name: "The millpond", minX: 0, maxX: 26, maxZ: -21 },
+    { id: "fields", name: "The open fields" },
+  );
 
 export function regionAt(x, z) {
   return REGIONS.find(
@@ -113,18 +123,30 @@ export function regionAt(x, z) {
   );
 }
 
-// Terrain heights, one sample per metre over the ground slab. All zero for
-// now: the village stays flat, and hills arrive later as data in new regions.
+// Terrain heights, one sample per metre over the ground slab. The village
+// stays flat; new regions bring their own heights: the millpond's banks and
+// bed so far.
 const TERRAIN_STEP = 1,
   terrainCols = Math.round((ground.maxX - ground.minX) / TERRAIN_STEP) + 1,
   terrainRows = Math.round((ground.maxZ - ground.minZ) / TERRAIN_STEP) + 1,
   terrain = new Float32Array(terrainCols * terrainRows);
+let terrainMax = 0;
+for (let row = 0; row < terrainRows; row++)
+  for (let col = 0; col < terrainCols; col++) {
+    const x = ground.minX + col * TERRAIN_STEP,
+      z = ground.minZ + row * TERRAIN_STEP;
+    if (inVillage(x, z) || !inMillpondGround(x, z)) continue;
+    // Heights are above the lawn's top, which sits 5 cm over the terrain.
+    const height = millpondGround(x, z) - MILLPOND.lawn;
+    terrain[row * terrainCols + col] = height;
+    terrainMax = Math.max(terrainMax, height);
+  }
 export const terrainField = {
   step: TERRAIN_STEP,
   cols: terrainCols,
   rows: terrainRows,
   heights: terrain,
-  max: 0,
+  max: terrainMax,
 };
 
 /** Height of the bare ground at (x, z), bilinear between samples. */

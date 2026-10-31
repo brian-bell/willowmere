@@ -104,3 +104,51 @@ test("village keeps a draw-call budget with live water and a planted garden", as
   expect(Math.max(...samples.map((s) => s.geometries))).toBeLessThan(320);
   expect(errors).toEqual([]);
 });
+
+test("the millpond keeps a tighter draw budget than the village's", async ({
+  page,
+}) => {
+  test.setTimeout(900000);
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "willowmere.save.v1",
+      JSON.stringify({
+        started: true,
+        quests: { mabel: false, flower: false, plant: false },
+        plants: [],
+      }),
+    );
+  });
+  await page.goto("/?resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
+  // The benchmark's viewpoint: the pond's south bank by the jetty, at the
+  // default height, once the region has streamed in and the view arrived.
+  await page.waitForFunction(() => !window.__willowmere.getStreaming().pending, null, {
+    timeout: 600000,
+    polling: 1000,
+  });
+  await page.evaluate(() => window.__willowmere.moveTo(9, -26.4));
+  const samples = await page.evaluate(async () => {
+    const values = [],
+      start = performance.now();
+    // The overview eases over to the pond first: three seconds, and enough
+    // frames for a slow renderer's capped steps to get there too.
+    for (let i = 0; i < 40 || performance.now() - start < 3000; i++)
+      await new Promise(requestAnimationFrame);
+    for (let i = 0; i < 30; i++) {
+      await new Promise(requestAnimationFrame);
+      values.push(window.__willowmere.getDiagnostics());
+    }
+    return values;
+  });
+  // All three pools are in view here: the pond, the brook above the village
+  // and the village's brook, each taking its turn at a reflection.
+  expect(Math.max(...samples.map((s) => s.drawCalls))).toBeLessThan(1000);
+  expect(Math.max(...samples.map((s) => s.triangles))).toBeLessThan(2.5e6);
+  expect(errors).toEqual([]);
+});
