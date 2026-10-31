@@ -303,3 +303,12 @@ These are sequential headless Chrome runs at 1600 × 1000, with frame-rate limit
 | First person             | 25.4 → 21.7             | 39.0 → 34.9             | 2.82M → 2.08M            |
 
 Interleaved A/B toggles in a single page measured each change's share at DPR 1, default view. Leaving foliage out of the water captures saved 3.6 ms (5.7 ms at DPR 2). Coarse leaves at maximum zoom-out saved 3.5 ms (4.6 ms at DPR 2). At the default view, the remaining detailed tree leaves cost about 3.5 ms, and all shrub leaves together cost about 0.7 ms. Absolute times include contention from other local GPU work, so compare the differences rather than the totals.
+
+### Kitchen garden (2026-10-31)
+
+The fenced kitchen garden moved into `src/garden.js` and gained mixed vegetables, a cutting border, a rose arch, a scarecrow and props. Plants share one vertex-coloured material and painted props another; timber reuses the village's wood, dark wood, trim and path materials, so the bake gains two batches. The garden's static geometry grew from about 6,000 to 33,000 triangles. Counts only, measured in a GPU-less container with SwiftShader at 1200 × 750, high quality, against `529e708`; frame times there are not meaningful.
+
+| View                   | Draw calls before → after | Triangles before → after |
+| ---------------------- | ------------------------- | ------------------------ |
+| Default (spawn)        | 1,077 → 1,079             | 2.787M → 2.836M          |
+| Garden framed, zoomed in | 515 → 517               | 1.975M → 2.025M          |

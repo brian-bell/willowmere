@@ -1,6 +1,7 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createTrees } from "./trees.js";
 import { createBushes } from "./bushes.js";
+import { createGarden } from "./garden.js";
 import { createReeds } from "./reeds.js";
 import { createRiverbank } from "./riverbank.js";
 import { createWaterSystem, sampleWaterField } from "./water.js";
@@ -854,7 +855,7 @@ export function createWorld(T, scene) {
   bench(2.7, 2.7, -Math.PI / 2);
   bench(-5, 10.9, Math.PI);
   bench(17, 5.7, Math.PI);
-  // Enclosed kitchen garden, orderly vegetable beds, trellis and watering can.
+  // Enclosed kitchen garden; its beds, plants and clutter live in garden.js.
   function fence(x1, z1, x2, z2) {
     colliders.push({
       x: (x1 + x2) / 2,
@@ -885,18 +886,7 @@ export function createWorld(T, scene) {
   fence(-13.8, 13.7, -13.8, 11);
   fence(-19, 6, -14, 6);
   fence(-13.8, 6, -13.8, 8);
-  const bedSoil = mat("#796146");
-  for (let z of [7.1, 9.6, 12.1]) {
-    box(bedSoil, -16.6, 0.14, z, 3.7, 0.15, 1.45);
-    for (let zz of [-0.75, 0.75])
-      box(wood, -16.6, 0.2, z + zz, 3.9, 0.22, 0.12);
-    for (let x of [-18.5, -14.7]) box(wood, x, 0.2, z, 0.1, 0.22, 1.55);
-    for (let i = 0; i < 8; i++) {
-      let x = -18.2 + i * 0.47;
-      orb(plantMats[i % 3], x, 0.39, z, 0.3, 0.25, 0.38);
-      if (z > 11) orb(mat("#d9a45a"), x, 0.5, z, 0.13);
-    }
-  }
+  scene.add(createGarden({ wood, darkWood, trim, soil: mat("#796146"), path }));
   interactables.push({
     id: "garden",
     name: "Community Garden",
