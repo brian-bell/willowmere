@@ -592,6 +592,12 @@ updateZoomControls();
 $("#zoom-in").onclick = () => setZoom(targetViewHeight - ZOOM_STEP);
 $("#zoom-out").onclick = () => setZoom(targetViewHeight + ZOOM_STEP);
 $("#zoom-reset").onclick = () => setZoom(DEFAULT_VIEW_HEIGHT);
+// Small screens fold tilt, yaw and pan behind this button (see style.css).
+$("#camera-more").onclick = () => {
+  const open = $(".view-controls").classList.toggle("camera-open");
+  $("#camera-more").setAttribute("aria-expanded", String(open));
+  $("#camera-more").innerHTML = `<span aria-hidden="true">${open ? "×" : "⋯"}</span>`;
+};
 updateTiltControls();
 $("#tilt-up").onclick = () => setTilt(targetTilt + TILT_STEP);
 $("#tilt-down").onclick = () => setTilt(targetTilt - TILT_STEP);
