@@ -199,6 +199,20 @@ test("tilted map supports click-to-walk and fits mobile screens", async ({ page 
   expect(controls.x + controls.width).toBeLessThanOrEqual(390);
   expect(controls.y).toBeGreaterThan(100);
   expect(controls.y + controls.height).toBeLessThan(700);
+  // Phones get a slim rail; tilt, yaw and pan fold out on demand.
+  expect(controls.width).toBeLessThan(60);
+  expect(controls.height).toBeLessThan(250);
+  await expect(page.locator(".tilt-controls")).toBeHidden();
+  await page.locator("#camera-more").click();
+  await expect(page.locator("#camera-more")).toHaveAttribute("aria-expanded", "true");
+  const panel = await page.locator(".camera-extra").boundingBox();
+  expect(panel.x).toBeGreaterThanOrEqual(quest.x + quest.width);
+  for (const button of ["#tilt-up", "#yaw-left", "#pan-down"]) {
+    const box = await page.locator(button).boundingBox();
+    expect(box.height).toBeGreaterThanOrEqual(40);
+  }
+  await page.locator("#camera-more").click();
+  await expect(page.locator(".pan-controls")).toBeHidden();
   await page.setViewportSize({ width: 844, height: 390 });
   const landscape = await page.locator(".view-controls").boundingBox();
   expect(landscape.y).toBeGreaterThan(80);

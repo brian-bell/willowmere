@@ -102,6 +102,15 @@
           <button id="zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
           <button id="zoom-reset" type="button" title="Reset zoom">Reset</button>
         </div>
+        <button
+          id="camera-more"
+          type="button"
+          aria-expanded="false"
+          aria-controls="camera-extra"
+          aria-label="More camera controls"
+          title="Tilt, yaw and pan"
+        ><span aria-hidden="true">⋯</span></button>
+        <div class="camera-extra" id="camera-extra">
         <div class="tilt-controls" role="group" aria-label="Map tilt">
           <span class="view-label">Tilt</span>
           <button
@@ -138,6 +147,7 @@
             <button id="pan-right" type="button" aria-label="Pan right" title="Pan right"><span aria-hidden="true">→</span></button>
             <button id="pan-down" type="button" aria-label="Pan down" title="Pan down"><span aria-hidden="true">↓</span></button>
           </div>
+        </div>
         </div>
       </div>
       <div id="view-help" hidden>WASD walk · Drag to look · ← → turn</div>
