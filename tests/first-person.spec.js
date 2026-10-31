@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 
 const view = (page) => page.evaluate(() => window.__willowmere.getView());
 const position = (page) => page.evaluate(() => window.__willowmere.getPlayer());
+const skyVisible = (page) =>
+  page.evaluate(() => window.__willowmere.getDiagnostics().render.sky);
 
 async function start(page) {
   await page.goto("/");
@@ -38,6 +40,7 @@ test("first person looks, walks, collides, interacts and returns to village view
   const before = await view(page);
   expect(before.camera).toBe("PerspectiveCamera");
   expect(before.playerVisible).toBe(false);
+  expect(await skyVisible(page)).toBe(true);
   const ground = await page.evaluate(
     () => window.__willowmere.getDiagnostics().position[1],
   );
@@ -114,6 +117,8 @@ test("first person looks, walks, collides, interacts and returns to village view
   await page.keyboard.press("v");
   expect((await view(page)).camera).toBe("OrthographicCamera");
   expect((await view(page)).playerVisible).toBe(true);
+  // The overview looks down on the village and never sees the horizon.
+  expect(await skyVisible(page)).toBe(false);
   expect(await position(page)).toEqual(savedPosition);
   await expect(page.locator("#zoom-in")).toBeVisible();
   expect(errors).toEqual([]);
