@@ -409,9 +409,10 @@ function fitShadow() {
       last = SHADOW_STEPS.length - 1,
       // Less a hair, so first person's village-sized box takes the 1.0 step.
       needed = Math.min(shadowSize[key], full) / reference - 1e-9;
-    // Grow at once; shrink only when the view fits well inside the smaller size.
+    // Grow at once; shrink only when the view fits well inside the smaller
+    // size. First person's box never changes size, so it takes its step at once.
     let step = shadowStep[axis];
-    if (needed > SHADOW_STEPS[step]) {
+    if (firstPerson || needed > SHADOW_STEPS[step]) {
       step = SHADOW_STEPS.findIndex((s) => s >= needed);
       if (step < 0) step = last;
     } else while (step > 0 && needed < SHADOW_STEPS[step - 1] * 0.96) step--;
@@ -1743,6 +1744,7 @@ window.__willowmere = {
           .applyMatrix4(mesh.matrixWorld);
         return {
           name: mesh.name,
+          visible: mesh.visible,
           instances: mesh.isInstancedMesh ? mesh.count : 0,
           center: sphere.center.toArray(),
           radius: sphere.radius,

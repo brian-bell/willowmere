@@ -51,20 +51,38 @@ test("first person hides distant grass and draws only as far as its fog", async 
   await expect
     .poll(async () => (await streaming(page)).pending, { timeout: 600000 })
     .toBe(0);
-  const overview = await page.evaluate(() => window.__willowmere.getDiagnostics());
+  // Switches the view, then reports after the next frame has applied it.
+  const view = (toggle) =>
+    page.evaluate(async (toggle) => {
+      if (toggle) document.querySelector("#view-toggle").click();
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      const game = window.__willowmere,
+        { fog, far } = game.getDiagnostics(),
+        patches = game
+          .getChunks()
+          .flatMap((chunk) => chunk.meshes)
+          .filter((mesh) => mesh.name.startsWith("Grass blades (open country"));
+      return {
+        fog,
+        far,
+        shown: patches.filter((mesh) => mesh.visible).length,
+      };
+    }, toggle);
+  const overview = await view(false);
   expect(overview.fog).toEqual([0, 693]);
-  await page.locator("#view-toggle").click();
-  await expect
-    .poll(async () => (await page.evaluate(() => window.__willowmere.getDiagnostics())).far)
-    .toBe(72);
-  const eye = await page.evaluate(() => window.__willowmere.getDiagnostics());
+  expect(overview.shown).toBe(16);
+  const eye = await view(true);
+  expect(eye.far).toBe(72);
   // The fog closes before the far plane, so nothing is cut off in view.
   expect(eye.fog[1]).toBeLessThan(eye.far);
   expect(eye.fog[0]).toBeGreaterThanOrEqual(25);
-  await page.locator("#view-toggle").click();
-  await expect
-    .poll(async () => (await page.evaluate(() => window.__willowmere.getDiagnostics())).fog)
-    .toEqual([0, 693]);
+  // From the village green, the patches across the map are out of range.
+  expect(eye.shown).toBeGreaterThan(0);
+  expect(eye.shown).toBeLessThan(16);
+  const back = await view(true);
+  expect(back.fog).toEqual([0, 693]);
+  expect(back.shown).toBe(16);
 });
 
 test("walking across chunk borders while the open country streams in never stalls a frame", async ({
@@ -81,6 +99,14 @@ test("walking across chunk borders while the open country streams in never stall
   });
   await page.goto("/?resolution=fixed");
   await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
+  // Frame gaps only mean something where frames are fast; software WebGL
+  // (as in cloud containers) takes seconds per frame and could not walk there.
+  const typical = await page.evaluate(() => {
+    const times = window.__frames.slice(-6).map(([t]) => t),
+      gaps = times.slice(1).map((t, i) => t - times[i]).sort((a, b) => a - b);
+    return gaps[gaps.length >> 1];
+  });
+  test.skip(typical > 20, `frames take ${Math.round(typical)} ms here, too slow to time hitches`);
   // Zoom out while the patches stream in, then walk from the village green
   // west across the chunk borders at x = -8 and x = -24 into the fields.
   await page.locator("#start").click();
@@ -102,10 +128,5 @@ test("walking across chunk borders while the open country streams in never stall
     return { gaps, streaming: window.__willowmere.getStreaming() };
   });
   expect(streaming.pending).toBe(0);
-  gaps.sort((a, b) => a - b);
-  // Frame gaps only mean something where frames are fast; software WebGL
-  // (as in cloud containers) takes seconds per frame.
-  const typical = gaps[gaps.length >> 1];
-  test.skip(typical > 20, `frames take ${Math.round(typical)} ms here, too slow to time hitches`);
-  expect(gaps.at(-1)).toBeLessThan(33.4);
+  expect(Math.max(...gaps)).toBeLessThan(33.4);
 });
