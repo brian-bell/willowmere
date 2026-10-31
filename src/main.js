@@ -11,6 +11,7 @@ import { createAudio } from "./audio.js";
 import { createEffects } from "./effects.js";
 import { createFlowerFactory } from "./flowers.js";
 import { createPlayerVisibility } from "./visibility.js";
+import { createSky } from "./sky.js";
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
 const canvas = $("#scene"),
@@ -255,6 +256,10 @@ sun.shadow.bias = -0.00015;
 sun.shadow.normalBias = 0.045;
 scene.add(sun);
 scene.add(sun.target);
+// Only first person sees the horizon; the overview looks down on the village.
+const sky = createSky(THREE, sun);
+scene.add(sky.mesh);
+const showSky = () => (sky.mesh.visible = firstPerson && (overrides.sky ?? true));
 // The sun never moves. Its shadow camera rolls with each yaw step so the overview's
 // footprint lines up with the map, and its bounds follow the receivers in view in
 // fixed sizes and whole-texel steps, so shadow edges hold still while the view
@@ -635,6 +640,7 @@ function setFirstPerson(value) {
   camera = firstPerson ? firstPersonCamera : overviewCamera;
   scenePass.camera = camera;
   life.player.visible = !firstPerson;
+  showSky();
   state.viewMode = firstPerson ? "first-person" : "overview";
   updateViewUI();
   save();
@@ -1296,7 +1302,8 @@ function scanNearby() {
 let elapsed = 0,
   last = performance.now(),
   frame = 0,
-  duskMix = 0;
+  duskMix = 0,
+  skyTime = 0;
 const screenRight = new THREE.Vector2(
     cameraOffset.z,
     -cameraOffset.x,
@@ -1451,6 +1458,8 @@ function animate(now) {
   sun.color.set("#fff0d6").lerp(duskSun, duskMix);
   scene.background.set("#abc2a1").lerp(duskSky, duskMix);
   scene.fog.color.copy(scene.background);
+  if (motion) skyTime += dt;
+  sky.update(duskMix, skyTime);
   for (const light of world.lanterns || [])
     light.intensity = THREE.MathUtils.lerp(0.1, 18.0, duskMix);
   renderer.toneMappingExposure = THREE.MathUtils.lerp(1.05, 0.95, duskMix);
@@ -1495,6 +1504,7 @@ function applyTune() {
   for (const mesh of world.trees.foliage) mesh.visible = foliage;
   world.bushes.group.visible = foliage;
   world.trees.setDetail(leafDetail());
+  showSky();
   // The scaler stands aside while the ratio is forced; clearing it resumes
   // from the quality's cap.
   if (!interior?.active) resetResolution(q);
@@ -1558,6 +1568,7 @@ window.__willowmere = {
       shadowUpdate: sun.shadow.autoUpdate,
       water: overrides.water ?? true,
       foliage: world.bushes.group.visible,
+      sky: sky.mesh.visible,
       leafDetail: overrides.leafDetail ?? "auto",
       leaves: world.trees.foliage.reduce((n, mesh) => n + mesh.count, 0),
       overrides: { ...overrides },
