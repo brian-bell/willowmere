@@ -80,6 +80,29 @@ test("welcome quest, interaction, garden, journal, photo mode and persistence", 
     (await page.evaluate(() => window.__willowmere.getState())).flowers >= 3,
     "Gathering three wildflowers updates inventory",
   );
+  await walk(-1, 5.6);
+  await page.waitForTimeout(300);
+  assert(
+    (await page.locator("#interaction span").textContent()) ===
+      "Wishing Fountain",
+    "Fountain offers an interaction",
+  );
+  await page.keyboard.press("e");
+  await page.waitForTimeout(200);
+  assert(
+    [
+      "Listen closely. Beneath the splashing water, the whole village seems to hum.",
+      "Someone has left a little wish on the rim: “May we always have enough to share.”",
+    ].includes(await page.locator("#dialogue-text").textContent()) &&
+      (await page.locator("#dialogue-next").textContent()).includes("Lovely"),
+    "Fountain answers with a single line",
+  );
+  await page.keyboard.press("e");
+  await page.waitForTimeout(200);
+  assert(
+    await page.locator("#dialogue").isHidden(),
+    "One more press ends the fountain interaction",
+  );
   await walk(3, 9);
   await page.keyboard.press("3");
   await page.keyboard.press("e");

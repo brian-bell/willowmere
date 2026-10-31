@@ -863,6 +863,7 @@ function openGrass(x, z) {
     Math.abs(x - 12) > 2
   );
 }
+const oneOf = (list) => list[Math.floor(Math.random() * list.length)];
 function interact() {
   if (interior?.active || interiorLoading) return;
   if (dialogue) {
@@ -945,19 +946,15 @@ function interact() {
       finn: "FINN · THE BAKER",
       elio: "ELIO · THE GARDENER",
     };
-    openDialogue(
-      names[n.id] || n.name,
-      [phrases[Math.floor(Math.random() * phrases.length)]],
-      () => {
-        if (n.id === "mabel") complete("mabel");
-        if (n.id === "finn" && state.seeds < 3) {
-          state.seeds += 3;
-          updateUI();
-          save();
-          toast("Finn tucked three seeds into your pouch.");
-        }
-      },
-    );
+    openDialogue(names[n.id] || n.name, [oneOf(phrases)], () => {
+      if (n.id === "mabel") complete("mabel");
+      if (n.id === "finn" && state.seeds < 3) {
+        state.seeds += 3;
+        updateUI();
+        save();
+        toast("Finn tucked three seeds into your pouch.");
+      }
+    });
     return;
   }
   const id = nearest.data.id || nearest.data.type;
@@ -985,10 +982,14 @@ function interact() {
       "Good things grow slowly. Choose your seeds, find a little space, and begin.",
     ],
   };
-  openDialogue(
-    nearest.data.name.toUpperCase(),
-    dialogues[id] || ["Some places ask you to slow down. This is one of them."],
-  );
+  // Like a neighbor, a landmark answers each interaction with a single line.
+  openDialogue(nearest.data.name.toUpperCase(), [
+    oneOf(
+      dialogues[id] || [
+        "Some places ask you to slow down. This is one of them.",
+      ],
+    ),
+  ]);
 }
 window.addEventListener("keydown", (e) => {
   if (interior?.active) {
