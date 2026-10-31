@@ -12,6 +12,7 @@ import { createEffects } from "./effects.js";
 import { createFlowerFactory } from "./flowers.js";
 import { createPlayerVisibility } from "./visibility.js";
 import { createSky } from "./sky.js";
+import { WORLD, regionAt, terrainField } from "./world-layout.js";
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
 const canvas = $("#scene"),
@@ -251,8 +252,6 @@ const sun = new THREE.DirectionalLight("#fff0d6", 2.4);
 sun.position.set(-16, 32, 15);
 sun.castShadow = true;
 sun.shadow.mapSize.setScalar(SHADOW_MAP_SIZES.high.overview);
-Object.assign(sun.shadow.camera, { near: 1, far: 85 });
-sun.shadow.bias = -0.00015;
 sun.shadow.normalBias = 0.045;
 scene.add(sun);
 scene.add(sun.target);
@@ -265,10 +264,13 @@ const showSky = () => (sky.mesh.visible = firstPerson && (overrides.sky ?? true)
 // fixed sizes and whole-texel steps, so shadow edges hold still while the view
 // follows or pans and change only in small steps while it zooms.
 const shadowCamera = sun.shadow.camera;
-// The soil rim's base and the tallest canopy bound every receiver vertically.
+// The soil rim's base and the tallest canopy on the highest ground bound every
+// receiver vertically.
 const SHADOW_FLOOR = -1.4,
-  SHADOW_CEILING = 9.5,
+  SHADOW_CEILING = terrainField.max + WORLD.canopy,
   SHADOW_MARGIN = 1,
+  // Depth bias in metres; the shadow map stores depth across near..far.
+  SHADOW_BIAS = 0.0126,
   // Fractions of the whole village, about 12% apart.
   SHADOW_STEPS = Array.from({ length: 11 }, (_, i) =>
     i < 10 ? 0.32 * 1.12 ** i : 1,
@@ -282,6 +284,25 @@ const shadowLight = sun.position.clone().sub(sun.target.position).normalize(),
   villageShadow = new THREE.Box2(),
   shadowStep = [SHADOW_STEPS.length - 1, SHADOW_STEPS.length - 1];
 let shadowYaw = null;
+// The depth range spans the world's receivers along the light, with a metre spare.
+{
+  let near = Infinity,
+    far = -Infinity;
+  const { shadow } = WORLD;
+  for (let i = 0; i < 8; i++) {
+    shadowPoint.set(
+      i & 1 ? shadow.maxX : shadow.minX,
+      i & 2 ? SHADOW_CEILING : SHADOW_FLOOR,
+      i & 4 ? shadow.maxZ : shadow.minZ,
+    );
+    const depth = sun.position.clone().sub(shadowPoint).dot(shadowLight);
+    near = Math.min(near, depth);
+    far = Math.max(far, depth);
+  }
+  shadowCamera.near = Math.max(0.1, near - 1);
+  shadowCamera.far = far + 1;
+  sun.shadow.bias = -SHADOW_BIAS / (shadowCamera.far - shadowCamera.near);
+}
 function addShadowPoint(box, point) {
   point.applyMatrix4(shadowCamera.matrixWorldInverse);
   box.expandByPoint(shadowCenter.set(point.x, point.y));
@@ -298,13 +319,14 @@ function rollShadow(yaw) {
   shadowCamera.lookAt(sun.target.position);
   shadowCamera.updateMatrixWorld();
   villageShadow.makeEmpty();
+  const { shadow } = WORLD;
   for (let i = 0; i < 8; i++)
     addShadowPoint(
       villageShadow,
       shadowPoint.set(
-        i & 1 ? 24.6 : -24.6,
+        i & 1 ? shadow.maxX : shadow.minX,
         i & 2 ? SHADOW_CEILING : SHADOW_FLOOR,
-        i & 4 ? 21 : -21,
+        i & 4 ? shadow.maxZ : shadow.minZ,
       ),
     );
   shadowYaw = yaw;
@@ -377,7 +399,7 @@ const fill = new THREE.DirectionalLight("#dae9ec", 0.6);
 fill.position.set(15, 14, -20);
 scene.add(fill);
 const world = createWorld(THREE, scene),
-  life = createLife(THREE, scene),
+  life = createLife(THREE, scene, world.terrainHeight),
   audio = createAudio();
 const sceneTarget = new THREE.WebGLRenderTarget(innerWidth, innerHeight, {
   samples: 4,
@@ -390,15 +412,10 @@ const bloom = new SoftBloomPass(0.19, 0.65, 1.15);
 composer.addPass(bloom);
 composer.addPass(new BloomOutputPass(bloom));
 renderer.info.autoReset = false;
+// Lit windows and lamp glass brighten at blue hour. Each chunk lists its own.
 const glowMaterials = new Set();
-scene.traverse((o) => {
-  if (
-    o.material &&
-    !Array.isArray(o.material) &&
-    o.material.emissive?.getHex() > 0
-  )
-    glowMaterials.add(o.material);
-});
+for (const chunk of world.chunks.values())
+  for (const material of chunk.glow) glowMaterials.add(material);
 const startPos = world.spawn || { x: -3, z: 5 };
 life.player.position.set(startPos.x, 0, startPos.z);
 const effects = createEffects(scene);
@@ -423,6 +440,12 @@ try {
   if (saved && saved.quests && Array.isArray(saved.plants))
     state = { ...state, ...saved };
 } catch {}
+// Planted flowers are keyed by id, so their meshes can be created in any order.
+// Saves from before ids get them in planting order.
+let nextPlantId =
+  Math.max(-1, ...state.plants.map((p) => (Number.isInteger(p.id) ? p.id : -1))) + 1;
+for (const plant of state.plants)
+  if (!Number.isInteger(plant.id)) plant.id = nextPlantId++;
 let savingWorks = true;
 function save() {
   try {
@@ -478,14 +501,19 @@ const gatheringSpots = [
   ],
   flowerGroups = new Map();
 const makeFlower = createFlowerFactory(scene);
+const flowerAt = (x, z, planted) => {
+  const group = makeFlower(x, z, planted);
+  group.position.y = world.terrainHeight(x, z);
+  return group;
+};
 gatheringSpots.forEach(([x, z], i) => {
-  if (!state.gathered.includes(i)) flowerGroups.set(i, makeFlower(x, z));
+  if (!state.gathered.includes(i)) flowerGroups.set(i, flowerAt(x, z));
 });
-const plantedGroups = [];
+const plantedGroups = new Map();
 state.plants.forEach((p) => {
-  let g = makeFlower(p.x, p.z, true);
+  const g = flowerAt(p.x, p.z, true);
   g.scale.setScalar(p.watered ? 1.35 : 0.7);
-  plantedGroups.push(g);
+  plantedGroups.set(p.id, g);
 });
 let tool = "hand",
   started = state.started,
@@ -847,8 +875,15 @@ $("#reset-position").onclick = () => {
   toast("Back home, on the village green.");
 };
 const colliders = world.colliders || [];
+const { walk } = WORLD;
 function blocked(x, z, r = 0.27) {
-  if (x < -21 + r || x > 21 - r || z < -17 + r || z > 17 - r) return true;
+  if (
+    x < walk.minX + r ||
+    x > walk.maxX - r ||
+    z < walk.minZ + r ||
+    z > walk.maxZ - r
+  )
+    return true;
   for (const c of colliders) {
     if (c.r !== undefined) {
       if (Math.hypot(x - c.x, z - c.z) < r + c.r) return true;
@@ -862,11 +897,9 @@ function blocked(x, z, r = 0.27) {
 }
 function openGrass(x, z) {
   return (
-    (world.isPlantable?.(x, z) ?? true) &&
+    world.isPlantable(x, z) &&
     !blocked(x, z, 0.55) &&
-    Math.hypot(x, z) > 2.5 &&
-    state.plants.every((p) => Math.hypot(x - p.x, z - p.z) > 0.75) &&
-    Math.abs(x - 12) > 2
+    state.plants.every((p) => Math.hypot(x - p.x, z - p.z) > 0.75)
   );
 }
 const oneOf = (list) => list[Math.floor(Math.random() * list.length)];
@@ -891,12 +924,12 @@ function interact() {
       toast("Find a little more room for those roots.");
       return;
     }
-    const plant = { x: fx, z: fz, watered: false };
+    const plant = { id: nextPlantId++, x: fx, z: fz, watered: false };
     state.plants.push(plant);
-    if (motion) effects.burst(fx, 0.4, fz);
-    let g = makeFlower(fx, fz, true);
+    if (motion) effects.burst(fx, world.terrainHeight(fx, fz) + 0.4, fz);
+    const g = flowerAt(fx, fz, true);
     g.scale.setScalar(0.7);
-    plantedGroups.push(g);
+    plantedGroups.set(plant.id, g);
     state.seeds--;
     complete("plant");
     updateUI();
@@ -906,15 +939,16 @@ function interact() {
     return;
   }
   if (tool === "water") {
-    let idx = state.plants.findIndex(
+    const plant = state.plants.find(
       (q) => Math.hypot(q.x - p.x, q.z - p.z) < 2 && !q.watered,
     );
-    if (idx < 0) {
+    if (!plant) {
       toast("Plant some flowers first, then give them a drink.");
       return;
     }
-    state.plants[idx].watered = true;
-    if (motion) effects.burst(state.plants[idx].x, 0.4, state.plants[idx].z);
+    plant.watered = true;
+    if (motion)
+      effects.burst(plant.x, world.terrainHeight(plant.x, plant.z) + 0.4, plant.z);
     state.coins += 5;
     save();
     updateUI();
@@ -929,7 +963,8 @@ function interact() {
   if (nearest.kind === "flower") {
     const id = nearest.id;
     const fg = flowerGroups.get(id);
-    if (motion) effects.burst(fg.position.x, 0.4, fg.position.z);
+    if (motion)
+      effects.burst(fg.position.x, fg.position.y + 0.4, fg.position.z);
     scene.remove(fg);
     flowerGroups.delete(id);
     state.gathered.push(id);
@@ -1104,14 +1139,15 @@ $$("[data-key]").forEach((b) => {
 $("#touch-interact").onclick = interact;
 // A grid search gives point-and-click movement a route around cottages and across the bridge.
 // Colliders never move, so each cell's walkability is sampled once, on the first click.
-const ROUTE = {
-  step: 0.65,
-  minX: -21,
-  minZ: -17,
-  cols: 65,
-  rows: 53,
-  radius: 0.34,
-};
+const ROUTE_STEP = 0.65,
+  ROUTE = {
+    step: ROUTE_STEP,
+    minX: walk.minX,
+    minZ: walk.minZ,
+    cols: Math.floor((walk.maxX - walk.minX) / ROUTE_STEP + 1e-6) + 1,
+    rows: Math.floor((walk.maxZ - walk.minZ) / ROUTE_STEP + 1e-6) + 1,
+    radius: 0.34,
+  };
 let routeWalkable = null;
 function walkableCells() {
   if (routeWalkable) return routeWalkable;
@@ -1229,6 +1265,20 @@ const raycaster = new THREE.Raycaster(),
   mouse = new THREE.Vector2(),
   groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
   hit = new THREE.Vector3();
+// Where a ray meets the terrain: intersect a level plane, then move the plane
+// to the ground height under the hit and repeat. Flat ground needs one pass;
+// gentle slopes settle within a few.
+function pickGround(ray, out) {
+  let height = 0;
+  for (let i = 0; i < 6; i++) {
+    groundPlane.constant = -height;
+    if (!ray.intersectPlane(groundPlane, out)) return null;
+    const next = world.terrainHeight(out.x, out.z);
+    if (Math.abs(next - height) < 0.005) return out;
+    height = next;
+  }
+  return out;
+}
 const destination = new THREE.Mesh(
   new THREE.RingGeometry(0.25, 0.29, 32),
   new THREE.MeshBasicMaterial({
@@ -1239,7 +1289,6 @@ const destination = new THREE.Mesh(
   }),
 );
 destination.rotation.x = -Math.PI / 2;
-destination.position.y = 0.03;
 destination.visible = false;
 scene.add(destination);
 canvas.addEventListener("pointerdown", (e) => {
@@ -1260,11 +1309,11 @@ canvas.addEventListener("pointerdown", (e) => {
     (-(e.clientY - r.top) / r.height) * 2 + 1,
   );
   raycaster.setFromCamera(mouse, camera);
-  if (raycaster.ray.intersectPlane(groundPlane, hit)) {
+  if (pickGround(raycaster.ray, hit)) {
     const route = findPath(life.player.position, { x: hit.x, z: hit.z });
     clickPath.splice(0, clickPath.length, ...route);
     if (route.length) {
-      destination.position.set(hit.x, 0.03, hit.z);
+      destination.position.set(hit.x, world.terrainHeight(hit.x, hit.z) + 0.03, hit.z);
       destination.visible = true;
     }
   }
@@ -1351,16 +1400,7 @@ function scanNearby() {
         : nearest?.label;
   $("#interaction").hidden = !label || !started;
   if (label) $("#interaction span").textContent = label;
-  $("#location-name").textContent =
-    p.x > 10
-      ? "The willow brook"
-      : p.z < -5
-        ? "The cottage lane"
-        : p.x < -8
-          ? "The wildflower meadow"
-          : p.z > 7
-            ? "The kitchen gardens"
-            : "The village green";
+  $("#location-name").textContent = regionAt(p.x, p.z).name;
 }
 let elapsed = 0,
   last = performance.now(),
@@ -1375,7 +1415,11 @@ const screenRight = new THREE.Vector2(
   input = new THREE.Vector2(),
   duskHemi = new THREE.Color("#8dacef"),
   duskSun = new THREE.Color("#ffa572"),
-  duskSky = new THREE.Color("#566782");
+  duskSky = new THREE.Color("#566782"),
+  viewFrustum = new THREE.Frustum(),
+  shadowFrustum = new THREE.Frustum(),
+  animationFrustums = [viewFrustum, shadowFrustum],
+  frustumMatrix = new THREE.Matrix4();
 function animate(now) {
   requestAnimationFrame(animate);
   const interval = now - last;
@@ -1454,17 +1498,18 @@ function animate(now) {
   const moving = velocity.length() > 0.08;
   life.setPlayerMotion(velocity.x, velocity.y);
   life.update(dt, elapsed, moving, motion);
-  world.update?.(motion ? dt : 0, motion ? elapsed : 0);
   if (moving && elapsed - lastStep > 0.33) {
     audio.step();
     lastStep = elapsed;
   }
-  // The view stays composed around the village, then gently accompanies longer walks.
-  const follow = started ? 0.85 : 0.48;
+  // The view stays composed around the village, then gently accompanies longer
+  // walks, up to the map's edge.
+  const follow = started ? 0.85 : 0.48,
+    bounds = WORLD.camera;
   target.set(
-    THREE.MathUtils.clamp(p.x * follow, -12, 14),
+    THREE.MathUtils.clamp(p.x * follow, bounds.minX, bounds.maxX),
     0,
-    THREE.MathUtils.clamp(1.5 + (p.z - 5) * follow, -9, 11),
+    THREE.MathUtils.clamp(1.5 + (p.z - 5) * follow, bounds.minZ, bounds.maxZ),
   );
   if (Math.abs(viewHeight - targetViewHeight) > 0.01) {
     viewHeight = THREE.MathUtils.lerp(
@@ -1499,17 +1544,34 @@ function animate(now) {
   overviewCamera.lookAt(viewTarget);
   firstPersonCamera.position.copy(p).y += 1.65;
   firstPersonCamera.rotation.set(pitch, yaw, 0, "YXZ");
+  // Chunks animate while the view or the sun's shadow can see them.
+  camera.updateMatrixWorld();
+  viewFrustum.setFromProjectionMatrix(
+    frustumMatrix.multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse,
+    ),
+  );
+  shadowFrustum.setFromProjectionMatrix(
+    frustumMatrix.multiplyMatrices(
+      shadowCamera.projectionMatrix,
+      shadowCamera.matrixWorldInverse,
+    ),
+  );
+  world.update(motion ? dt : 0, motion ? elapsed : 0, animationFrustums);
   destination.visible = clickPath.length > 0;
   if (destination.visible) {
     destination.scale.setScalar(1 + Math.sin(elapsed * 4) * 0.12);
     destination.material.opacity = 0.5 + Math.sin(elapsed * 3) * 0.2;
   }
-  plantedGroups.forEach((g, i) => {
-    const targetScale = state.plants[i].watered ? 1.35 : 0.7;
+  for (const plant of state.plants) {
+    const g = plantedGroups.get(plant.id);
+    if (!g) continue;
+    const targetScale = plant.watered ? 1.35 : 0.7;
     g.scale.setScalar(
       THREE.MathUtils.lerp(g.scale.x, targetScale, 1 - Math.exp(-dt * 1.5)),
     );
-  });
+  }
   duskMix = THREE.MathUtils.lerp(
     duskMix,
     day === "dusk" ? 1 : 0,
@@ -1599,6 +1661,29 @@ window.__willowmere = {
   getInterior: () => interior?.diagnostics() ?? { active: false },
   tuneInterior: (settings) => interior?.tune(settings),
   getWater: () => world.water.diagnostics(),
+  getChunks: () => {
+    const animating = new Set(world.animatedChunks()),
+      sphere = new THREE.Sphere();
+    return [...world.chunks.values()].map((chunk) => ({
+      key: chunk.key,
+      bounds: [chunk.bounds.min.toArray(), chunk.bounds.max.toArray()],
+      animations: chunk.animations.length,
+      animating: animating.has(chunk.key),
+      glow: chunk.glow.size,
+      meshes: chunk.meshes.map((mesh) => {
+        sphere
+          .copy(mesh.isInstancedMesh ? mesh.boundingSphere : mesh.geometry.boundingSphere)
+          .applyMatrix4(mesh.matrixWorld);
+        return {
+          name: mesh.name,
+          instances: mesh.isInstancedMesh ? mesh.count : 0,
+          center: sphere.center.toArray(),
+          radius: sphere.radius,
+        };
+      }),
+    }));
+  },
+  getGlowMaterials: () => glowMaterials.size,
   getDiagnostics: () => ({
     objects: scene.children.length,
     drawCalls: renderer.info.render.calls,

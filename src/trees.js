@@ -123,7 +123,8 @@ function leafTexture() {
 
 // Specimens share materials, but retain separate bounds so offscreen trees
 // can be culled in the village view and its water reflections.
-export function createTrees(placements) {
+// groundHeight(x, z) seats each trunk on the terrain under it.
+export function createTrees(placements, groundHeight = () => 0) {
   const group = new T.Group();
   group.name = "Willowmere trees";
   group.userData.dynamic = true; // Keep the leaf wind shader out of world baking.
@@ -232,8 +233,9 @@ export function createTrees(placements) {
     const lean = new T.Vector3(range(-0.19, 0.19), 0, range(-0.14, 0.14));
     const rotation = rand() * TAU;
     const stretch = range(0.93, 1.12);
+    const base = groundHeight(x, z);
     const localToWorld = (v) =>
-      new T.Vector3(x + v.x * scale, v.y * scale, z + v.z * scale);
+      new T.Vector3(x + v.x * scale, base + v.y * scale, z + v.z * scale);
     const trunkPoints = [
       new T.Vector3(0, 0.07, 0),
       new T.Vector3(-lean.x * 0.2, 0.42, -lean.z * 0.2),

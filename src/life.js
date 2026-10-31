@@ -1,8 +1,11 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createCat } from "./cats.js";
 
-/** Hand-built inhabitants and wildlife. Coordinates are in the village's X/Z plane. */
-export function createLife(THREE, scene) {
+/**
+ * Hand-built inhabitants and wildlife. Coordinates are in the village's X/Z
+ * plane; groundHeight(x, z) lifts everyone onto the terrain under them.
+ */
+export function createLife(THREE, scene, groundHeight = () => 0) {
   const materials = new Map();
   const mat = (color, roughness = 0.86) => {
     const key = `${color}:${roughness}`;
@@ -366,7 +369,7 @@ export function createLife(THREE, scene) {
   ];
   const residents = npcDefinitions.map((def) => {
     const figure = person(def);
-    figure.root.position.set(def.x, 0, def.z);
+    figure.root.position.set(def.x, groundHeight(def.x, def.z), def.z);
     figure.root.rotation.y = def.id === "finn" ? 0.2 : -0.5;
     figure.root.name = def.name;
     scene.add(figure.root);
@@ -549,6 +552,7 @@ export function createLife(THREE, scene) {
     route.getTangentAt(u, tangent).normalize();
     right.set(tangent.z, 0, -tangent.x);
     girl.root.position.copy(position);
+    girl.root.position.y += groundHeight(position.x, position.z);
     girl.root.rotation.y = Math.atan2(tangent.x, tangent.z);
     const phase =
       (((distance / (duration - ramp)) * routeLength) / 0.38) * Math.PI * 2;
@@ -562,6 +566,7 @@ export function createLife(THREE, scene) {
       .copy(position)
       .addScaledVector(right, 0.64)
       .addScaledVector(tangent, 0.3);
+    puppy.position.y += groundHeight(puppy.position.x, puppy.position.z);
     puppy.rotation.y =
       girl.root.rotation.y + Math.sin(time * 1.7) * 0.1 * (1 - blend);
     puppyBody.position.y = Math.abs(Math.sin(phase * 1.4)) * 0.025 * blend;
@@ -820,10 +825,12 @@ export function createLife(THREE, scene) {
     }
     butterflies.forEach(({ root, wings, x, z, seed }) => {
       const t = time * 0.55 + seed;
+      const bx = x + Math.sin(t) * 0.9,
+        bz = z + Math.cos(t * 0.9) * 0.65;
       root.position.set(
-        x + Math.sin(t) * 0.9,
-        0.9 + Math.sin(t * 1.7) * 0.32,
-        z + Math.cos(t * 0.9) * 0.65,
+        bx,
+        groundHeight(bx, bz) + 0.9 + Math.sin(t * 1.7) * 0.32,
+        bz,
       );
       root.rotation.set(0.2, Math.atan2(Math.cos(t), -Math.sin(t * 0.9)), 0);
       wings[0].rotation.y = Math.sin(time * 14 + seed) * 1.05;
@@ -851,6 +858,7 @@ export function createLife(THREE, scene) {
       cat.route.getPointAt(u, cat.position);
       cat.route.getTangentAt(u, cat.tangent).normalize();
       root.position.copy(cat.position);
+      root.position.y += groundHeight(cat.position.x, cat.position.z);
       root.rotation.y = Math.atan2(cat.tangent.x, cat.tangent.z);
       // A stride follows the arc actually travelled, including slow starts and stops.
       const phase = (lap * cat.routeLength * Math.PI * 2) / 0.43;
@@ -888,18 +896,23 @@ export function createLife(THREE, scene) {
     for (let i = 0; i < 18; i++) {
       const t = time * 0.22 + i * 2.399;
       motePositions[i * 3] = -8 + Math.sin(t) * 2.5 + Math.cos(i * 1.7) * 2;
-      motePositions[i * 3 + 1] =
-        0.6 + Math.sin(t * 0.71 + i) * 0.27 + (i % 3) * 0.22;
       motePositions[i * 3 + 2] =
         6 + Math.cos(t * 0.63) * 1.8 + Math.sin(i * 1.5) * 2;
+      motePositions[i * 3 + 1] =
+        groundHeight(motePositions[i * 3], motePositions[i * 3 + 2]) +
+        0.6 +
+        Math.sin(t * 0.71 + i) * 0.27 +
+        (i % 3) * 0.22;
     }
     moteGeometry.attributes.position.needsUpdate = true;
     birds.forEach(({ root, wings, seed }) => {
       const t = time * 0.12 + seed;
+      const bx = Math.cos(t) * 14,
+        bz = Math.sin(t) * 9 - 1;
       root.position.set(
-        Math.cos(t) * 14,
-        6.5 + Math.sin(t * 2) * 0.4,
-        Math.sin(t) * 9 - 1,
+        bx,
+        groundHeight(bx, bz) + 6.5 + Math.sin(t * 2) * 0.4,
+        bz,
       );
       root.rotation.set(
         0,

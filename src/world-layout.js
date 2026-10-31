@@ -1,0 +1,118 @@
+// One description of the map's extent, its chunk grid, its named regions and
+// its ground height. Movement, routing, the overview camera, shadows, scatter
+// and planting read their limits from here instead of keeping their own copies.
+
+const box = (minX, maxX, minZ, maxZ) => ({ minX, maxX, minZ, maxZ });
+const inset = (b, x, z = x) =>
+  box(b.minX + x, b.maxX - x, b.minZ + z, b.maxZ - z);
+
+// The ground slab and its soil rim. Everything the world builds sits inside it.
+const ground = box(-24, 24, -21, 21);
+// The player's centre stays inside this box.
+const walk = inset(ground, 3, 4);
+
+export const WORLD = {
+  ground,
+  walk,
+  // Flowers can be planted a step beyond the walk box's edge.
+  plantable: inset(walk, -1),
+  // Light-space bounds of every receiver: the ground plus the overhang of the
+  // trees along the east and west rims.
+  shadow: inset(ground, -0.6, 0),
+  // The overview camera's target stays this far inside the walk box. The
+  // camera looks from +x, +z, so the near (east and south) margins are smaller.
+  camera: { minX: walk.minX + 9, maxX: walk.maxX - 7, minZ: walk.minZ + 8, maxZ: walk.maxZ - 6 },
+  // Static scenery is baked and culled per chunk. The village is the 3 × 3
+  // chunks from (-1, -1) to (1, 1); new regions add chunks around it.
+  chunk: { width: 16, depth: 14, originX: -8, originZ: -7 },
+  // The tallest canopy above the ground beneath it.
+  canopy: 9.5,
+};
+
+/** Integer chunk coordinates of a point. */
+export function chunkCoords(x, z) {
+  const { width, depth, originX, originZ } = WORLD.chunk;
+  return [Math.floor((x - originX) / width), Math.floor((z - originZ) / depth)];
+}
+
+export function chunkKey(x, z) {
+  const [cx, cz] = chunkCoords(x, z);
+  return `${cx},${cz}`;
+}
+
+/** Footprint of chunk (cx, cz) on the ground plane. */
+export function chunkBounds(cx, cz) {
+  const { width, depth, originX, originZ } = WORLD.chunk;
+  const minX = originX + cx * width,
+    minZ = originZ + cz * depth;
+  return box(minX, minX + width, minZ, minZ + depth);
+}
+
+/**
+ * A random stream that depends only on a chunk's coordinates, so chunks can be
+ * built in any order and adding one never moves another. The village keeps the
+ * single legacy stream in world.js; new chunks use these.
+ */
+export function chunkRandom(cx, cz, salt = 0) {
+  let seed =
+    (Math.imul(cx | 0, 73856093) ^
+      Math.imul(cz | 0, 19349663) ^
+      Math.imul(salt | 0, 83492791) ^
+      0x5bd1e995) >>>
+    0;
+  return () =>
+    (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
+}
+
+// Named areas for the location label, first match wins. Bounds are open
+// (strict comparisons) and a missing side is unbounded.
+export const REGIONS = [
+  { id: "brook", name: "The willow brook", minX: 10 },
+  { id: "lane", name: "The cottage lane", maxZ: -5 },
+  { id: "meadow", name: "The wildflower meadow", maxX: -8 },
+  { id: "gardens", name: "The kitchen gardens", minZ: 7 },
+  { id: "green", name: "The village green" },
+];
+
+export function regionAt(x, z) {
+  return REGIONS.find(
+    (r) =>
+      !(x <= r.minX || x >= r.maxX || z <= r.minZ || z >= r.maxZ),
+  );
+}
+
+// Terrain heights, one sample per metre over the ground slab. All zero for
+// now: the village stays flat, and hills arrive later as data in new regions.
+const TERRAIN_STEP = 1,
+  terrainCols = Math.round((ground.maxX - ground.minX) / TERRAIN_STEP) + 1,
+  terrainRows = Math.round((ground.maxZ - ground.minZ) / TERRAIN_STEP) + 1,
+  terrain = new Float32Array(terrainCols * terrainRows);
+export const terrainField = {
+  step: TERRAIN_STEP,
+  cols: terrainCols,
+  rows: terrainRows,
+  heights: terrain,
+  max: 0,
+};
+
+/** Height of the bare ground at (x, z), bilinear between samples. */
+export function terrainHeight(x, z) {
+  const fx = Math.min(
+      Math.max((x - ground.minX) / TERRAIN_STEP, 0),
+      terrainCols - 1,
+    ),
+    fz = Math.min(
+      Math.max((z - ground.minZ) / TERRAIN_STEP, 0),
+      terrainRows - 1,
+    ),
+    x0 = Math.min(Math.floor(fx), terrainCols - 2),
+    z0 = Math.min(Math.floor(fz), terrainRows - 2),
+    tx = fx - x0,
+    tz = fz - z0,
+    i = z0 * terrainCols + x0,
+    a = terrain[i] + (terrain[i + 1] - terrain[i]) * tx,
+    b =
+      terrain[i + terrainCols] +
+      (terrain[i + terrainCols + 1] - terrain[i + terrainCols]) * tx;
+  return a + (b - a) * tz;
+}
