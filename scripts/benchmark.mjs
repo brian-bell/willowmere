@@ -27,6 +27,8 @@ const ablations = {
   "water skipped": { water: false },
   "shadow map frozen": { shadowUpdate: false },
   "bloom off": { bloom: false },
+  "open country hidden": { fields: false },
+  "open-country grass hidden": { fields: "ground" },
   "shadows, water and bloom off": {
     shadowUpdate: false,
     water: false,
@@ -53,6 +55,23 @@ if (ablate) {
       tune: {},
       view,
     });
+  // Height 30 on every revision (the zoom cap since the map grew; four zoom
+  // steps from the default), with and without the open country.
+  configs.push(
+    { name: "high, height 30", quality: "high", tune: {}, view: "height-30" },
+    {
+      name: "high, height 30, open-country grass hidden",
+      quality: "high",
+      tune: { fields: "ground" },
+      view: "height-30",
+    },
+    {
+      name: "high, height 30, open country hidden",
+      quality: "high",
+      tune: { fields: false },
+      view: "height-30",
+    },
+  );
 }
 
 const browser = await chromium.launch({
@@ -104,6 +123,8 @@ try {
         await page.locator("#zoom-out").click();
     else if (!(await page.locator("#zoom-reset").isDisabled()))
       await page.locator("#zoom-reset").click();
+    if (view === "height-30")
+      for (let i = 0; i < 4; i++) await page.locator("#zoom-out").click();
     // The overview eases to its height; sample once it has arrived.
     await page.waitForFunction(
       () => {
@@ -132,6 +153,7 @@ try {
           pixelRatio: null,
           foliage: null,
           leafDetail: null,
+          fields: null,
           ...tune,
         });
       }, tune);

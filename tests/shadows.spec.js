@@ -7,7 +7,7 @@ const extent = ({ bounds: [left, right, bottom, top] }) => [
   top - bottom,
 ];
 
-test("sun shadows fit the overview in whole texels and keep eye-level detail", async ({
+test("sun shadows fit the view in whole texels and keep eye-level detail", async ({
   page,
 }) => {
   const errors = [];
@@ -52,7 +52,9 @@ test("sun shadows fit the overview in whole texels and keep eye-level detail", a
     .poll(async () => extent(await shadow(page))[0])
     .toBeLessThan(width * 0.8);
   const near = extent(await shadow(page));
-  for (let i = 0; i < 10; i++) await page.locator("#zoom-out").click();
+  // Out to the zoom cap.
+  while (!(await page.locator("#zoom-out").isDisabled()))
+    await page.locator("#zoom-out").click();
   await expect
     .poll(async () => extent(await shadow(page))[0])
     .toBeGreaterThan(width);
@@ -60,10 +62,41 @@ test("sun shadows fit the overview in whole texels and keep eye-level detail", a
   expect(near[0] * near[1]).toBeLessThan(width * height);
   expect(far[0] * far[1]).toBeGreaterThan(width * height);
 
-  // First person sees across the whole village up close, so it keeps a finer map.
+  // First person fits a finer map to a village-sized box ahead of the eye:
+  // the old whole-village texel density, on a map of any size.
   await page.locator("#view-toggle").click();
   await expect.poll(async () => (await shadow(page)).mapSize).toBe(4096);
-  expect(extent(await shadow(page))).toEqual(far);
+  // The next frame fits the bounds after the map is resized.
+  await expect
+    .poll(async () => {
+      const { bounds, reference } = await shadow(page);
+      return Math.abs(extent({ bounds })[0] - reference[0]);
+    })
+    .toBeLessThan(1e-4);
+  const eye = await shadow(page),
+    [eyeWidth, eyeHeight] = extent(eye);
+  expect(eyeWidth).toBeCloseTo(eye.reference[0], 4);
+  expect(eyeHeight).toBeCloseTo(eye.reference[1], 4);
+  // Turning moves the box in whole texels and keeps its size.
+  await page.keyboard.down("ArrowLeft");
+  const turn = await page.evaluate(async () => {
+    const values = [];
+    for (let i = 0; i < 30; i++) {
+      await new Promise(requestAnimationFrame);
+      values.push(window.__willowmere.getDiagnostics().shadow.bounds);
+    }
+    return values;
+  });
+  await page.keyboard.up("ArrowLeft");
+  expect(new Set(turn.map((b) => b.join())).size).toBeGreaterThan(1);
+  for (const [left, right, bottom, top] of turn) {
+    expect(right - left).toBeCloseTo(eyeWidth, 6);
+    expect(top - bottom).toBeCloseTo(eyeHeight, 6);
+    const column = left / (eyeWidth / 4096),
+      row = bottom / (eyeHeight / 4096);
+    expect(Math.abs(column - Math.round(column))).toBeLessThan(1e-3);
+    expect(Math.abs(row - Math.round(row))).toBeLessThan(1e-3);
+  }
   await page.locator("#view-toggle").click();
   await expect.poll(async () => (await shadow(page)).mapSize).toBe(2048);
   expect(errors).toEqual([]);

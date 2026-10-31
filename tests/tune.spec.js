@@ -31,6 +31,7 @@ test("tune toggles each outdoor override and null restores the defaults", async 
     shadowUpdate: true,
     water: true,
     foliage: true,
+    fields: true,
     leafDetail: "auto",
     overrides: {},
   });
@@ -79,7 +80,24 @@ test("tune toggles each outdoor override and null restores the defaults", async 
   expect(coarse.render).toMatchObject({ foliage: true, leafDetail: 1 });
   expect(coarse.render.leaves).toBeLessThan(base.render.leaves * 0.55);
 
-  const restored = await tune(page, { leafDetail: null });
+  // Hiding the open country removes its grass, and then its ground, from the frame.
+  const fieldParts = () =>
+    page.evaluate(() =>
+      window.__willowmere
+        .getChunks()
+        .flatMap((chunk) => chunk.meshes)
+        .filter((mesh) => mesh.name.startsWith("Grass blades (open country")),
+    );
+  await tune(page, { leafDetail: null, fields: "ground" });
+  const ground = await fieldParts();
+  expect(ground.length).toBeGreaterThan(0);
+  expect(ground.every((mesh) => !mesh.visible)).toBe(true);
+  await tune(page, { fields: false });
+  const village = await diagnostics(page);
+  expect(village.render).toMatchObject({ leafDetail: "auto", fields: false });
+  expect((await fieldParts()).every((mesh) => !mesh.visible)).toBe(true);
+
+  const restored = await tune(page, { fields: null });
   expect(restored).toMatchObject({
     pixelRatio: 1,
     width: 1600,
@@ -89,6 +107,7 @@ test("tune toggles each outdoor override and null restores the defaults", async 
     shadowUpdate: true,
     water: true,
     foliage: true,
+    fields: true,
     leafDetail: "auto",
     leaves: base.render.leaves,
     overrides: {},

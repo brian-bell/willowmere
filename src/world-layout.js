@@ -3,27 +3,36 @@
 // and planting read their limits from here instead of keeping their own copies.
 
 const box = (minX, maxX, minZ, maxZ) => ({ minX, maxX, minZ, maxZ });
-const inset = (b, x, z = x) =>
+export const inset = (b, x, z = x) =>
   box(b.minX + x, b.maxX - x, b.minZ + z, b.maxZ - z);
 
-// The ground slab and its soil rim. Everything the world builds sits inside it.
-const ground = box(-24, 24, -21, 21);
+// The village: the original 48 × 42 m island, now the middle of the map. Its
+// layout and scatter keep these limits so it stays exactly as it was.
+const village = box(-24, 24, -21, 21);
+// The ground slab and its soil rim, 4x the village's area. Everything the
+// world builds sits inside it.
+const ground = box(-48, 48, -42, 42);
 // The player's centre stays inside this box.
 const walk = inset(ground, 3, 4);
 
 export const WORLD = {
+  village,
   ground,
   walk,
   // Flowers can be planted a step beyond the walk box's edge.
   plantable: inset(walk, -1),
-  // Light-space bounds of every receiver: the ground plus the overhang of the
-  // trees along the east and west rims.
+  // Light-space bounds of every receiver: the ground plus a margin for
+  // anything that overhangs the rim.
   shadow: inset(ground, -0.6, 0),
+  // Shadow map sizes are fractions of this box's light-space extent: the
+  // village's old receivers, so texel density never depends on the map's size.
+  shadowReference: inset(village, -0.6, 0),
   // The overview camera's target stays this far inside the walk box. The
   // camera looks from +x, +z, so the near (east and south) margins are smaller.
   camera: { minX: walk.minX + 9, maxX: walk.maxX - 7, minZ: walk.minZ + 8, maxZ: walk.maxZ - 6 },
   // Static scenery is baked and culled per chunk. The village is the 3 × 3
-  // chunks from (-1, -1) to (1, 1); new regions add chunks around it.
+  // chunks from (-1, -1) to (1, 1); the map's 7 × 7 chunks run from (-3, -3)
+  // to (3, 3), the outermost ring half as wide and deep as the rest.
   chunk: { width: 16, depth: 14, originX: -8, originZ: -7 },
   // The tallest canopy above the ground beneath it.
   canopy: 9.5,
@@ -60,19 +69,42 @@ export function chunkRandom(cx, cz, salt = 0) {
       Math.imul(salt | 0, 83492791) ^
       0x5bd1e995) >>>
     0;
-  return () =>
-    (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
+  // Mulberry32: unlike a plain LCG, successive draws taken as (x, z) pairs
+  // scatter evenly instead of lining up in visible rows.
+  return () => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
+/** Whether (x, z) lies within the original village island. */
+export const inVillage = (x, z) =>
+  x >= village.minX && x <= village.maxX && z >= village.minZ && z <= village.maxZ;
+
 // Named areas for the location label, first match wins. Bounds are open
-// (strict comparisons) and a missing side is unbounded.
+// (strict comparisons) and a missing side is unbounded. The village's areas
+// keep to the village, reaching a hair past its edge so the edge itself still
+// belongs to them; everything beyond is open country until its regions arrive.
+const villageArea = inset(village, -1e-6),
+  withinVillage = (r) => ({
+    ...r,
+    minX: Math.max(villageArea.minX, r.minX ?? -Infinity),
+    maxX: Math.min(villageArea.maxX, r.maxX ?? Infinity),
+    minZ: Math.max(villageArea.minZ, r.minZ ?? -Infinity),
+    maxZ: Math.min(villageArea.maxZ, r.maxZ ?? Infinity),
+  });
 export const REGIONS = [
   { id: "brook", name: "The willow brook", minX: 10 },
   { id: "lane", name: "The cottage lane", maxZ: -5 },
   { id: "meadow", name: "The wildflower meadow", maxX: -8 },
   { id: "gardens", name: "The kitchen gardens", minZ: 7 },
   { id: "green", name: "The village green" },
-];
+]
+  .map(withinVillage)
+  .concat({ id: "fields", name: "The open fields" });
 
 export function regionAt(x, z) {
   return REGIONS.find(

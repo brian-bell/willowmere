@@ -73,12 +73,30 @@ test("unreachable and blocked clicks return no route", async ({ page }) => {
     const game = window.__willowmere,
       from = game.getPlayer();
     return {
-      // Mid-brook and outside the walkable island.
+      // Mid-brook and beyond the map's rim.
       water: game.findPath(from, { x: 12, z: -8 }).length,
-      outside: game.findPath(from, { x: 30, z: 0 }).length,
+      outside: game.findPath(from, { x: 60, z: 0 }).length,
     };
   });
   expect(routes).toEqual({ water: 0, outside: 0 });
+});
+
+test("the open country and the pocket south of the mill are reachable", async ({ page }) => {
+  await page.goto("/?resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere);
+  const routes = await page.evaluate(() => {
+    const game = window.__willowmere,
+      from = game.getPlayer();
+    return [
+      [30, 0],
+      [-40, -35],
+      [40, 35],
+      // Sealed by the mill, its shrubs and the old walk box's edge until the
+      // map grew.
+      [20, -12],
+    ].map(([x, z]) => game.findPath(from, { x, z }).length);
+  });
+  for (const length of routes) expect(length).toBeGreaterThan(1);
 });
 
 test("lamps share a fixed pool of point lights", async ({ page }) => {

@@ -4,24 +4,39 @@ import {
   chunkBounds,
   chunkCoords,
   chunkRandom,
+  inVillage,
   regionAt,
   terrainHeight,
 } from "../src/world-layout.js";
 
-test("world bounds reproduce the village's limits", () => {
-  expect(WORLD.walk).toEqual({ minX: -21, maxX: 21, minZ: -17, maxZ: 17 });
-  expect(WORLD.camera).toEqual({ minX: -12, maxX: 14, minZ: -9, maxZ: 11 });
-  expect(WORLD.shadow).toEqual({ minX: -24.6, maxX: 24.6, minZ: -21, maxZ: 21 });
-  expect(WORLD.plantable).toEqual({ minX: -22, maxX: 22, minZ: -18, maxZ: 18 });
+test("the map is four times the village, with the village in the middle", () => {
+  expect(WORLD.village).toEqual({ minX: -24, maxX: 24, minZ: -21, maxZ: 21 });
+  expect(WORLD.ground).toEqual({ minX: -48, maxX: 48, minZ: -42, maxZ: 42 });
+  const area = (b) => (b.maxX - b.minX) * (b.maxZ - b.minZ);
+  expect(area(WORLD.ground)).toBe(4 * area(WORLD.village));
+  // The walk box, plantable area and camera clamp keep their margins from the
+  // edge they always had, now at the map's rim.
+  expect(WORLD.walk).toEqual({ minX: -45, maxX: 45, minZ: -38, maxZ: 38 });
+  expect(WORLD.plantable).toEqual({ minX: -46, maxX: 46, minZ: -39, maxZ: 39 });
+  expect(WORLD.camera).toEqual({ minX: -36, maxX: 38, minZ: -30, maxZ: 32 });
+  expect(WORLD.shadow).toEqual({ minX: -48.6, maxX: 48.6, minZ: -42, maxZ: 42 });
+  // Shadow texel sizes still refer to the village's old receivers.
+  expect(WORLD.shadowReference).toEqual({ minX: -24.6, maxX: 24.6, minZ: -21, maxZ: 21 });
   // The village is exactly the 3 × 3 chunks around the origin.
   expect(chunkBounds(-1, -1)).toMatchObject({ minX: -24, minZ: -21 });
   expect(chunkBounds(1, 1)).toMatchObject({ maxX: 24, maxZ: 21 });
   expect(chunkCoords(0, 0)).toEqual([0, 0]);
   expect(chunkCoords(-8.01, 7)).toEqual([-1, 1]);
   expect(chunkCoords(23.9, -20.9)).toEqual([1, -1]);
+  // The map's corners fall in the half-width rim chunks.
+  expect(chunkCoords(-47.9, -41.9)).toEqual([-3, -3]);
+  expect(chunkCoords(47.9, 41.9)).toEqual([3, 3]);
+  expect(inVillage(0, 0)).toBe(true);
+  expect(inVillage(24, -21)).toBe(true);
+  expect(inVillage(24.1, 0)).toBe(false);
 });
 
-test("regions name the same places the location label always did", () => {
+test("regions name the same village places as always, and the fields beyond", () => {
   const legacy = (x, z) =>
     x > 10
       ? "The willow brook"
@@ -32,9 +47,17 @@ test("regions name the same places the location label always did", () => {
           : z > 7
             ? "The kitchen gardens"
             : "The village green";
-  for (let x = -21; x <= 21; x += 0.5)
-    for (let z = -17; z <= 17; z += 0.5)
+  for (let x = -24; x <= 24; x += 0.5)
+    for (let z = -21; z <= 21; z += 0.5)
       expect(regionAt(x, z).name).toBe(legacy(x, z));
+  for (const [x, z] of [
+    [-30, 0],
+    [30, 0],
+    [0, -30],
+    [12, 30],
+    [-47, 41],
+  ])
+    expect(regionAt(x, z).name).toBe("The open fields");
 });
 
 test("chunk seeds are independent of build order", () => {
