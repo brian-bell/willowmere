@@ -12,6 +12,9 @@
 // the finished objects (an object, an array, or an empty array) when done.
 export function createStreamer(renderer, scene, { budget = 2.5, target = null } = {}) {
   const queue = [],
+    // Compiled pieces join the scene one per frame, so their first draws and
+    // buffer uploads spread out even when their shaders finish together.
+    ready = [],
     parallel = renderer.extensions.has("KHR_parallel_shader_compile");
   let compiling = 0,
     finished = 0;
@@ -36,15 +39,16 @@ export function createStreamer(renderer, scene, { budget = 2.5, target = null } 
     compiling++;
     const join = () => {
       compiling--;
-      finished++;
-      for (const object of objects) scene.add(object);
-      job.added?.(objects);
+      ready.push(() => {
+        finished++;
+        for (const object of objects) scene.add(object);
+        job.added?.(objects);
+      });
     };
     // Shared materials are usually compiled already, and resolve at once.
     // Without parallel compiling, compileAsync would block anyway (and warn),
-    // so compile directly and join once this frame is drawn.
-    // compileAsync starts each compile before it returns, so the target only
-    // needs setting around the calls.
+    // so compile directly. compileAsync starts each compile before it
+    // returns, so the target only needs setting around the calls.
     const previous = renderer.getRenderTarget();
     renderer.setRenderTarget(target);
     if (!parallel) {
@@ -53,11 +57,11 @@ export function createStreamer(renderer, scene, { budget = 2.5, target = null } 
       Promise.resolve().then(join);
       return;
     }
-    const ready = objects.map((object) =>
+    const compiled = objects.map((object) =>
       renderer.compileAsync(object, camera, scene),
     );
     renderer.setRenderTarget(previous);
-    Promise.all(ready).then(join, join);
+    Promise.all(compiled).then(join, join);
   }
   return {
     add(...jobs) {
@@ -65,13 +69,17 @@ export function createStreamer(renderer, scene, { budget = 2.5, target = null } 
     },
     /** Jobs still building or compiling. */
     get pending() {
-      return queue.length + compiling;
+      return queue.length + compiling + ready.length;
     },
     get finished() {
       return finished;
     },
-    /** Runs jobs for up to `budget` milliseconds, nearest (x, z) first. */
+    /**
+     * Adds one compiled piece to the scene, then runs jobs for up to `budget`
+     * milliseconds, nearest (x, z) first.
+     */
     update(x, z, camera) {
+      ready.shift()?.();
       if (!queue.length) return;
       const deadline = performance.now() + budget;
       let index = nearest(x, z);
