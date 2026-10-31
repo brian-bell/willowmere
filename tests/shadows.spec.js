@@ -52,7 +52,9 @@ test("sun shadows fit the view in whole texels and keep eye-level detail", async
     .poll(async () => extent(await shadow(page))[0])
     .toBeLessThan(width * 0.8);
   const near = extent(await shadow(page));
-  for (let i = 0; i < 10; i++) await page.locator("#zoom-out").click();
+  // Out to the zoom cap.
+  while (!(await page.locator("#zoom-out").isDisabled()))
+    await page.locator("#zoom-out").click();
   await expect
     .poll(async () => extent(await shadow(page))[0])
     .toBeGreaterThan(width);

@@ -43,7 +43,7 @@ export function outskirtsJobs(T, world) {
             maxZ,
           }, `${cx},${cz}`),
         added: ([mesh]) => {
-          world.addStreamed(mesh, { detail: true });
+          world.addStreamed(mesh, { detail: true, field: true });
           // The brook's reflections would show these as specks at most.
           world.water.excludeFromCaptures(mesh);
         },

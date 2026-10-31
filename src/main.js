@@ -1700,6 +1700,7 @@ function applyTune() {
   const foliage = overrides.foliage ?? true;
   for (const mesh of world.trees.foliage) mesh.visible = foliage;
   world.bushes.group.visible = foliage;
+  world.showFields(overrides.fields ?? true);
   world.trees.setDetail(leafDetail());
   showSky();
   // The scaler stands aside while the ratio is forced; clearing it resumes
@@ -1805,6 +1806,7 @@ window.__willowmere = {
       shadowUpdate: sun.shadow.autoUpdate,
       water: overrides.water ?? true,
       foliage: world.bushes.group.visible,
+      fields: overrides.fields ?? true,
       sky: sky.mesh.visible,
       leafDetail: overrides.leafDetail ?? "auto",
       leaves: world.trees.foliage.reduce((n, mesh) => n + mesh.count, 0),

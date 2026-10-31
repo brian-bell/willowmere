@@ -240,53 +240,52 @@ export function createWorld(T, scene) {
     flat.push(
       box(grass, (left + right) / 2, -0.1, groundZ, right - left, 0.3, groundDepth - 0.4),
     );
-  // A slab between two corners, its texture laid out in world space so
-  // neighbouring slabs continue it.
-  function slab(material, minX, maxX, minZ, maxZ, y, height) {
-    if (maxX - minX < 1e-3 || maxZ - minZ < 1e-3) return;
-    const geometry = new T.BoxGeometry(maxX - minX, height, maxZ - minZ),
-      position = geometry.attributes.position,
+  // The open country's ground: two meshes, its grass and its soil, kept out
+  // of the village's bake so the village's batches stay as they were and the
+  // fields can be measured on their own (tune({ fields: false })).
+  const fieldGrass = [],
+    fieldSoil = [];
+  // Texture laid out in world space, so neighbouring pieces continue it.
+  const worldUV = (geometry) => {
+    const position = geometry.attributes.position,
       normal = geometry.attributes.normal,
-      uv = geometry.attributes.uv,
-      cx = (minX + maxX) / 2,
-      cz = (minZ + maxZ) / 2;
+      uv = geometry.attributes.uv;
     for (let i = 0; i < position.count; i++) {
-      const x = position.getX(i) + cx,
-        y2 = position.getY(i) + y,
-        z = position.getZ(i) + cz;
+      const x = position.getX(i),
+        z = position.getZ(i);
       if (Math.abs(normal.getY(i)) > 0.5) uv.setXY(i, x / 33.5, -z / 41.6);
-      else uv.setXY(i, (x + z) / 33.5, y2 / 41.6);
+      else uv.setXY(i, (x + z) / 33.5, position.getY(i) / 41.6);
     }
-    flat.push(mesh(geometry, material, cx, y, cz));
-  }
-  // Soil fills the ring of open country around the village in four strips.
-  const outer = [
+    return geometry;
+  };
+  const slab = (minX, maxX, minZ, maxZ, y, height) =>
+    worldUV(
+      new T.BoxGeometry(maxX - minX, height, maxZ - minZ).translate(
+        (minX + maxX) / 2,
+        y,
+        (minZ + maxZ) / 2,
+      ),
+    );
+  // Soil fills the ring around the village in four strips.
+  for (const [minX, maxX, minZ, maxZ] of [
     [ground.minX, village.minX, ground.minZ, ground.maxZ],
     [village.maxX, ground.maxX, ground.minZ, ground.maxZ],
     [village.minX, village.maxX, ground.minZ, village.minZ],
     [village.minX, village.maxX, village.maxZ, ground.maxZ],
-  ];
-  for (const [minX, maxX, minZ, maxZ] of outer) {
-    slab(soil, minX, maxX, minZ, maxZ, -1.18, 0.34);
-    slab(soil, minX, maxX, minZ, maxZ, -0.58, 1.06);
-  }
-  // The open country's grass is one surface with the village cut out, so no
-  // seams cross it, and texture laid out in world space. It meets the
-  // village's grass at its inset edge, and the brook's channel at the
-  // village's true edge, where the water and bed end. Below it, thin grass
-  // walls show at the map's rim, behind a 0.2 m soil lip, and at the
+  ])
+    fieldSoil.push(
+      slab(minX, maxX, minZ, maxZ, -1.18, 0.34),
+      slab(minX, maxX, minZ, maxZ, -0.58, 1.06),
+    );
+  // The grass is one surface with the village cut out, so no seams cross it.
+  // It meets the village's grass at its inset edge, and the brook's channel
+  // at the village's true edge, where the water and bed end. Below it, thin
+  // grass walls show at the map's rim, behind a 0.2 m soil lip, and at the
   // channel's ends.
   const lip = 0.2,
     outerGrass = inset(ground, lip),
     villageGrass = inset(village, lip),
-    top = 0.05,
-    worldUV = (geometry) => {
-      const position = geometry.attributes.position,
-        uv = geometry.attributes.uv;
-      for (let i = 0; i < position.count; i++)
-        uv.setXY(i, position.getX(i) / 33.5, -position.getZ(i) / 41.6);
-      return geometry;
-    };
+    top = 0.05;
   const field = new T.Shape([
       new T.Vector2(outerGrass.minX, -outerGrass.minZ),
       new T.Vector2(outerGrass.maxX, -outerGrass.minZ),
@@ -312,29 +311,33 @@ export function createWorld(T, scene) {
       ].map(([x, z]) => new T.Vector2(x, -z)),
     ),
   );
-  flat.push(
-    mesh(
-      worldUV(new T.ShapeGeometry(field).rotateX(-Math.PI / 2)),
-      grass,
-      0,
-      top,
-      0,
-    ),
+  fieldGrass.push(
+    worldUV(new T.ShapeGeometry(field).rotateX(-Math.PI / 2).translate(0, top, 0)),
   );
-  function wall(minX, maxX, minZ, maxZ) {
-    const geometry = new T.BoxGeometry(maxX - minX, 0.295, maxZ - minZ);
-    flat.push(
-      mesh(worldUV(geometry), grass, (minX + maxX) / 2, top - 0.1525, (minZ + maxZ) / 2),
-    );
-  }
   const g = outerGrass,
-    t = 0.3;
+    t = 0.3,
+    wall = (minX, maxX, minZ, maxZ) =>
+      fieldGrass.push(slab(minX, maxX, minZ, maxZ, top - 0.1525, 0.295));
   wall(g.minX, g.maxX, g.minZ, g.minZ + t);
   wall(g.minX, g.maxX, g.maxZ - t, g.maxZ);
   wall(g.minX, g.minX + t, g.minZ + t, g.maxZ - t);
   wall(g.maxX - t, g.maxX, g.minZ + t, g.maxZ - t);
   wall(9.7, 14.3, village.minZ - t, village.minZ);
   wall(9.7, 14.3, village.maxZ, village.maxZ + t);
+  const fieldGround = [
+    [fieldGrass, grass, "Open country grass"],
+    [fieldSoil, soil, "Open country soil"],
+  ].map(([pieces, material, name]) => {
+    const merged = mergeGeometries(pieces, false);
+    for (const piece of pieces) piece.dispose();
+    const m = mesh(merged, material);
+    m.name = name;
+    m.castShadow = false;
+    m.userData.dynamic = true;
+    m.matrixAutoUpdate = false;
+    m.updateMatrix();
+    return m;
+  });
   const shadowCanvas = document.createElement("canvas");
   shadowCanvas.width = shadowCanvas.height = 128;
   const sh = shadowCanvas.getContext("2d"),
@@ -1721,12 +1724,15 @@ export function createWorld(T, scene) {
   const DETAIL_RANGE = 30,
     DETAIL_NAMES = ["Grass blades", "Meadow blossoms", "River pebbles"],
     detailParts = [];
-  function addDetail(mesh) {
+  function addDetail(mesh, field = false) {
     const sphere = (mesh.isInstancedMesh ? mesh.boundingSphere : mesh.geometry.boundingSphere)
       .clone()
       .applyMatrix4(mesh.matrixWorld);
-    detailParts.push({ mesh, sphere });
+    detailParts.push({ mesh, sphere, field });
   }
+  // The open country's meshes, which a benchmark can hide to measure them.
+  const fieldMeshes = [...fieldGround];
+  let fieldsShown = true;
   for (const chunk of chunks.values())
     for (const mesh of chunk.meshes)
       if (DETAIL_NAMES.some((name) => mesh.name.startsWith(name))) addDetail(mesh);
@@ -1756,21 +1762,31 @@ export function createWorld(T, scene) {
      * Registers a mesh that streamed in after startup with the chunk under its
      * centre, and with first person's detail range when `detail` is set.
      */
-    addStreamed(mesh, { detail = false } = {}) {
+    addStreamed(mesh, { detail = false, field = false } = {}) {
       mesh.updateMatrixWorld();
       chunkOf(mesh).meshes.push(mesh);
-      if (detail) addDetail(mesh);
+      if (detail) addDetail(mesh, field);
+      if (field) {
+        fieldMeshes.push(mesh);
+        mesh.visible &&= fieldsShown;
+      }
+    },
+    /** Shows or hides the open country (for measuring its cost). */
+    showFields(shown) {
+      fieldsShown = shown;
+      for (const mesh of fieldMeshes) mesh.visible = shown;
     },
     /**
      * Hides small detail more than DETAIL_RANGE from (x, z), or shows it all
      * when called without a position (the overview).
      */
     setDetailFocus(x, z) {
-      for (const { mesh, sphere } of detailParts)
+      for (const { mesh, sphere, field } of detailParts)
         mesh.visible =
-          x === undefined ||
-          Math.hypot(sphere.center.x - x, sphere.center.z - z) - sphere.radius <
-            DETAIL_RANGE;
+          (fieldsShown || !field) &&
+          (x === undefined ||
+            Math.hypot(sphere.center.x - x, sphere.center.z - z) - sphere.radius <
+              DETAIL_RANGE);
     },
     getGroundHeight,
     isPlantable,
