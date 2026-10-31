@@ -907,7 +907,7 @@ export function createWorld(T, scene) {
   });
   colliders.push({ x: -16.6, z: 9.6, w: 4.5, d: 7.5 });
   // Slim lanterns cast warm pools when the evening arrives.
-  const lanterns = [];
+  const lamps = [];
   function lamp(x, z) {
     cyl(darkWood, x, 1.1, z, 0.075, 2.2);
     cyl(stone, x, 0.18, z, 0.17, 0.25);
@@ -918,10 +918,7 @@ export function createWorld(T, scene) {
         box(darkWood, x + a * 0.17, 2.44, z + b * 0.17, 0.035, 0.43, 0.035);
     mesh(new T.ConeGeometry(0.35, 0.25, 4), darkWood, x, 2.76, z).rotation.y =
       Math.PI / 4;
-    const light = new T.PointLight("#ffcd82", 0.6, 4, 2);
-    light.position.set(x, 2.4, z);
-    scene.add(light);
-    lanterns.push(light);
+    lamps.push(new T.Vector3(x, 2.4, z));
     colliders.push({ x, z, r: 0.18 });
   }
   for (const [x, z] of [
@@ -933,6 +930,27 @@ export function createWorld(T, scene) {
     [-10.5, 11.7],
   ])
     lamp(x, z);
+  // Every lit material is compiled for the scene's point-light count, so a
+  // fixed pool of lights moves to the lamps nearest the view; the glass glows
+  // on every lamp. Spare lights wait far below the ground, out of range.
+  const LANTERN_LIGHTS = 6,
+    spareLight = new T.Vector3(0, -100, 0),
+    lampsByDistance = [...lamps],
+    focus = new T.Vector2(),
+    focusDistance = (lamp) => (lamp.x - focus.x) ** 2 + (lamp.z - focus.y) ** 2,
+    nearerFocus = (a, b) => focusDistance(a) - focusDistance(b);
+  const lanterns = Array.from({ length: LANTERN_LIGHTS }, () => {
+    const light = new T.PointLight("#ffcd82", 0.6, 4, 2);
+    scene.add(light);
+    return light;
+  });
+  function placeLanterns(x, z) {
+    focus.set(x, z);
+    lampsByDistance.sort(nearerFocus);
+    for (let i = 0; i < lanterns.length; i++)
+      lanterns[i].position.copy(lampsByDistance[i] ?? spareLight);
+  }
+  placeLanterns(0, 0);
   // Each tree keeps four material batches so offscreen specimens can be culled.
   const treePlacements = [
     [-20, -14, 1.3],
@@ -1273,5 +1291,7 @@ export function createWorld(T, scene) {
       for (const f of animated) f(dt, time);
     },
     lanterns,
+    lamps,
+    placeLanterns,
   };
 }

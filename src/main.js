@@ -1103,77 +1103,126 @@ $$("[data-key]").forEach((b) => {
 });
 $("#touch-interact").onclick = interact;
 // A grid search gives point-and-click movement a route around cottages and across the bridge.
+// Colliders never move, so each cell's walkability is sampled once, on the first click.
+const ROUTE = {
+  step: 0.65,
+  minX: -21,
+  minZ: -17,
+  cols: 65,
+  rows: 53,
+  radius: 0.34,
+};
+let routeWalkable = null;
+function walkableCells() {
+  if (routeWalkable) return routeWalkable;
+  const { step, minX, minZ, cols, rows, radius } = ROUTE;
+  routeWalkable = new Uint8Array(cols * rows);
+  for (let z = 0; z < rows; z++)
+    for (let x = 0; x < cols; x++)
+      if (!blocked(minX + x * step, minZ + z * step, radius))
+        routeWalkable[z * cols + x] = 1;
+  return routeWalkable;
+}
+const ROUTE_MOVES = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+];
 function findPath(start, end) {
-  const step = 0.65,
-    minX = -21,
-    minZ = -17,
-    cols = 65,
-    rows = 53,
-    toCell = (p) => [
-      Math.round((p.x - minX) / step),
-      Math.round((p.z - minZ) / step),
-    ],
-    toWorld = (x, z) => ({ x: minX + x * step, z: minZ + z * step }),
-    key = (x, z) => z * cols + x;
-  let [sx, sz] = toCell(start),
-    [ex, ez] = toCell(end);
   if (blocked(end.x, end.z, 0.3)) return [];
-  const open = [{ x: sx, z: sz, g: 0, f: 0 }],
-    came = new Map(),
-    cost = new Map([[key(sx, sz), 0]]),
-    closed = new Set();
-  let found = null;
-  for (let iteration = 0; open.length && iteration < 5000; iteration++) {
-    open.sort((a, b) => a.f - b.f);
-    let cur = open.shift(),
-      ck = key(cur.x, cur.z);
-    if (closed.has(ck)) continue;
-    if (Math.abs(cur.x - ex) + Math.abs(cur.z - ez) <= 1) {
-      found = cur;
+  const { step, minX, minZ, cols, rows } = ROUTE,
+    walkable = walkableCells(),
+    toCell = (v, min, count) =>
+      THREE.MathUtils.clamp(Math.round((v - min) / step), 0, count - 1),
+    toWorld = (i) => ({
+      x: minX + (i % cols) * step,
+      z: minZ + Math.floor(i / cols) * step,
+    }),
+    sx = toCell(start.x, minX, cols),
+    sz = toCell(start.z, minZ, rows),
+    ex = toCell(end.x, minX, cols),
+    ez = toCell(end.z, minZ, rows),
+    startCell = sz * cols + sx,
+    cost = new Float32Array(cols * rows).fill(Infinity),
+    came = new Int32Array(cols * rows).fill(-1),
+    closed = new Uint8Array(cols * rows),
+    // Binary min-heap of cells keyed by estimated total cost; stale entries are skipped.
+    heapCell = [],
+    heapF = [];
+  const push = (cell, f) => {
+    let i = heapCell.length;
+    heapCell.push(cell);
+    heapF.push(f);
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (heapF[parent] <= f) break;
+      heapCell[i] = heapCell[parent];
+      heapF[i] = heapF[parent];
+      i = parent;
+    }
+    heapCell[i] = cell;
+    heapF[i] = f;
+  };
+  const pop = () => {
+    const top = heapCell[0],
+      lastCell = heapCell.pop(),
+      lastF = heapF.pop(),
+      n = heapCell.length;
+    if (n) {
+      let i = 0;
+      for (;;) {
+        let child = 2 * i + 1;
+        if (child >= n) break;
+        if (child + 1 < n && heapF[child + 1] < heapF[child]) child++;
+        if (heapF[child] >= lastF) break;
+        heapCell[i] = heapCell[child];
+        heapF[i] = heapF[child];
+        i = child;
+      }
+      heapCell[i] = lastCell;
+      heapF[i] = lastF;
+    }
+    return top;
+  };
+  cost[startCell] = 0;
+  push(startCell, 0);
+  let found = -1;
+  while (heapCell.length) {
+    const cell = pop();
+    if (closed[cell]) continue;
+    const cx = cell % cols,
+      cz = (cell - cx) / cols;
+    if (Math.abs(cx - ex) + Math.abs(cz - ez) <= 1) {
+      found = cell;
       break;
     }
-    closed.add(ck);
-    for (const [dx, dz] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-      [1, 1],
-      [1, -1],
-      [-1, 1],
-      [-1, -1],
-    ]) {
-      const nx = cur.x + dx,
-        nz = cur.z + dz,
-        nk = key(nx, nz);
-      if (nx < 0 || nx >= cols || nz < 0 || nz >= rows || closed.has(nk))
+    closed[cell] = 1;
+    for (const [dx, dz] of ROUTE_MOVES) {
+      const nx = cx + dx,
+        nz = cz + dz,
+        next = nz * cols + nx;
+      if (nx < 0 || nx >= cols || nz < 0 || nz >= rows || closed[next])
         continue;
-      const w = toWorld(nx, nz);
-      if (blocked(w.x, w.z, 0.34)) continue;
-      if (dx && dz) {
-        const a = toWorld(cur.x + dx, cur.z),
-          b = toWorld(cur.x, cur.z + dz);
-        if (blocked(a.x, a.z, 0.34) || blocked(b.x, b.z, 0.34)) continue;
-      }
-      const ng = cur.g + Math.hypot(dx, dz);
-      if (ng < (cost.get(nk) ?? Infinity)) {
-        cost.set(nk, ng);
-        came.set(nk, cur);
-        open.push({
-          x: nx,
-          z: nz,
-          g: ng,
-          f: ng + Math.hypot(nx - ex, nz - ez),
-        });
+      if (!walkable[next]) continue;
+      if (dx && dz && !(walkable[cz * cols + nx] && walkable[nz * cols + cx]))
+        continue;
+      const g = cost[cell] + Math.hypot(dx, dz);
+      if (g < cost[next]) {
+        cost[next] = g;
+        came[next] = cell;
+        push(next, g + Math.hypot(nx - ex, nz - ez));
       }
     }
   }
-  if (!found) return [];
+  if (found < 0) return [];
   const result = [end];
-  while (found && (found.x !== sx || found.z !== sz)) {
-    result.push(toWorld(found.x, found.z));
-    found = came.get(key(found.x, found.z));
-  }
+  for (let cell = found; cell !== startCell && cell >= 0; cell = came[cell])
+    result.push(toWorld(cell));
   return result.reverse();
 }
 const raycaster = new THREE.Raycaster(),
@@ -1474,6 +1523,10 @@ function animate(now) {
   scene.fog.color.copy(scene.background);
   if (motion) skyTime += dt;
   sky.update(duskMix, skyTime);
+  world.placeLanterns?.(
+    firstPerson ? p.x : viewTarget.x,
+    firstPerson ? p.z : viewTarget.z,
+  );
   for (const light of world.lanterns || [])
     light.intensity = THREE.MathUtils.lerp(0.1, 18.0, duskMix);
   renderer.toneMappingExposure = THREE.MathUtils.lerp(1.05, 0.95, duskMix);
@@ -1554,6 +1607,14 @@ window.__willowmere = {
     textures: renderer.info.memory.textures,
     colliders: colliders.length,
     flowers: flowerGroups.size,
+    programs: renderer.info.programs.length,
+    lanterns: {
+      pool: world.lanterns.length,
+      lamps: world.lamps.length,
+      pointLights: scene.children.filter((o) => o.isPointLight).length,
+      lit: world.lanterns.map((light) => light.position.toArray()),
+      lampPositions: world.lamps.map((lamp) => lamp.toArray()),
+    },
     resolution: {
       adaptive: resolution.adaptive,
       pixelRatio: renderer.getPixelRatio(),

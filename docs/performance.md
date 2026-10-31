@@ -66,9 +66,9 @@ Measure before and after every rendering change, on an idle machine, and compare
 Each item names the mechanism in the code that a new change has to work with.
 
 - **Static scenery.** Add plain meshes under `createWorld`; the bake at the end of `src/world.js` merges them into one draw per material and shadow role, and removes the originals. Animated or later-modified objects must set `userData.dynamic = true` or they are frozen into the bake. Transparent materials and instanced meshes are not merged. Give flat receivers (ground, roads, beds) `castShadow = false`; the bake honors per-mesh flags.
-- **Materials.** Reuse shared materials; every distinct material is at least one extra draw per pass. Avoid cloning materials per object. Materials with emissive color are collected into `glowMaterials` at startup for the dusk glow, so new lanterns need no extra code.
+- **Materials.** Reuse shared materials; every distinct material is at least one extra draw per pass. Avoid cloning materials per object. Materials with emissive color are collected into `glowMaterials` at startup for the dusk glow, so a new lantern's glass needs no extra code.
 - **Dense instanced detail.** Keep `matrixAutoUpdate = false` and tight bounding spheres so each instanced mesh culls as a unit. Register it with `water.excludeFromCaptures()` unless it must appear in reflections. Prefer `FrontSide` with `shadowSide: DoubleSide` for thin blades. If it covers few pixels at the default view, give it a coarse level like `trees.setDetail()`.
-- **Lights.** Each shadow-casting light renders the whole scene again every frame. The village has one; the bakery caches its two because they never move. A new shadow caster outdoors needs the same fitting and caching argument as `fitShadow()`, or a measured budget.
+- **Lights.** Each shadow-casting light renders the whole scene again every frame. The village has one; the bakery caches its two because they never move. A new shadow caster outdoors needs the same fitting and caching argument as `fitShadow()`, or a measured budget. Point lights are a fixed pool: every lit material is compiled for the scene's point-light count, so adding or removing one recompiles every program on the main thread, and each one is evaluated in every lit fragment. Add a lantern with `lamp(x, z)` in `src/world.js`, never a new `PointLight`; `placeLanterns` moves the `LANTERN_LIGHTS` pool (six, one per current lamp) to the lamps nearest the view each frame. Raise the pool only with a measured budget.
 - **Post-processing.** Do not add a full-resolution pass that reads or writes the multisampled scene target. Follow `src/bloom.js`: work at quarter resolution and composite in the output pass.
 - **Water.** Read [docs/water.md](water.md) first. Each pool adds simulation targets and a reflection capture at the quality's interval; refraction comes from the main pass and costs a blit, not a render.
 - **Resolution.** Never call `renderer.setPixelRatio` directly outdoors. Go through `QUALITY_PIXEL_RATIO`, `resetResolution` and the scaler, and keep `?resolution=fixed` working for the benchmark and tests. The bakery applies its quality's cap on entry and restores the scaler's ratio on exit.
@@ -222,10 +222,16 @@ Screenshots at device scale 2 with reduced motion compare the counter, the oven 
 
 `tests/shadows.spec.js` checks that the sun's shadow bounds keep their size and move in whole texels while the player walks, shrink when zoomed in, grow when zoomed out, and switch to the finer first-person map and back.
 
+`tests/routing.spec.js` checks that a click on the far bank of the brook routes over the bridge and walks there, that clicks in the water or off the island return no route, and that the lanterns keep a fixed pool of point lights with no new shader programs at dusk.
+
 These tests assert rendering work and behavior instead of a machine-dependent FPS threshold. The village diagnostics expose `drawCalls`, `triangles`, `geometries`, `textures`, and `shadow` (`mapSize` and light-space `bounds`); water diagnostics include each pool's `reflectionSize`.
 ## Change history
 
 Per-change measurements, each against the previous `main` (`1a2624c`) at the time, in the order the changes landed. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the current combined baseline.
+
+### Route search and lantern pool (2026-10-31)
+
+`findPath` used to re-check every collider for each cell it visited, sort its open list on every step and stop after 5,000 steps. It now samples the 65 × 53 route grid's walkability once, on the first click (about 3,400 `blocked` calls), and searches with a binary heap and no step cap. From spawn in headless Chromium: a route to the far bank at (19, −2.5) took 3.2 ms before and 0.2 ms after, (−19, −15) took 10.7 ms and 0.3 ms, and an unreachable click behind the mill took 39 ms and 1.8 ms to give up. Routes are the same length. The six lanterns' `PointLight`s became a fixed pool of six (see the checklist); draw calls, triangles and shader programs at the default view and in first person are unchanged.
 
 ### Local comparison (2026-10-29)
 
