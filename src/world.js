@@ -1264,6 +1264,7 @@ export function createWorld(T, scene) {
     isPlantable,
     colliders,
     trees,
+    bushes,
     treeCanopies: trees.canopyBounds,
     interactables,
     spawn: { x: -2.8, z: 6.2 },
