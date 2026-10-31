@@ -1,6 +1,7 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createTrees } from "./trees.js";
 import { createBushes } from "./bushes.js";
+import { createPlanters } from "./planters.js";
 import { createReeds } from "./reeds.js";
 import { createRiverbank } from "./riverbank.js";
 import { createWaterSystem, sampleWaterField } from "./water.js";
@@ -472,67 +473,151 @@ export function createWorld(T, scene) {
   const flowerMats = ["#e4c471", "#e4a38f", "#d9d4b4", "#a49bbe"].map((c) =>
     mat(c),
   );
-  function pot(x, z, s = 0.5, p = scene, y = 0) {
-    const terr = mat("#ae7354");
-    cyl(terr, x, y + s * 0.38, z, s * 0.45, s * 0.75, p);
-    cyl(terr, x, y + s * 0.79, z, s * 0.51, s * 0.12, p);
-    cyl(darkWood, x, y + s * 0.86, z, s * 0.38, 0.06, p);
-    for (let i = 0; i < 4; i++) {
-      const xx = x + range(-s * 0.3, s * 0.3),
-        zz = z + range(-s * 0.3, s * 0.3);
-      orb(
-        plantMats[i % 3],
-        xx,
-        y + s * 1.07,
-        zz,
-        s * 0.32,
-        s * 0.5,
-        s * 0.32,
-        p,
-      );
-      if (i < 3)
-        orb(
-          flowerMats[i % 4],
-          xx,
-          y + s * 1.48,
-          zz,
-          s * 0.16,
-          s * 0.1,
-          s * 0.16,
-          p,
-        );
-    }
+  // Each building keeps its own planting scheme: doorstep pots, window boxes
+  // and the beds along its walls. All of it shares one vertex-colored draw.
+  const planters = createPlanters();
+  const { blooms, foliage, recipes } = planters;
+  const plantings = {
+    home: {
+      pots: [
+        ["geranium", blooms.rose],
+        ["lavender", blooms.lavender],
+      ],
+      glaze: "#b4725a",
+      box: [
+        ["geranium", blooms.rose],
+        ["daisies", blooms.white],
+        ["geranium", blooms.blush],
+      ],
+      wall: ["spires", blooms.rose],
+      bed: ["lavender", blooms.lavender],
+      side: [0.05, 1.75], // The woodpile stands further back.
+    },
+    bakery: {
+      pots: [["topiary"], ["topiary"]],
+      glaze: "#8f8a7c",
+      box: [
+        ["geranium", blooms.scarlet],
+        ["daisies", blooms.white],
+        ["geranium", blooms.scarlet],
+      ],
+      wall: ["spires", blooms.butter],
+      bed: ["daisies", blooms.butter],
+    },
+    mill: {
+      pots: [
+        ["lavender", blooms.lilac],
+        ["daisies", blooms.white],
+      ],
+      glaze: "#a9765c",
+      box: [
+        ["daisies", blooms.sky],
+        ["lavender", blooms.lavender],
+        ["geranium", blooms.lilac],
+      ],
+      wall: ["spires", blooms.lilac],
+      bed: ["daisies", blooms.white],
+      side: [-1.75, 0.65], // Clear of the water barrel by the door.
+    },
+    cottage: {
+      pots: [
+        ["geranium", blooms.coral],
+        ["daisies", blooms.marigold],
+      ],
+      glaze: "#b8795a",
+      box: [
+        ["geranium", blooms.coral],
+        ["daisies", blooms.butter],
+        ["geranium", blooms.coral],
+      ],
+      wall: ["spires", blooms.blush],
+      bed: ["daisies", blooms.marigold],
+      side: [-1.35, 1.35],
+    },
+  };
+  function plant([recipe, bloom], x, y, z, r, ...rest) {
+    recipes[recipe](x, y, z, r, bloom, ...rest);
   }
-  function windowAt(x, y, z, w = 0.8, h = 1.1, p = scene) {
+  function pot(x, z, s, scheme, choice, p = scene) {
+    const soilY = planters.pot(x, 0.02, z, s, scheme.glaze);
+    plant(
+      choice,
+      x,
+      soilY - 0.02,
+      z,
+      s * (choice[0] === "topiary" ? 0.42 : 0.5),
+    );
+    if (choice[0] !== "topiary")
+      for (let i = 0; i < 3; i++) {
+        const a = Math.PI * (0.15 + i * 0.35);
+        planters.trail(
+          x + Math.cos(a) * s * 0.46,
+          soilY,
+          z + Math.sin(a) * s * 0.46,
+          s * 0.45,
+          foliage.ivy,
+          Math.cos(a),
+          Math.sin(a),
+        );
+      }
+    planters.flush(p);
+  }
+  // A strip bed against a wall, running along local X. Spires stand at the
+  // back, kept short beneath window boxes so they never grow through them.
+  function wallBed(scheme, x, z, length, p, windows = []) {
+    const depth = 0.46;
+    planters.bed(x, z, length, depth);
+    const spires = Math.max(1, Math.round(length / 0.6));
+    for (let i = 0; i < spires; i++) {
+      const sx = x - length / 2 + ((i + 0.5) / spires) * length;
+      const under = windows.some(([c, half]) => Math.abs(sx - c) < half);
+      plant(
+        scheme.wall,
+        sx,
+        0.12,
+        z - depth * 0.22,
+        0.22,
+        under ? planters.range(0.62, 0.78) : planters.range(1.05, 1.4),
+      );
+    }
+    const fronts = Math.max(1, Math.round(length / 0.42));
+    for (let i = 0; i < fronts; i++)
+      plant(
+        i % 2 ? ["geranium", scheme.box[0][1]] : scheme.bed,
+        x - length / 2 + ((i + 0.5) / fronts) * length,
+        0.12,
+        z + depth * 0.18,
+        planters.range(0.17, 0.22),
+      );
+    planters.flush(p);
+  }
+  function windowAt(x, y, z, w = 0.8, h = 1.1, p = scene, scheme = null) {
     box(darkWood, x, y, z, w + 0.19, h + 0.19, 0.11, p);
     box(glass, x, y, z + 0.07, w, h, 0.03, p);
     box(trim, x, y, z + 0.095, 0.075, h + 0.1, 0.07, p);
     box(trim, x, y + 0.04, z + 0.1, w + 0.1, 0.065, 0.07, p);
     box(trim, x, y - h / 2 - 0.1, z + 0.16, w + 0.34, 0.12, 0.37, p);
-    if (h > 0.8) {
+    if (h > 0.8 && scheme) {
       box(wood, x, y - h / 2 - 0.2, z + 0.24, w + 0.16, 0.2, 0.3, p);
-      for (let j = 0; j < 5; j++) {
-        orb(
-          plantMats[j % 3],
-          x - w * 0.4 + j * w * 0.2,
-          y - h / 2 - 0.05,
-          z + 0.32,
-          0.16,
-          0.12,
-          0.16,
-          p,
+      box(darkWood, x, y - h / 2 - 0.105, z + 0.395, w + 0.2, 0.035, 0.035, p);
+      const top = y - h / 2 - 0.1;
+      for (let j = 0; j < 4; j++)
+        plant(
+          scheme.box[j % 3],
+          x - w * 0.39 + j * w * 0.26,
+          top,
+          z + 0.25 + (j % 2) * 0.03,
+          0.14,
         );
-        orb(
-          flowerMats[j % 4],
-          x - w * 0.4 + j * w * 0.2,
-          y - h / 2 + 0.04,
-          z + 0.33,
-          0.07,
-          0.06,
-          0.07,
-          p,
+      for (let j = 0; j < 4; j++)
+        planters.trail(
+          x - w * 0.42 + j * w * 0.28 + planters.range(-0.04, 0.04),
+          top + 0.02,
+          z + 0.36,
+          planters.range(0.22, 0.42),
+          foliage.ivy,
         );
-      }
+      planters.flush(p);
     }
     for (let side of [-1, 1]) {
       box(wood, x + side * (w / 2 + 0.22), y, z, 0.27, h + 0.16, 0.09, p);
@@ -622,17 +707,56 @@ export function createWorld(T, scene) {
     orb(mat("#d0b067"), 0.25, 1.1, dz + 0.16, 0.05, 0.05, 0.05, p);
     box(stone, 0, 0.2, dz + 0.45, 1.5, 0.25, 0.7, p);
     box(stone, 0, 0.12, dz + 0.84, 1.75, 0.12, 0.3, p);
-    windowAt(-w * 0.3, 1.9, dz, 0.76, 1, p);
-    windowAt(w * 0.3, 1.9, dz, 0.76, 1, p);
+    const scheme = plantings[id];
+    windowAt(-w * 0.3, 1.9, dz, 0.76, 1, p, scheme);
+    windowAt(w * 0.3, 1.9, dz, 0.76, 1, p, scheme);
     windowAt(0, h + 0.94, dz, 0.67, 0.65, p);
     // Right wall window visible to camera.
     const win = new T.Group();
     win.position.set(w / 2 + 0.05, 0, 0);
     win.rotation.y = Math.PI / 2;
     p.add(win);
-    windowAt(0, 1.8, 0, 0.9, 1, win);
-    pot(-w / 2 + 0.15, d / 2 + 0.7, 0.62, p);
-    pot(w / 2 - 0.1, d / 2 + 0.68, 0.58, p);
+    windowAt(0, 1.8, 0, 0.9, 1, win, scheme);
+    // Pots flank the doorstep; beds fill the wall on either side of them.
+    pot(-1.22, dz + 0.72, 0.62, scheme, scheme.pots[0], p);
+    pot(1.22, dz + 0.68, 0.58, scheme, scheme.pots[1], p);
+    // Narrow fronts leave the lawn running up to the wall instead.
+    const bedLength = w / 2 - 1.62;
+    if (bedLength > 0.5)
+      for (const side of [-1, 1]) {
+        wallBed(
+          scheme,
+          side * (w / 2 - bedLength / 2),
+          dz + 0.2,
+          bedLength,
+          p,
+          [
+            [-w * 0.3, 0.62],
+            [w * 0.3, 0.62],
+          ],
+        );
+        colliders.push({
+          x: x + side * (w / 2 - bedLength / 2),
+          z: z + dz + 0.2,
+          w: bedLength,
+          d: 0.46,
+        });
+      }
+    colliders.push(
+      { x: x - 1.22, z: z + dz + 0.72, r: 0.3 },
+      { x: x + 1.22, z: z + dz + 0.68, r: 0.28 },
+    );
+    if (scheme.side) {
+      const [from, to] = scheme.side,
+        length = to - from,
+        mid = (from + to) / 2;
+      const sideBed = new T.Group();
+      sideBed.position.set(w / 2 + 0.31, 0, mid);
+      sideBed.rotation.y = Math.PI / 2;
+      p.add(sideBed);
+      wallBed(scheme, 0, 0, length, sideBed, [[mid, 0.75]]);
+      colliders.push({ x: x + w / 2 + 0.31, z: z + mid, w: 0.46, d: length });
+    }
     if (sign) {
       box(darkWood, 0, 2.66, dz + 0.12, 2, 0.12, 0.12, p);
       box(label(sign), 0, 2.67, dz + 0.205, 1.78, 0.46, 0.07, p);
