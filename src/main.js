@@ -35,6 +35,9 @@ const startQuality =
   innerWidth < 760 || innerWidth * innerHeight * devicePixelRatio ** 2 > 2.6e6
     ? "balanced"
     : "high";
+// Benchmark overrides for attributing render cost (window.__willowmere.tune);
+// empty in normal play, so every `??` below takes its default.
+const overrides = {};
 const resolution = {
   // ?resolution=fixed keeps the quality's pixel ratio for benchmarks and tests.
   adaptive: new URLSearchParams(location.search).get("resolution") !== "fixed",
@@ -75,7 +78,7 @@ function resetResolution(quality) {
     lastUp: -Infinity,
     descentFrom: 0,
   });
-  applyPixelRatio(resolution.ceiling);
+  applyPixelRatio(overrides.pixelRatio ?? resolution.ceiling);
 }
 function stepResolution(direction) {
   const r = resolution;
@@ -90,7 +93,7 @@ function stepResolution(direction) {
 }
 function updateResolution(now, interval) {
   const r = resolution;
-  if (!r.adaptive || now < r.holdUntil) return;
+  if (!r.adaptive || overrides.pixelRatio != null || now < r.holdUntil) return;
   // Start a fresh window after a hidden tab, the bakery, or a long stall.
   if (interval > 250 || now - r.lastSample > 250) {
     r.samples.length = 0;
@@ -208,6 +211,13 @@ const leafDetailFromEye = (center) =>
   center.distanceTo(firstPersonCamera.position) > COARSE_LEAVES_DISTANCE
     ? 1
     : 0;
+const leafDetail = () =>
+  overrides.leafDetail ??
+  (firstPerson
+    ? leafDetailFromEye
+    : viewHeight > COARSE_LEAVES_VIEW_HEIGHT
+      ? 1
+      : 0);
 let viewHeight = 29,
   targetViewHeight = 29;
 function updateZoomControls() {
@@ -303,6 +313,7 @@ function updateShadowMapSize() {
   sun.shadow.mapSize.setScalar(size);
   sun.shadow.map?.dispose();
   sun.shadow.map = null;
+  if (!sun.shadow.autoUpdate) sun.shadow.needsUpdate = true;
 }
 function fitShadow() {
   if (shadowYaw !== targetYaw) rollShadow(targetYaw);
@@ -811,7 +822,7 @@ $("#quality").onchange = (e) => {
   // The chosen quality is the scaler's ceiling.
   resetResolution(q);
   updateShadowMapSize();
-  bloom.enabled = q !== "performance";
+  bloom.enabled = overrides.bloom ?? q !== "performance";
   resize();
 };
 $("#day-select").onchange = (e) => {
@@ -1448,23 +1459,18 @@ function animate(now) {
   for (const material of glowMaterials)
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
   playerVisibility.update(camera, !photo && !firstPerson);
-  world.trees.setDetail(
-    firstPerson
-      ? leafDetailFromEye
-      : viewHeight > COARSE_LEAVES_VIEW_HEIGHT
-        ? 1
-        : 0,
-  );
+  world.trees.setDetail(leafDetail());
   fitShadow();
   scene.updateMatrixWorld();
   renderer.info.reset();
   // RenderPass draws into readBuffer; water resolves refraction from that pass.
-  world.water.render(renderer, camera, {
-    dt,
-    dusk: duskMix,
-    sun,
-    target: composer.readBuffer,
-  });
+  if (overrides.water ?? true)
+    world.water.render(renderer, camera, {
+      dt,
+      dusk: duskMix,
+      sun,
+      target: composer.readBuffer,
+    });
   composer.render();
   if (frame === 3) {
     $("#loading").classList.add("loaded");
@@ -1472,7 +1478,36 @@ function animate(now) {
 }
 updateUI();
 requestAnimationFrame(animate);
+// Applies the benchmark overrides, or the defaults for anything not overridden.
+function applyTune() {
+  const q = $("#quality").value;
+  const shadowUpdate = overrides.shadowUpdate ?? true;
+  if (!shadowUpdate && sun.shadow.autoUpdate) sun.shadow.needsUpdate = true;
+  sun.shadow.autoUpdate = shadowUpdate;
+  bloom.enabled = overrides.bloom ?? q !== "performance";
+  const samples = overrides.samples ?? 4;
+  for (const target of [composer.renderTarget1, composer.renderTarget2])
+    if (target.samples !== samples) {
+      target.samples = samples;
+      target.dispose();
+    }
+  const foliage = overrides.foliage ?? true;
+  for (const mesh of world.trees.foliage) mesh.visible = foliage;
+  world.bushes.group.visible = foliage;
+  world.trees.setDetail(leafDetail());
+  // The scaler stands aside while the ratio is forced; clearing it resumes
+  // from the quality's cap.
+  if (!interior?.active) resetResolution(q);
+  resize();
+}
 window.__willowmere = {
+  tune(settings) {
+    for (const [key, value] of Object.entries(settings))
+      if (value == null) delete overrides[key];
+      else overrides[key] = value;
+    applyTune();
+    return this.getDiagnostics().render;
+  },
   getState: () => structuredClone(state),
   getPlayer: () => ({ x: life.player.position.x, z: life.player.position.z }),
   getView: () => ({
@@ -1514,6 +1549,19 @@ window.__willowmere = {
         shadowCamera.top,
       ],
     },
+    render: {
+      pixelRatio: renderer.getPixelRatio(),
+      width: composer.renderTarget1.width,
+      height: composer.renderTarget1.height,
+      samples: composer.renderTarget1.samples,
+      bloom: bloom.enabled,
+      shadowUpdate: sun.shadow.autoUpdate,
+      water: overrides.water ?? true,
+      foliage: world.bushes.group.visible,
+      leafDetail: overrides.leafDetail ?? "auto",
+      leaves: world.trees.foliage.reduce((n, mesh) => n + mesh.count, 0),
+      overrides: { ...overrides },
+    },
     position: life.player.position.toArray(),
     camera: {
       tilt,
@@ -1521,6 +1569,7 @@ window.__willowmere = {
       yaw: overviewYaw,
       targetYaw,
       viewHeight,
+      targetViewHeight,
       offset: cameraOffset.toArray(),
       pan: pan.toArray(),
       targetPan: targetPan.toArray(),
