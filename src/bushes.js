@@ -83,7 +83,8 @@ function leafGeometry() {
   return geometry;
 }
 
-export function createBushes() {
+// groundHeight(x, z) seats each shrub pocket on the terrain under it.
+export function createBushes(groundHeight = () => 0) {
   let seed = 28719;
   const rand = () =>
     (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
@@ -110,7 +111,12 @@ export function createBushes() {
     dummy.updateMatrix();
     stems.push(dummy.matrix.clone());
   }
+  // Lift every part of a pocket by the ground height at its centre.
+  const seat = (records, from, y, matrixOf) => {
+    if (y) for (let i = from; i < records.length; i++) matrixOf(records[i]).elements[13] += y;
+  };
   for (const [x, z, spread, height, variety] of placements) {
+    const first = [stems.length, leaves.length, flowers.length];
     const turn = rand() * Math.PI * 2;
     // Unequal crowns grow from several woody shoots rather than a solid ball.
     for (let crown = 0; crown < 5; crown++) {
@@ -185,6 +191,10 @@ export function createBushes() {
         }
       }
     }
+    const y = groundHeight(x, z);
+    seat(stems, first[0], y, (m) => m);
+    seat(leaves, first[1], y, (leaf) => leaf.matrix);
+    if (y) for (let i = first[2]; i < flowers.length; i++) flowers[i].position.y += y;
   }
   const foliage = new T.InstancedMesh(
     leafGeometry(),

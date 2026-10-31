@@ -6,12 +6,47 @@ import { createPlanters } from "./planters.js";
 import { createReeds } from "./reeds.js";
 import { createRiverbank } from "./riverbank.js";
 import { createWaterSystem, sampleWaterField } from "./water.js";
+import {
+  WORLD,
+  chunkBounds,
+  chunkCoords,
+  terrainHeight,
+} from "./world-layout.js";
 export function createWorld(T, scene) {
   const initialChildren = new Set(scene.children);
   const water = createWaterSystem(scene);
   const colliders = [],
-    interactables = [],
-    animated = [];
+    interactables = [];
+  // Static scenery, instanced detail, glowing materials and animations are
+  // grouped by chunk, so a view only pays for the chunks it can see.
+  const chunks = new Map();
+  function chunkAt(x, z) {
+    const [cx, cz] = chunkCoords(x, z),
+      key = `${cx},${cz}`;
+    if (!chunks.has(key)) {
+      const { minX, maxX, minZ, maxZ } = chunkBounds(cx, cz);
+      chunks.set(key, {
+        key,
+        cx,
+        cz,
+        // A margin covers parts that reach over the chunk's edge.
+        bounds: new T.Box3(
+          new T.Vector3(minX - 2, -2, minZ - 2),
+          new T.Vector3(maxX + 2, WORLD.canopy + 2, maxZ + 2),
+        ),
+        meshes: [],
+        animations: [],
+        glow: new Set(),
+      });
+    }
+    return chunks.get(key);
+  }
+  // Animations that span the whole map (wind, reeds, dust) run every frame;
+  // the rest belong to the chunk they move in and pause while it is out of view.
+  const animated = [];
+  function animate(x, z, update) {
+    chunkAt(x, z).animations.push(update);
+  }
   let seed = 91372;
   const rand = () =>
       (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296,
@@ -172,18 +207,34 @@ export function createWorld(T, scene) {
   // The channel is physically recessed, so refraction sees its bed rather than lawn.
   // Ground slabs, roads and the riverbed only receive shadows. As casters they would
   // fill the whole shadow map without darkening anything the camera can see.
-  const flat = [box(soil, 0, -1.18, 0, 48, 0.34, 42)];
+  const { ground } = WORLD,
+    groundDepth = ground.maxZ - ground.minZ,
+    groundZ = (ground.minZ + ground.maxZ) / 2;
+  const flat = [
+    box(
+      soil,
+      (ground.minX + ground.maxX) / 2,
+      -1.18,
+      groundZ,
+      ground.maxX - ground.minX,
+      0.34,
+      groundDepth,
+    ),
+  ];
   for (const [left, right] of [
-    [-24, 9.7],
-    [14.3, 24],
+    [ground.minX, 9.7],
+    [14.3, ground.maxX],
   ])
-    flat.push(box(soil, (left + right) / 2, -0.58, 0, right - left, 1.06, 42));
+    flat.push(
+      box(soil, (left + right) / 2, -0.58, groundZ, right - left, 1.06, groundDepth),
+    );
   for (const [left, right] of [
-    [-23.8, 9.7],
-    [14.3, 23.8],
+    [ground.minX + 0.2, 9.7],
+    [14.3, ground.maxX - 0.2],
   ])
-    flat.push(box(grass, (left + right) / 2, -0.1, 0, right - left, 0.3, 41.6));
-  const groundH = (x, z) => 0.04;
+    flat.push(
+      box(grass, (left + right) / 2, -0.1, groundZ, right - left, 0.3, groundDepth - 0.4),
+    );
   const shadowCanvas = document.createElement("canvas");
   shadowCanvas.width = shadowCanvas.height = 128;
   const sh = shadowCanvas.getContext("2d"),
@@ -199,7 +250,13 @@ export function createWorld(T, scene) {
     depthWrite: false,
   });
   function contact(x, z, w, d) {
-    const m = mesh(new T.PlaneGeometry(w, d), contactMat, x, 0.13, z);
+    const m = mesh(
+      new T.PlaneGeometry(w, d),
+      contactMat,
+      x,
+      terrainHeight(x, z) + 0.13,
+      z,
+    );
     m.rotation.x = -Math.PI / 2;
     m.castShadow = false;
     m.receiveShadow = false;
@@ -306,6 +363,7 @@ export function createWorld(T, scene) {
     pebbles.setMatrixAt(i, dum.matrix);
     pebbles.setColorAt(i, pebbleColors[i % pebbleColors.length]);
   }
+  pebbles.name = "River pebbles";
   pebbles.receiveShadow = true;
   scene.add(pebbles);
   // Saturated stone is darker and smoother just below the lapping waterline.
@@ -693,7 +751,7 @@ export function createWorld(T, scene) {
         0.4 + i * 0.12,
         0.26 + i * 0.12,
       );
-      animated.push((dt, t) => {
+      animate(x + cx, z + cz, (dt, t) => {
         puff.position.x = x + cx + i * 0.12 + Math.sin(t * 0.45 + i) * 0.14;
         puff.position.y = cy + 1.35 + i * 0.47 + Math.sin(t * 0.6 + i) * 0.09;
       });
@@ -863,7 +921,16 @@ export function createWorld(T, scene) {
   }
   cyl(darkWood, 0, 0, 0, 0.18, 1.2, wheel);
   // Turn around the local axle after the wheel has been mounted vertically.
-  animated.push((dt) => wheel.rotateY(dt * 0.18));
+  // The angle follows the world's animation clock, so pausing the wheel while
+  // its chunk is out of view does not fall behind.
+  const wheelMount = wheel.quaternion.clone(),
+    wheelTurn = new T.Quaternion(),
+    wheelAxle = new T.Vector3(0, 1, 0);
+  animate(wheel.position.x, wheel.position.z, (dt, t, clock) =>
+    wheel.quaternion
+      .copy(wheelMount)
+      .multiply(wheelTurn.setFromAxisAngle(wheelAxle, clock * 0.18)),
+  );
   // Sealed stone walls enclose each pool below the rounded lip.
   function basinWall(x, y, z, inner, outer, height) {
     const ring = new T.Shape();
@@ -1089,7 +1156,7 @@ export function createWorld(T, scene) {
     [6, -5, 0.9],
     [6.7, 8.5, 1.1],
   ];
-  const trees = createTrees(treePlacements);
+  const trees = createTrees(treePlacements, terrainHeight);
   scene.add(trees.group);
   for (const [x, z, s] of treePlacements) {
     contact(x, z, 2.1 * s, 2.1 * s);
@@ -1103,7 +1170,7 @@ export function createWorld(T, scene) {
   fence(-18, -0.7, -15.6, -0.7);
   fence(-13.7, -0.7, -12.5, -0.7);
   // Shrub pockets follow cottage fences, garden corners and woodland understory.
-  const bushes = createBushes();
+  const bushes = createBushes(terrainHeight);
   scene.add(bushes.group);
   // Pools barely resolve single leaves; their captures skip the dense foliage.
   water.excludeFromCaptures(...trees.foliage, bushes.group);
@@ -1149,7 +1216,8 @@ export function createWorld(T, scene) {
     const x = range(-22.7, 22.7),
       z = range(-19.5, 19.5);
     if (inRoad(x, z) || isBlocked(x, z)) continue;
-    dum.position.set(x, 0.15, z);
+    const y = terrainHeight(x, z);
+    dum.position.set(x, y + 0.15, z);
     dum.rotation.set(range(-0.3, 0.3), rand() * 6.28, range(-0.3, 0.3));
     dum.scale.set(1, range(0.6, 1.4), 1);
     dum.updateMatrix();
@@ -1159,7 +1227,7 @@ export function createWorld(T, scene) {
       rand() < 0.34 &&
       Math.sin(x * 0.72) + Math.sin(z * 0.84) + Math.sin((x + z) * 0.47) > 0.65
     ) {
-      dum.position.y = 0.28;
+      dum.position.y = y + 0.28;
       dum.scale.set(0.07, 0.045, 0.07);
       dum.updateMatrix();
       blossoms.setMatrixAt(fi, dum.matrix);
@@ -1174,6 +1242,8 @@ export function createWorld(T, scene) {
   }
   blades.count = bi;
   blossoms.count = fi;
+  blades.name = "Grass blades";
+  blossoms.name = "Meadow blossoms";
   blades.receiveShadow = true;
   scene.add(blades, blossoms);
 
@@ -1226,7 +1296,7 @@ export function createWorld(T, scene) {
     leaf.rotation.x = -Math.PI / 2;
     leaf.rotation.z = rand() * 6.28;
     orb(flowerMats[1], 0.02, 0.06, 0, 0.09, 0.05, 0.09, floating);
-    animated.push(() => {
+    animate(x, z, () => {
       const t = water.time;
       floating.position.y =
         0.139 + Math.sin(x * 1.01 + z * 3.46 - t * 5.95) * 0.011;
@@ -1265,6 +1335,7 @@ export function createWorld(T, scene) {
     dum.updateMatrix();
     stones.setMatrixAt(i, dum.matrix);
   }
+  stones.name = "Path cobbles";
   stones.receiveShadow = true;
   scene.add(stones);
   // Handcrafted village accents: mailboxes, well used barrels, stacked firewood and flags.
@@ -1341,54 +1412,226 @@ export function createWorld(T, scene) {
     particles.rotation.y = Math.sin(t * 0.04) * 0.015;
     particles.position.y = Math.sin(t * 0.3) * 0.1;
   });
-  // Bake static architectural and botanical meshes into one draw per material and shadow role.
+  // Bake static meshes into one draw per chunk, material and shadow role. Each
+  // batch has bounds that hug its chunk, so the main, shadow and reflection
+  // passes skip chunks out of view. Plain-coloured materials that differ only
+  // in colour share one vertex-coloured material per finish, which keeps the
+  // number of batches per chunk low.
   scene.updateMatrixWorld(true);
+  const center = new T.Vector3(),
+    point = new T.Vector3(),
+    instanceMatrix = new T.Matrix4(),
+    instanceColor = new T.Color();
+  const chunkOf = (node) => {
+    if (node.isInstancedMesh) {
+      node.computeBoundingSphere();
+      center.copy(node.boundingSphere.center);
+    } else {
+      if (!node.geometry.boundingSphere) node.geometry.computeBoundingSphere();
+      center.copy(node.geometry.boundingSphere.center);
+    }
+    center.applyMatrix4(node.matrixWorld);
+    return chunkAt(center.x, center.z);
+  };
+  const plainMaterial = (m) =>
+    m.type === "MeshStandardMaterial" &&
+    !m.vertexColors &&
+    !m.transparent &&
+    m.onBeforeCompile === T.Material.prototype.onBeforeCompile &&
+    m.emissive.getHex() === 0 &&
+    ![
+      "map",
+      "lightMap",
+      "aoMap",
+      "emissiveMap",
+      "bumpMap",
+      "normalMap",
+      "displacementMap",
+      "roughnessMap",
+      "metalnessMap",
+      "alphaMap",
+      "envMap",
+    ].some((slot) => m[slot]);
+  const sharedMaterials = new Map();
+  function bakedMaterial(m) {
+    if (!plainMaterial(m)) return m;
+    const key = [m.roughness, m.metalness, m.side, m.flatShading, m.shadowSide].join("/");
+    if (!sharedMaterials.has(key)) {
+      const shared = m.clone();
+      shared.color.set(0xffffff);
+      shared.vertexColors = true;
+      sharedMaterials.set(key, shared);
+    }
+    return sharedMaterials.get(key);
+  }
+  // Every draw has a fixed cost, so a chunk's share of a batch smaller than
+  // this joins the same batch in a neighbouring chunk instead of drawing alone.
+  const MIN_BATCH_TRIANGLES = 4000;
+  // Merges small parts ({ chunk, items, triangles }) into the largest part
+  // within one chunk of them, smallest first, and returns the parts left.
+  function clusterParts(parts) {
+    const sorted = [...parts].sort((a, b) => a.triangles - b.triangles);
+    for (const part of sorted) {
+      if (part.merged || part.triangles >= MIN_BATCH_TRIANGLES) continue;
+      let target = null;
+      for (const other of sorted)
+        if (
+          other !== part &&
+          !other.merged &&
+          Math.abs(other.chunk.cx - part.chunk.cx) <= 1 &&
+          Math.abs(other.chunk.cz - part.chunk.cz) <= 1 &&
+          (!target || other.triangles > target.triangles)
+        )
+          target = other;
+      if (!target) continue;
+      target.items.push(...part.items);
+      target.triangles += part.triangles;
+      part.merged = true;
+    }
+    return sorted.filter((part) => !part.merged);
+  }
+  const triangleCount = (geometry) =>
+    (geometry.index ? geometry.index.count : geometry.attributes.position.count) / 3;
+  // Instanced detail spread across the map splits into one mesh per chunk,
+  // or per few chunks where it is sparse. Trees keep their own per-specimen
+  // meshes and detail levels.
+  function splitInstances(mesh) {
+    const byChunk = new Map(),
+      perInstance = triangleCount(mesh.geometry);
+    for (let i = 0; i < mesh.count; i++) {
+      mesh.getMatrixAt(i, instanceMatrix);
+      point.setFromMatrixPosition(instanceMatrix).applyMatrix4(mesh.matrixWorld);
+      const chunk = chunkAt(point.x, point.z);
+      if (!byChunk.has(chunk))
+        byChunk.set(chunk, { chunk, items: [], triangles: 0 });
+      const part = byChunk.get(chunk);
+      part.items.push(i);
+      part.triangles += perInstance;
+    }
+    const parts = clusterParts(byChunk.values());
+    if (parts.length < 2) {
+      if (parts.length) parts[0].chunk.meshes.push(mesh);
+      return;
+    }
+    for (const { chunk, items: indices } of parts) {
+      const part = new T.InstancedMesh(mesh.geometry, mesh.material, indices.length);
+      part.name = `${mesh.name || "Instances"} (chunk ${chunk.key})`;
+      part.castShadow = mesh.castShadow;
+      part.receiveShadow = mesh.receiveShadow;
+      part.matrixAutoUpdate = mesh.matrixAutoUpdate;
+      part.matrix.copy(mesh.matrix);
+      part.matrix.decompose(part.position, part.quaternion, part.scale);
+      indices.forEach((source, i) => {
+        mesh.getMatrixAt(source, instanceMatrix);
+        part.setMatrixAt(i, instanceMatrix);
+        if (mesh.instanceColor) {
+          mesh.getColorAt(source, instanceColor);
+          part.setColorAt(i, instanceColor);
+        }
+      });
+      part.computeBoundingSphere();
+      mesh.parent.add(part);
+      part.updateMatrixWorld();
+      chunk.meshes.push(part);
+    }
+    mesh.removeFromParent();
+  }
+  // Batches group by material, shadow role and vertex layout, then by chunk.
   const batches = new Map(),
-    remove = [];
+    remove = [],
+    instanced = [];
   function collect(node, dynamic = false) {
+    if (node === trees.group) return;
     dynamic = dynamic || node.userData.dynamic;
     for (const child of [...node.children]) collect(child, dynamic);
+    if (!node.isMesh && !node.isPoints) return;
+    // Lit materials brighten at blue hour; main.js finds them through their chunk.
+    if (!Array.isArray(node.material) && node.material.emissive?.getHex() > 0)
+      chunkOf(node).glow.add(node.material);
+    if (node.isInstancedMesh) {
+      instanced.push(node);
+      return;
+    }
     if (
       !node.isMesh ||
-      node.isInstancedMesh ||
       dynamic ||
       Array.isArray(node.material) ||
       node.material.transparent
     )
       return;
-    const geometry = node.geometry.clone().applyMatrix4(node.matrixWorld);
-    const key = `${node.material.uuid}/${node.castShadow}/${node.receiveShadow}`;
+    const chunk = chunkOf(node),
+      material = bakedMaterial(node.material),
+      geometry = node.geometry.clone().applyMatrix4(node.matrixWorld),
+      flat = geometry.index ? geometry.toNonIndexed() : geometry;
+    if (flat !== geometry) geometry.dispose();
+    if (material !== node.material) {
+      const colors = new Float32Array(flat.attributes.position.count * 3),
+        { r, g, b } = node.material.color;
+      for (let i = 0; i < colors.length; i += 3) {
+        colors[i] = r;
+        colors[i + 1] = g;
+        colors[i + 2] = b;
+      }
+      flat.setAttribute("color", new T.BufferAttribute(colors, 3));
+    }
+    // Only geometries with the same attributes can merge.
+    const attributes = Object.keys(flat.attributes).sort().join(),
+      key = `${material.uuid}/${node.castShadow}/${node.receiveShadow}/${attributes}`;
     if (!batches.has(key))
       batches.set(key, {
-        material: node.material,
+        material,
         castShadow: node.castShadow,
         receiveShadow: node.receiveShadow,
-        geometries: [],
+        chunks: new Map(),
       });
-    batches
-      .get(key)
-      .geometries.push(geometry.index ? geometry.toNonIndexed() : geometry);
+    const { chunks: parts } = batches.get(key);
+    if (!parts.has(chunk)) parts.set(chunk, { chunk, items: [], triangles: 0 });
+    const part = parts.get(chunk);
+    part.items.push(flat);
+    part.triangles += triangleCount(flat);
     remove.push(node);
   }
   for (const root of [...scene.children])
     if (!initialChildren.has(root)) collect(root);
-  for (const { material, castShadow, receiveShadow, geometries } of batches.values()) {
-    const merged = mergeGeometries(geometries, false);
-    if (merged) {
-      const obj = new T.Mesh(merged, material);
-      obj.castShadow = castShadow;
-      obj.receiveShadow = receiveShadow;
-      scene.add(obj);
+  // Trees cull per specimen already; register them with their chunk.
+  for (const mesh of trees.group.children)
+    if (mesh.isMesh) chunkOf(mesh).meshes.push(mesh);
+  for (const mesh of instanced) splitInstances(mesh);
+  for (const batch of batches.values())
+    for (const { chunk, items: geometries } of clusterParts(batch.chunks.values())) {
+      const merged = mergeGeometries(geometries, false);
+      if (merged) {
+        merged.computeBoundingSphere();
+        const obj = new T.Mesh(merged, batch.material);
+        obj.name = `Baked scenery (chunk ${chunk.key})`;
+        obj.castShadow = batch.castShadow;
+        obj.receiveShadow = batch.receiveShadow;
+        scene.add(obj);
+        chunk.meshes.push(obj);
+      } else console.error("Could not merge a scenery batch", batch.material);
+      for (const g of geometries) g.dispose();
     }
-    for (const g of geometries) g.dispose();
-  }
   for (const obj of remove) obj.removeFromParent();
+  scene.updateMatrixWorld(true);
+  // Animations run only for chunks the view, or the sun's shadow, can see.
+  let clock = 0;
+  const visibleChunks = new Set();
+  // The walking surface: the bridge deck's hump, otherwise the terrain's grass.
   const getGroundHeight = (x, z) =>
     x >= 9.1 && x <= 14.86 && z >= 1.25 && z <= 4.75
       ? 0.33 + Math.sin(((x - 9.1) / 5.76) * Math.PI) * 0.39
-      : 0.05;
+      : terrainHeight(x, z) + 0.05;
+  const { plantable } = WORLD;
   const isPlantable = (x, z) =>
-    Math.abs(x) < 22 && Math.abs(z) < 18 && !inRoad(x, z) && !isBlocked(x, z);
+    x > plantable.minX &&
+    x < plantable.maxX &&
+    z > plantable.minZ &&
+    z < plantable.maxZ &&
+    !inRoad(x, z) &&
+    !isBlocked(x, z) &&
+    // Keep the plaza's open middle and the brook's banks clear.
+    Math.hypot(x, z) > 2.5 &&
+    Math.abs(x - 12) > 2;
   return {
     water,
     getGroundHeight,
@@ -1399,10 +1642,27 @@ export function createWorld(T, scene) {
     treeCanopies: trees.canopyBounds,
     interactables,
     spawn: { x: -2.8, z: 6.2 },
-    update(dt, time) {
+    chunks,
+    terrainHeight,
+    /**
+     * Advances water and animations. `frustums` lists the views being drawn
+     * (the camera, the shadow camera); a chunk outside all of them skips its
+     * animations. Without frustums every chunk animates.
+     */
+    update(dt, time, frustums) {
       water.update(dt);
-      for (const f of animated) f(dt, time);
+      clock += dt;
+      for (const f of animated) f(dt, time, clock);
+      visibleChunks.clear();
+      for (const chunk of chunks.values()) {
+        if (!chunk.animations.length) continue;
+        if (frustums && !frustums.some((f) => f.intersectsBox(chunk.bounds)))
+          continue;
+        visibleChunks.add(chunk.key);
+        for (const f of chunk.animations) f(dt, time, clock);
+      }
     },
+    animatedChunks: () => [...visibleChunks],
     lanterns,
     lamps,
     placeLanterns,
