@@ -29,7 +29,9 @@ test("the village bakes, instances and glows per chunk", async ({ page }) => {
   await page.goto("/?resolution=fixed");
   await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
   const chunks = await page.evaluate(() => window.__willowmere.getChunks());
-  expect(chunks.map((c) => c.key).sort()).toEqual(VILLAGE_CHUNKS);
+  // The village's 3 × 3 chunks, plus the open country's around them.
+  const keys = chunks.map((c) => c.key);
+  for (const key of VILLAGE_CHUNKS) expect(keys).toContain(key);
   const baked = chunks.flatMap((chunk) =>
     chunk.meshes
       .filter((m) => m.name.startsWith("Baked scenery"))

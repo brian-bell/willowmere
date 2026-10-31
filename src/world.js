@@ -8,6 +8,8 @@ import { createRiverbank } from "./riverbank.js";
 import { createWaterSystem, sampleWaterField } from "./water.js";
 import {
   WORLD,
+  inset,
+  inVillage,
   chunkBounds,
   chunkCoords,
   terrainHeight,
@@ -207,34 +209,132 @@ export function createWorld(T, scene) {
   // The channel is physically recessed, so refraction sees its bed rather than lawn.
   // Ground slabs, roads and the riverbed only receive shadows. As casters they would
   // fill the whole shadow map without darkening anything the camera can see.
-  const { ground } = WORLD,
-    groundDepth = ground.maxZ - ground.minZ,
-    groundZ = (ground.minZ + ground.maxZ) / 2;
+  // The village keeps its original island slabs; the open country around it
+  // adds the same layers out to the map's rim. The brook's channel stops at
+  // the village's edge until its upstream and downstream reaches arrive.
+  const { ground, village } = WORLD,
+    groundDepth = village.maxZ - village.minZ,
+    groundZ = (village.minZ + village.maxZ) / 2;
   const flat = [
     box(
       soil,
-      (ground.minX + ground.maxX) / 2,
+      (village.minX + village.maxX) / 2,
       -1.18,
       groundZ,
-      ground.maxX - ground.minX,
+      village.maxX - village.minX,
       0.34,
       groundDepth,
     ),
   ];
   for (const [left, right] of [
-    [ground.minX, 9.7],
-    [14.3, ground.maxX],
+    [village.minX, 9.7],
+    [14.3, village.maxX],
   ])
     flat.push(
       box(soil, (left + right) / 2, -0.58, groundZ, right - left, 1.06, groundDepth),
     );
   for (const [left, right] of [
-    [ground.minX + 0.2, 9.7],
-    [14.3, ground.maxX - 0.2],
+    [village.minX + 0.2, 9.7],
+    [14.3, village.maxX - 0.2],
   ])
     flat.push(
       box(grass, (left + right) / 2, -0.1, groundZ, right - left, 0.3, groundDepth - 0.4),
     );
+  // A slab between two corners, its texture laid out in world space so
+  // neighbouring slabs continue it.
+  function slab(material, minX, maxX, minZ, maxZ, y, height) {
+    if (maxX - minX < 1e-3 || maxZ - minZ < 1e-3) return;
+    const geometry = new T.BoxGeometry(maxX - minX, height, maxZ - minZ),
+      position = geometry.attributes.position,
+      normal = geometry.attributes.normal,
+      uv = geometry.attributes.uv,
+      cx = (minX + maxX) / 2,
+      cz = (minZ + maxZ) / 2;
+    for (let i = 0; i < position.count; i++) {
+      const x = position.getX(i) + cx,
+        y2 = position.getY(i) + y,
+        z = position.getZ(i) + cz;
+      if (Math.abs(normal.getY(i)) > 0.5) uv.setXY(i, x / 33.5, -z / 41.6);
+      else uv.setXY(i, (x + z) / 33.5, y2 / 41.6);
+    }
+    flat.push(mesh(geometry, material, cx, y, cz));
+  }
+  // Soil fills the ring of open country around the village in four strips.
+  const outer = [
+    [ground.minX, village.minX, ground.minZ, ground.maxZ],
+    [village.maxX, ground.maxX, ground.minZ, ground.maxZ],
+    [village.minX, village.maxX, ground.minZ, village.minZ],
+    [village.minX, village.maxX, village.maxZ, ground.maxZ],
+  ];
+  for (const [minX, maxX, minZ, maxZ] of outer) {
+    slab(soil, minX, maxX, minZ, maxZ, -1.18, 0.34);
+    slab(soil, minX, maxX, minZ, maxZ, -0.58, 1.06);
+  }
+  // The open country's grass is one surface with the village cut out, so no
+  // seams cross it, and texture laid out in world space. It meets the
+  // village's grass at its inset edge, and the brook's channel at the
+  // village's true edge, where the water and bed end. Below it, thin grass
+  // walls show at the map's rim, behind a 0.2 m soil lip, and at the
+  // channel's ends.
+  const lip = 0.2,
+    outerGrass = inset(ground, lip),
+    villageGrass = inset(village, lip),
+    top = 0.05,
+    worldUV = (geometry) => {
+      const position = geometry.attributes.position,
+        uv = geometry.attributes.uv;
+      for (let i = 0; i < position.count; i++)
+        uv.setXY(i, position.getX(i) / 33.5, -position.getZ(i) / 41.6);
+      return geometry;
+    };
+  const field = new T.Shape([
+      new T.Vector2(outerGrass.minX, -outerGrass.minZ),
+      new T.Vector2(outerGrass.maxX, -outerGrass.minZ),
+      new T.Vector2(outerGrass.maxX, -outerGrass.maxZ),
+      new T.Vector2(outerGrass.minX, -outerGrass.maxZ),
+    ]),
+    { minX, maxX, minZ, maxZ } = villageGrass;
+  field.holes.push(
+    new T.Path(
+      [
+        [minX, minZ],
+        [9.7, minZ],
+        [9.7, village.minZ],
+        [14.3, village.minZ],
+        [14.3, minZ],
+        [maxX, minZ],
+        [maxX, maxZ],
+        [14.3, maxZ],
+        [14.3, village.maxZ],
+        [9.7, village.maxZ],
+        [9.7, maxZ],
+        [minX, maxZ],
+      ].map(([x, z]) => new T.Vector2(x, -z)),
+    ),
+  );
+  flat.push(
+    mesh(
+      worldUV(new T.ShapeGeometry(field).rotateX(-Math.PI / 2)),
+      grass,
+      0,
+      top,
+      0,
+    ),
+  );
+  function wall(minX, maxX, minZ, maxZ) {
+    const geometry = new T.BoxGeometry(maxX - minX, 0.295, maxZ - minZ);
+    flat.push(
+      mesh(worldUV(geometry), grass, (minX + maxX) / 2, top - 0.1525, (minZ + maxZ) / 2),
+    );
+  }
+  const g = outerGrass,
+    t = 0.3;
+  wall(g.minX, g.maxX, g.minZ, g.minZ + t);
+  wall(g.minX, g.maxX, g.maxZ - t, g.maxZ);
+  wall(g.minX, g.minX + t, g.minZ + t, g.maxZ - t);
+  wall(g.maxX - t, g.maxX, g.minZ + t, g.maxZ - t);
+  wall(9.7, 14.3, village.minZ - t, village.minZ);
+  wall(9.7, 14.3, village.maxZ, village.maxZ + t);
   const shadowCanvas = document.createElement("canvas");
   shadowCanvas.width = shadowCanvas.height = 128;
   const sh = shadowCanvas.getContext("2d"),
@@ -427,8 +527,10 @@ export function createWorld(T, scene) {
   seed = riverLayoutSeed;
   for (let i = 0; i < 568; i++) rand();
   dum.rotation.set(0, 0, 0);
+  // The brook blocks walking along its whole length, out to the village's
+  // edge where it ends; the bridge's span is the gap between the two.
   colliders.push(
-    { x: 12, z: -8.5, w: 4.3, d: 19.5 },
+    { x: 12, z: -10, w: 4.3, d: 22.5 },
     { x: 12, z: 13, w: 4.3, d: 16.5 },
   );
   // Timber bridge with graceful hump, cap rails and peg details.
@@ -1613,6 +1715,21 @@ export function createWorld(T, scene) {
     }
   for (const obj of remove) obj.removeFromParent();
   scene.updateMatrixWorld(true);
+  // Grass, blossoms and pebbles cover only a few pixels in the distance, so
+  // first person skips the parts beyond DETAIL_RANGE. Each part keeps its
+  // world-space bounds; they never move.
+  const DETAIL_RANGE = 30,
+    DETAIL_NAMES = ["Grass blades", "Meadow blossoms", "River pebbles"],
+    detailParts = [];
+  function addDetail(mesh) {
+    const sphere = (mesh.isInstancedMesh ? mesh.boundingSphere : mesh.geometry.boundingSphere)
+      .clone()
+      .applyMatrix4(mesh.matrixWorld);
+    detailParts.push({ mesh, sphere });
+  }
+  for (const chunk of chunks.values())
+    for (const mesh of chunk.meshes)
+      if (DETAIL_NAMES.some((name) => mesh.name.startsWith(name))) addDetail(mesh);
   // Animations run only for chunks the view, or the sun's shadow, can see.
   let clock = 0;
   const visibleChunks = new Set();
@@ -1627,13 +1744,34 @@ export function createWorld(T, scene) {
     x < plantable.maxX &&
     z > plantable.minZ &&
     z < plantable.maxZ &&
-    !inRoad(x, z) &&
     !isBlocked(x, z) &&
-    // Keep the plaza's open middle and the brook's banks clear.
-    Math.hypot(x, z) > 2.5 &&
-    Math.abs(x - 12) > 2;
+    // Village paths, the plaza's open middle and the brook's banks stay clear.
+    !(inVillage(x, z) && (inRoad(x, z) || Math.abs(x - 12) <= 2)) &&
+    Math.hypot(x, z) > 2.5;
   return {
     water,
+    // Shared by the village's meadow grass and the open country's.
+    grassBlade: { geometry: blades.geometry, material: blades.material },
+    /**
+     * Registers a mesh that streamed in after startup with the chunk under its
+     * centre, and with first person's detail range when `detail` is set.
+     */
+    addStreamed(mesh, { detail = false } = {}) {
+      mesh.updateMatrixWorld();
+      chunkOf(mesh).meshes.push(mesh);
+      if (detail) addDetail(mesh);
+    },
+    /**
+     * Hides small detail more than DETAIL_RANGE from (x, z), or shows it all
+     * when called without a position (the overview).
+     */
+    setDetailFocus(x, z) {
+      for (const { mesh, sphere } of detailParts)
+        mesh.visible =
+          x === undefined ||
+          Math.hypot(sphere.center.x - x, sphere.center.z - z) - sphere.radius <
+            DETAIL_RANGE;
+    },
     getGroundHeight,
     isPlantable,
     colliders,

@@ -12,13 +12,23 @@ import { createEffects } from "./effects.js";
 import { createFlowerFactory } from "./flowers.js";
 import { createPlayerVisibility } from "./visibility.js";
 import { createSky } from "./sky.js";
+import { createStreamer } from "./streaming.js";
 import { WORLD, regionAt, terrainField } from "./world-layout.js";
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
 const canvas = $("#scene"),
   scene = new THREE.Scene();
 scene.background = new THREE.Color("#abc2a1");
-scene.fog = new THREE.FogExp2("#b5c2a0", 0.0025);
+// Linear fog that starts at the eye in the overview, where its quadratic
+// onset matches the light exponential haze this used to be (density 0.0025),
+// and closes in first person so the far plane's edge vanishes into it.
+const FOG = {
+    overview: { near: 0, far: 693 },
+    firstPerson: { near: 30, far: 70 },
+  },
+  // First person draws only as far as its fog lets anything show.
+  FIRST_PERSON_FAR = 72;
+scene.fog = new THREE.Fog("#b5c2a0", FOG.overview.near, FOG.overview.far);
 // Update transforms once, then reuse them for water, shadows and the final view.
 scene.matrixWorldAutoUpdate = false;
 const renderer = new THREE.WebGLRenderer({
@@ -148,7 +158,7 @@ const overviewCamera = new THREE.OrthographicCamera(-25, 25, 16, -16, 0.1, 160),
     66,
     innerWidth / innerHeight,
     0.06,
-    160,
+    FIRST_PERSON_FAR,
   );
 firstPersonCamera.rotation.order = "YXZ";
 let camera = overviewCamera,
@@ -204,7 +214,9 @@ function updateTiltControls() {
 }
 const DEFAULT_VIEW_HEIGHT = 18,
   MIN_VIEW_HEIGHT = 10,
-  MAX_VIEW_HEIGHT = 39,
+  // At 39 the overview held about twice the village's content, which culling
+  // cannot reduce; the cap lifts once zoom-based detail reduction exists.
+  MAX_VIEW_HEIGHT = 30,
   ZOOM_STEP = 3;
 // Beyond these, single leaves cover only a few pixels and trees draw coarser foliage.
 const COARSE_LEAVES_VIEW_HEIGHT = 24,
@@ -271,18 +283,27 @@ const SHADOW_FLOOR = -1.4,
   SHADOW_MARGIN = 1,
   // Depth bias in metres; the shadow map stores depth across near..far.
   SHADOW_BIAS = 0.0126,
-  // Fractions of the whole village, about 12% apart.
-  SHADOW_STEPS = Array.from({ length: 11 }, (_, i) =>
-    i < 10 ? 0.32 * 1.12 ** i : 1,
-  );
+  // Fractions of the village's light-space extent, about 12% apart, so a
+  // texel's size never depends on the map's. The largest steps cover views
+  // wider than the village; any larger view takes the whole map.
+  SHADOW_STEPS = Array.from({ length: 17 }, (_, i) =>
+    i < 10 ? 0.32 * 1.12 ** i : 1.12 ** (i - 10),
+  ),
+  // First person fits the shadow to a village-sized box of ground around the
+  // eye, reaching this far ahead of it, so eye-level detail keeps the
+  // 4096 map's density on a map of any size, and turning only shifts it.
+  FIRST_PERSON_SHADOW_AHEAD = 10;
 const shadowLight = sun.position.clone().sub(sun.target.position).normalize(),
   shadowPoint = new THREE.Vector3(),
   shadowRay = new THREE.Vector3(),
   shadowSize = new THREE.Vector2(),
   shadowCenter = new THREE.Vector2(),
   shadowView = new THREE.Box2(),
+  // Light-space bounds of the village's receivers (the size reference) and of
+  // the whole map's (where the shadow box may go).
   villageShadow = new THREE.Box2(),
-  shadowStep = [SHADOW_STEPS.length - 1, SHADOW_STEPS.length - 1];
+  worldShadow = new THREE.Box2(),
+  shadowStep = [10, 10];
 let shadowYaw = null;
 // The depth range spans the world's receivers along the light, with a metre spare.
 {
@@ -307,6 +328,20 @@ function addShadowPoint(box, point) {
   point.applyMatrix4(shadowCamera.matrixWorldInverse);
   box.expandByPoint(shadowCenter.set(point.x, point.y));
 }
+// Adds a ground box's receivers, from the soil rim to the canopy, offset by
+// (dx, dz), to a light-space box.
+function addShadowBox(box, bounds, dx, dz) {
+  for (let i = 0; i < 8; i++)
+    addShadowPoint(
+      box,
+      shadowPoint.set(
+        (i & 1 ? bounds.maxX : bounds.minX) + dx,
+        i & 2 ? SHADOW_CEILING : SHADOW_FLOOR,
+        (i & 4 ? bounds.maxZ : bounds.minZ) + dz,
+      ),
+    );
+  return box;
+}
 function rollShadow(yaw) {
   // Point light-space x along the screen's right edge, projected across the sunlight.
   const heading = cameraHeading + THREE.MathUtils.degToRad(yaw);
@@ -318,17 +353,11 @@ function rollShadow(yaw) {
   shadowCamera.position.copy(sun.position);
   shadowCamera.lookAt(sun.target.position);
   shadowCamera.updateMatrixWorld();
-  villageShadow.makeEmpty();
-  const { shadow } = WORLD;
-  for (let i = 0; i < 8; i++)
-    addShadowPoint(
-      villageShadow,
-      shadowPoint.set(
-        i & 1 ? shadow.maxX : shadow.minX,
-        i & 2 ? SHADOW_CEILING : SHADOW_FLOOR,
-        i & 4 ? shadow.maxZ : shadow.minZ,
-      ),
-    );
+  for (const [box, bounds] of [
+    [villageShadow, WORLD.shadowReference],
+    [worldShadow, WORLD.shadow],
+  ])
+    addShadowBox(box.makeEmpty(), bounds, 0, 0);
   shadowYaw = yaw;
 }
 function updateShadowMapSize() {
@@ -344,8 +373,17 @@ function updateShadowMapSize() {
 }
 function fitShadow() {
   if (shadowYaw !== targetYaw) rollShadow(targetYaw);
-  if (firstPerson) shadowView.copy(villageShadow);
-  else {
+  if (firstPerson) {
+    // A village-sized box centred a little ahead of the eye.
+    const { shadowReference: v } = WORLD,
+      ahead = FIRST_PERSON_SHADOW_AHEAD;
+    addShadowBox(
+      shadowView.makeEmpty(),
+      v,
+      firstPersonCamera.position.x - (v.minX + v.maxX) / 2 - Math.sin(yaw) * ahead,
+      firstPersonCamera.position.z - (v.minZ + v.maxZ) / 2 - Math.cos(yaw) * ahead,
+    );
+  } else {
     // Trace the overview's corner rays through every receiver height.
     shadowView.makeEmpty();
     overviewCamera.updateMatrixWorld();
@@ -365,16 +403,20 @@ function fitShadow() {
   const bounds = [0, 0, 0, 0];
   for (const axis of [0, 1]) {
     const key = axis ? "y" : "x",
-      low = villageShadow.min[key],
-      full = villageShadow.max[key] - low,
-      needed = Math.min(shadowSize[key] / full, 1);
+      reference = villageShadow.max[key] - villageShadow.min[key],
+      low = worldShadow.min[key],
+      full = worldShadow.max[key] - low,
+      last = SHADOW_STEPS.length - 1,
+      // Less a hair, so first person's village-sized box takes the 1.0 step.
+      needed = Math.min(shadowSize[key], full) / reference - 1e-9;
     // Grow at once; shrink only when the view fits well inside the smaller size.
     let step = shadowStep[axis];
-    if (needed > SHADOW_STEPS[step])
+    if (needed > SHADOW_STEPS[step]) {
       step = SHADOW_STEPS.findIndex((s) => s >= needed);
-    else while (step > 0 && needed < SHADOW_STEPS[step - 1] * 0.96) step--;
+      if (step < 0) step = last;
+    } else while (step > 0 && needed < SHADOW_STEPS[step - 1] * 0.96) step--;
     shadowStep[axis] = step;
-    const extent = full * SHADOW_STEPS[step],
+    const extent = Math.min(reference * SHADOW_STEPS[step], full),
       texel = extent / sun.shadow.mapSize[key],
       start = THREE.MathUtils.clamp(
         shadowCenter[key] - extent / 2,
@@ -412,6 +454,9 @@ const bloom = new SoftBloomPass(0.19, 0.65, 1.15);
 composer.addPass(bloom);
 composer.addPass(new BloomOutputPass(bloom));
 renderer.info.autoReset = false;
+// Everything beyond the village streams in after the first outdoor frames.
+const streamer = createStreamer(renderer, scene);
+let openCountryRequested = false;
 // Lit windows and lamp glass brighten at blue hour. Each chunk lists its own.
 const glowMaterials = new Set();
 for (const chunk of world.chunks.values())
@@ -664,6 +709,7 @@ function setFirstPerson(value) {
     pitch = -0.08;
   }
   firstPerson = value;
+  Object.assign(scene.fog, firstPerson ? FOG.firstPerson : FOG.overview);
   updateShadowMapSize();
   camera = firstPerson ? firstPersonCamera : overviewCamera;
   scenePass.camera = camera;
@@ -1148,15 +1194,28 @@ const ROUTE_STEP = 0.65,
     rows: Math.floor((walk.maxZ - walk.minZ) / ROUTE_STEP + 1e-6) + 1,
     radius: 0.34,
   };
-let routeWalkable = null;
-function walkableCells() {
-  if (routeWalkable) return routeWalkable;
+const routeWalkable = new Uint8Array(ROUTE.cols * ROUTE.rows);
+let routeRows = 0;
+// Samples rows until the deadline, or all of them; true once the grid is done.
+function sampleRouteRows(deadline = Infinity) {
   const { step, minX, minZ, cols, rows, radius } = ROUTE;
-  routeWalkable = new Uint8Array(cols * rows);
-  for (let z = 0; z < rows; z++)
+  while (routeRows < rows) {
+    const z = routeRows++;
     for (let x = 0; x < cols; x++)
       if (!blocked(minX + x * step, minZ + z * step, radius))
         routeWalkable[z * cols + x] = 1;
+    if (performance.now() > deadline) break;
+  }
+  return routeRows === rows;
+}
+// The grid streams in with the open country; a click before then finishes it.
+streamer.add({
+  x: 0,
+  z: 0,
+  step: (deadline) => (sampleRouteRows(deadline) ? [] : null),
+});
+function walkableCells() {
+  sampleRouteRows();
   return routeWalkable;
 }
 const ROUTE_MOVES = [
@@ -1584,7 +1643,7 @@ function animate(now) {
   scene.background.set("#abc2a1").lerp(duskSky, duskMix);
   scene.fog.color.copy(scene.background);
   if (motion) skyTime += dt;
-  sky.update(duskMix, skyTime);
+  sky.update(duskMix, skyTime, scene.fog.color);
   world.placeLanterns?.(
     firstPerson ? p.x : viewTarget.x,
     firstPerson ? p.z : viewTarget.z,
@@ -1598,6 +1657,9 @@ function animate(now) {
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
   playerVisibility.update(camera, !photo && !firstPerson);
   world.trees.setDetail(leafDetail());
+  if (firstPerson) world.setDetailFocus(p.x, p.z);
+  else world.setDetailFocus();
+  streamer.update(p.x, p.z, camera);
   fitShadow();
   scene.updateMatrixWorld();
   renderer.info.reset();
@@ -1610,8 +1672,13 @@ function animate(now) {
       target: composer.readBuffer,
     });
   composer.render();
-  if (frame === 3) {
-    $("#loading").classList.add("loaded");
+  if (frame === 3) $("#loading").classList.add("loaded");
+  // The open country's code loads once the village is on screen.
+  if (frame >= 3 && !openCountryRequested) {
+    openCountryRequested = true;
+    import("./regions/outskirts.js").then(({ outskirtsJobs }) =>
+      streamer.add(...outskirtsJobs(THREE, world)),
+    );
   }
 }
 updateUI();
@@ -1684,6 +1751,10 @@ window.__willowmere = {
     }));
   },
   getGlowMaterials: () => glowMaterials.size,
+  getStreaming: () => ({
+    pending: streamer.pending,
+    finished: streamer.finished,
+  }),
   getDiagnostics: () => ({
     objects: scene.children.length,
     drawCalls: renderer.info.render.calls,
@@ -1712,6 +1783,8 @@ window.__willowmere = {
     },
     shadow: {
       mapSize: sun.shadow.mapSize.x,
+      // The village's light-space extent, which shadow sizes are fractions of.
+      reference: villageShadow.getSize(new THREE.Vector2()).toArray(),
       bounds: [
         shadowCamera.left,
         shadowCamera.right,
@@ -1719,6 +1792,8 @@ window.__willowmere = {
         shadowCamera.top,
       ],
     },
+    fog: [scene.fog.near, scene.fog.far],
+    far: camera.far,
     render: {
       pixelRatio: renderer.getPixelRatio(),
       width: composer.renderTarget1.width,

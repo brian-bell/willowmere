@@ -19,6 +19,7 @@ uniform vec3 uSun;
 uniform sampler2D uCloudNoise;
 uniform vec3 uZenith[2], uMid[2], uHorizon[2], uGlow[2], uCloud[2], uCloudShade[2];
 uniform vec3 uFarHills[2], uMidHills[2], uNearHills[2];
+uniform vec3 uFog;
 varying vec3 vDirection;
 
 #define PI 3.14159265
@@ -99,10 +100,13 @@ void main() {
     vec3 haze = mix(pick(uHorizon), pick(uGlow), pow(sunSide, 2.0) * 0.5);
     vec3 farColor = mix(pick(uFarHills), haze, 0.35 + 0.4 * smoothstep(far - 0.03, far, elevation));
     vec3 midColor = mix(pick(uMidHills), haze, 0.18);
-    // Below the horizon is the valley floor, emerging from the haze toward the
-    // island's rim.
-    float below = smoothstep(0.01, -0.09, elevation);
-    vec3 nearColor = mix(mix(pick(uNearHills), haze, 0.42), pick(uNearHills) * 0.92, below);
+    // Just below the horizon lies the meadow beyond the far plane, lost in the
+    // scene's fog; further down, the valley floor emerges from the haze
+    // toward the island's rim.
+    float misty = smoothstep(0.004, -0.012, elevation);
+    float below = smoothstep(-0.03, -0.11, elevation);
+    vec3 nearColor = mix(mix(pick(uNearHills), haze, 0.42), uFog, misty);
+    nearColor = mix(nearColor, pick(uNearHills) * 0.92, below);
     sky = mix(sky, farColor, layer(elevation, far, edge));
     sky = mix(sky, midColor, layer(elevation, middle, edge));
     sky = mix(sky, nearColor, layer(elevation, near, edge));
@@ -174,6 +178,7 @@ export function createSky(T, sun) {
     uSun: {
       value: sun.position.clone().sub(sun.target.position).normalize(),
     },
+    uFog: { value: new T.Color() },
   };
   for (const [name, pair] of Object.entries(palette))
     uniforms["u" + name[0].toUpperCase() + name.slice(1)] = {
@@ -197,9 +202,10 @@ export function createSky(T, sun) {
   mesh.raycast = () => {};
   return {
     mesh,
-    update(dusk, time) {
+    update(dusk, time, fog) {
       uniforms.uDusk.value = dusk;
       uniforms.uTime.value = time;
+      if (fog) uniforms.uFog.value.copy(fog);
     },
   };
 }
