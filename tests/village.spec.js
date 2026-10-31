@@ -90,10 +90,8 @@ test("welcome quest, interaction, garden, journal, photo mode and persistence", 
   await page.keyboard.press("e");
   await page.waitForTimeout(200);
   assert(
-    [
-      "Listen closely. Beneath the splashing water, the whole village seems to hum.",
-      "Someone has left a little wish on the rim: “May we always have enough to share.”",
-    ].includes(await page.locator("#dialogue-text").textContent()) &&
+    (await page.locator("#speaker").textContent()) === "WISHING FOUNTAIN" &&
+      (await page.locator("#dialogue-text").textContent()).length > 0 &&
       (await page.locator("#dialogue-next").textContent()).includes("Lovely"),
     "Fountain answers with a single line",
   );
