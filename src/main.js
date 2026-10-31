@@ -456,7 +456,7 @@ composer.addPass(bloom);
 composer.addPass(new BloomOutputPass(bloom));
 renderer.info.autoReset = false;
 // Everything beyond the village streams in after the first outdoor frames.
-const streamer = createStreamer(renderer, scene);
+const streamer = createStreamer(renderer, scene, { target: sceneTarget });
 let openCountryRequested = false;
 // Lit windows and lamp glass brighten at blue hour. Each chunk lists its own.
 const glowMaterials = new Set();

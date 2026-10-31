@@ -28,6 +28,7 @@ const ablations = {
   "shadow map frozen": { shadowUpdate: false },
   "bloom off": { bloom: false },
   "open country hidden": { fields: false },
+  "open-country grass hidden": { fields: "ground" },
   "shadows, water and bloom off": {
     shadowUpdate: false,
     water: false,
@@ -58,6 +59,12 @@ if (ablate) {
   // steps from the default), with and without the open country.
   configs.push(
     { name: "high, height 30", quality: "high", tune: {}, view: "height-30" },
+    {
+      name: "high, height 30, open-country grass hidden",
+      quality: "high",
+      tune: { fields: "ground" },
+      view: "height-30",
+    },
     {
       name: "high, height 30, open country hidden",
       quality: "high",

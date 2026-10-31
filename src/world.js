@@ -1730,9 +1730,12 @@ export function createWorld(T, scene) {
       .applyMatrix4(mesh.matrixWorld);
     detailParts.push({ mesh, sphere, field });
   }
-  // The open country's meshes, which a benchmark can hide to measure them.
-  const fieldMeshes = [...fieldGround];
+  // The open country's ground and grass, which a benchmark can hide to
+  // measure them: shown is true, false, or "ground" for the ground alone.
+  const fieldPatches = [];
   let fieldsShown = true;
+  const fieldShown = (mesh) =>
+    fieldsShown === true || (fieldsShown === "ground" && fieldGround.includes(mesh));
   for (const chunk of chunks.values())
     for (const mesh of chunk.meshes)
       if (DETAIL_NAMES.some((name) => mesh.name.startsWith(name))) addDetail(mesh);
@@ -1767,14 +1770,17 @@ export function createWorld(T, scene) {
       chunkOf(mesh).meshes.push(mesh);
       if (detail) addDetail(mesh, field);
       if (field) {
-        fieldMeshes.push(mesh);
-        mesh.visible &&= fieldsShown;
+        fieldPatches.push(mesh);
+        mesh.visible &&= fieldShown(mesh);
       }
     },
-    /** Shows or hides the open country (for measuring its cost). */
+    /**
+     * Shows or hides the open country (for measuring its cost): true, false,
+     * or "ground" to hide only its grass.
+     */
     showFields(shown) {
       fieldsShown = shown;
-      for (const mesh of fieldMeshes) mesh.visible = shown;
+      for (const mesh of [...fieldGround, ...fieldPatches]) mesh.visible = fieldShown(mesh);
     },
     /**
      * Hides small detail more than DETAIL_RANGE from (x, z), or shows it all
@@ -1783,7 +1789,7 @@ export function createWorld(T, scene) {
     setDetailFocus(x, z) {
       for (const { mesh, sphere, field } of detailParts)
         mesh.visible =
-          (fieldsShown || !field) &&
+          (!field || fieldShown(mesh)) &&
           (x === undefined ||
             Math.hypot(sphere.center.x - x, sphere.center.z - z) - sphere.radius <
               DETAIL_RANGE);

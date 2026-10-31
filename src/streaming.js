@@ -3,10 +3,14 @@
 // joins the scene only once its shaders have compiled, so streaming never
 // stalls a frame on a first draw. See docs/performance.md.
 //
+// Shaders compile for `target`, the render target the scene is drawn into
+// (the composer's), since the program for the screen differs in colour space
+// and tone mapping and would go unused.
+//
 // A job is { x, z, step(deadline) }. `step` works until performance.now()
 // passes `deadline`, then returns nothing to be called again next slice, or
 // the finished objects (an object, an array, or an empty array) when done.
-export function createStreamer(renderer, scene, { budget = 2.5 } = {}) {
+export function createStreamer(renderer, scene, { budget = 2.5, target = null } = {}) {
   const queue = [],
     parallel = renderer.extensions.has("KHR_parallel_shader_compile");
   let compiling = 0,
@@ -39,14 +43,21 @@ export function createStreamer(renderer, scene, { budget = 2.5 } = {}) {
     // Shared materials are usually compiled already, and resolve at once.
     // Without parallel compiling, compileAsync would block anyway (and warn),
     // so compile directly and join once this frame is drawn.
+    // compileAsync starts each compile before it returns, so the target only
+    // needs setting around the calls.
+    const previous = renderer.getRenderTarget();
+    renderer.setRenderTarget(target);
     if (!parallel) {
       for (const object of objects) renderer.compile(object, camera, scene);
+      renderer.setRenderTarget(previous);
       Promise.resolve().then(join);
       return;
     }
-    Promise.all(
-      objects.map((object) => renderer.compileAsync(object, camera, scene)),
-    ).then(join, join);
+    const ready = objects.map((object) =>
+      renderer.compileAsync(object, camera, scene),
+    );
+    renderer.setRenderTarget(previous);
+    Promise.all(ready).then(join, join);
   }
   return {
     add(...jobs) {

@@ -66,6 +66,13 @@ test("sun shadows fit the view in whole texels and keep eye-level detail", async
   // the old whole-village texel density, on a map of any size.
   await page.locator("#view-toggle").click();
   await expect.poll(async () => (await shadow(page)).mapSize).toBe(4096);
+  // The next frame fits the bounds after the map is resized.
+  await expect
+    .poll(async () => {
+      const { bounds, reference } = await shadow(page);
+      return Math.abs(extent({ bounds })[0] - reference[0]);
+    })
+    .toBeLessThan(1e-4);
   const eye = await shadow(page),
     [eyeWidth, eyeHeight] = extent(eye);
   expect(eyeWidth).toBeCloseTo(eye.reference[0], 4);
