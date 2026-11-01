@@ -230,9 +230,11 @@ Screenshots at device scale 2 with reduced motion compare the counter, the oven 
 
 `tests/streaming.spec.js` checks that the open country's 16 grass patches and the route grid stream in after startup into the map's chunks, that first person's fog closes before its 72 m far plane and the overview's fog returns on switching back, and that neither the streaming nor a walk from the green across two chunk borders into the fields at the zoom cap ever misses two display refreshes in a row (a gap of 45 ms or more between animation frames; a single missed refresh at 33 ms is load, not a stall). The first zoom-out after starting is left out of that timing: it has stalled for 50–70 ms once since before the map grew, also on `main`. The last test skips itself where the median frame takes over 20 ms, as with software WebGL in cloud containers.
 
-`tests/chunks.spec.js` checks that the village bakes into its nine chunks with each batch near its chunk, that grass, blossoms and shrubs split per chunk, that glowing materials are registered, that a chunk out of view and out of the sun's shadow pauses its animations and resumes when it returns, and that planted flowers from an old save get ids that survive a reload. `tests/world-layout.spec.js` checks that the map is four times the village's area with the village in the middle, that the walk box, camera clamp and shadow extent keep their margins at the new rim, that the region table names every village spot as the old label did and the rest as the open fields, that chunk seeds do not depend on build order, and that the terrain is flat.
+`tests/chunks.spec.js` checks that the village bakes into its nine chunks with each batch near its chunk, that grass, blossoms and shrubs split per chunk, that glowing materials are registered, that a chunk out of view and out of the sun's shadow pauses its animations and resumes when it returns, and that planted flowers from an old save get ids that survive a reload. `tests/world-layout.spec.js` checks that the map is four times the village's area with the village in the middle, that the walk box, camera clamp and shadow extent keep their margins at the new rim, that the region table names every village spot as the old label did and the rest as the open fields, that chunk seeds do not depend on build order, and that the terrain is flat in the village and rises only at the millpond and the orchard hill.
 
 `tests/millpond.spec.js` checks that the pond's banks always stand above its water's edge and fall back to the lawn at the edge of its ground, that the pond and its brook block walking except along the jetty and footbridge, that the pond's water body follows its shoreline, that a cast waits for a bite which a timely press lands, and that the millpond streams in with its two water bodies and grids, routes from the village green to the jetty's end, and casts a line there.
+
+`tests/orchard.spec.js` checks that the orchard hill meets the lawn at the edge of its ground, before the village and the millpond, with no slope steeper than about 35°; that its path runs from the village's edge to the windmill's door clear of every tree, hive and bench, with each tree reachable; that the hill streams in, routes from the village green to the bench, carries the player on its slope, and that shaking a tree and opening a hive fill the basket and survive a reload; and that in first person trees beyond 40 m draw crowns that cast shadows while nearer ones keep their leaves, and the overview gives every tree its leaves back.
 
 `tests/routing.spec.js` checks that a click on the far bank of the brook routes over the bridge and walks there, that clicks in the water or off the map return no route, that the open country and the once-sealed pocket south of the mill route, and that the lanterns keep a fixed pool of point lights with no new shader programs at dusk.
 
@@ -240,6 +242,28 @@ These tests assert rendering work and behavior instead of a machine-dependent FP
 ## Change history
 
 Per-change measurements, each against the previous `main` (`1a2624c`) at the time, in the order the changes landed. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the current combined baseline.
+
+### Orchard hill (2026-11-01)
+
+Phase 4 of the map expansion. A hill about 3.6 m high rises north-west of the village (`src/regions/orchard-layout.js`: its height, path, trees, hives, colliders and grass mask load with the village); its slopes reach the lawn again before the village, the millpond's ground and the map's rim. A path climbs from the cottage lane to a stone windmill on the summit, past a bench that looks back over the village. Ten apple and six pear trees stand on the south and east slopes, three beehives on the west. Everything streams in after the village from `src/regions/orchard.js` (six jobs: the hill's ground, each kind's trees, the windmill with hives and bench, the bees, the clover and wildflowers).
+
+- **Draws.** The hill's ground is one 11,000-triangle mesh that tints the open country's grass texture, warmer up the slope and turned toward or away from the sun so its shape reads from above. Each kind of tree is five meshes: bark, the shade inside the crowns (castShadow off), leaves (one instanced mesh in the village's blade, about 9,200 apple and 4,800 pear leaves), the distant crowns (first person only) and fruit. The windmill, hives, bench and gateposts share one vertex-coloured mesh; the sails, bees and flowers are one draw each.
+- **Wind on the hill.** The village's wind shader counts each leaf's shelter from y = 0, which on the hill would let every leaf sway fully. Orchard leaves use `trees.materials.grounded()`, the same shader with a per-instance `groundLift`; the same uniform lets a shaken tree's leaves tremble. These are the orchard's only new programs (leaf and leaf depth).
+- **Distant crowns.** In first person, any tree, village or orchard, whose canopy centre is more than 40 m away draws its crown shells instead of leaves (see [Work reduction](#work-reduction-in-the-current-build)). From the bench looking over the village, that takes draws below `main`'s at the same spot despite the orchard in view.
+- **Shadows.** The overview's shadow ceiling now counts only the ground under the view, so the hill does not coarsen shadows elsewhere; the reference box keeps the flat village's 9.5 m ceiling, and first person's box rises with the ground under the eye. Chunk bounds include their tallest ground.
+- **Camera.** The overview's target rises with the ground under the player, so the player stays framed on the hill.
+
+Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high quality, `?resolution=fixed`, against `main` (`46d7f90`):
+
+| View | `main` draws / triangles | Orchard draws / triangles |
+| --- | --- | --- |
+| Village overview at spawn, height 18 | 739 / 2.52M | 728 / 2.50M |
+| First person at spawn, facing the hill | 724 / 2.24M | 754 / 2.46M |
+| Orchard overview by the bench (−21, −27.6), height 18 | 392 / 1.77M (empty field) | 349 / 2.00M |
+| Orchard overview, height 30 | | 568 / 2.11M |
+| First person by the bench, facing the village | 1,217 / 2.61M | 1,189 / 2.91M |
+
+`tests/performance.spec.js` holds the benchmark's orchard viewpoint (by the bench, height 18) under 1,000 draws and 2.5M triangles, as for the millpond. `npm run benchmark` measures it as "high, orchard" and "high, orchard, first person"; `--ablate` adds the orchard at height 30.
 
 ### Millpond (2026-11-01)
 
