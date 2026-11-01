@@ -43,10 +43,17 @@ const renderer = new THREE.WebGLRenderer({
 // count. Each quality caps the pixel ratio; the scaler below lowers it while
 // frames run long. See docs/performance.md.
 const QUALITY_PIXEL_RATIO = { high: 1.25, balanced: 1.25, performance: 1 };
-// Retina laptops and large monitors start on balanced; 1x screens up to about
-// 1920 × 1200, and small windows on dense screens, start on high.
-const startQuality =
-  innerWidth < 760 || innerWidth * innerHeight * devicePixelRatio ** 2 > 2.6e6
+// Multisampling costs tablets about a fifth of their frame; performance
+// skips it.
+const QUALITY_SAMPLES = { high: 4, balanced: 4, performance: 0 };
+// Touch-only devices (phones and tablets) start on performance: an A16 iPad
+// drew the village at 29 FPS on balanced, and at 11 FPS once it had warmed
+// up. Retina laptops and large monitors start on balanced; 1x screens up to
+// about 1920 × 1200, and small windows on dense screens, start on high.
+const touchOnly = matchMedia("(hover: none) and (pointer: coarse)").matches;
+const startQuality = touchOnly
+  ? "performance"
+  : innerWidth < 760 || innerWidth * innerHeight * devicePixelRatio ** 2 > 2.6e6
     ? "balanced"
     : "high";
 // Benchmark overrides for attributing render cost (window.__willowmere.tune);
@@ -75,6 +82,10 @@ const resolution = {
   lastUp: -Infinity,
   // Mean interval when the current run of step downs began.
   descentFrom: 0,
+  // Whether frames are held to every other refresh: set once even the floor
+  // cannot keep up with every refresh, so frames at least arrive evenly.
+  halfRate: false,
+  triedFullRate: false,
   // The village's ratio while the bakery is open.
   outdoor: 0,
 };
@@ -86,6 +97,8 @@ function applyPixelRatio(ratio) {
 }
 function resetResolution(quality) {
   Object.assign(resolution, {
+    halfRate: false,
+    triedFullRate: false,
     ceiling: Math.min(devicePixelRatio, QUALITY_PIXEL_RATIO[quality]),
     goodWindows: 0,
     upWindows: 5,
@@ -121,15 +134,30 @@ function updateResolution(now, interval) {
   r.mean = r.samples.reduce((a, b) => a + b, 0) / r.samples.length;
   r.samples.length = 0;
   r.windowStart = now;
-  const slow = r.p95 > 20;
+  // At half rate a frame has two refreshes, 33 ms at 60 Hz.
+  const refreshes = r.halfRate ? 2 : 1,
+    slow = r.p95 > 20 * refreshes;
   if (!slow) r.descentFrom = 0;
   if (slow) {
     r.goodWindows = 0;
     // Slow again soon after stepping up: wait longer before the next try.
     if (now - r.lastUp < 10000) r.upWindows = Math.min(r.upWindows * 2, 60);
-    if (r.pixelRatio > Math.min(r.floor, r.ceiling)) {
+    if (r.triedFullRate && now - r.lastUp < 10000) {
+      // Every refresh was still too much: back to every other one.
+      r.halfRate = true;
+      r.triedFullRate = false;
+    } else if (r.pixelRatio > Math.min(r.floor, r.ceiling)) {
       r.descentFrom ||= r.mean;
       stepResolution(-1);
+    } else if (!r.halfRate) {
+      // Even the floor cannot keep up with every refresh. Uneven frames read
+      // as stutter, so hold every other one instead, and start again from
+      // full detail, which may fit in two refreshes.
+      r.halfRate = true;
+      r.descentFrom = 0;
+      r.holdUntil = now + 2000;
+      applyPixelRatio(r.ceiling);
+      resize();
     } else if (r.descentFrom && r.mean > r.descentFrom * 0.95) {
       // Even the floor did not shorten frames, so something else sets the
       // pace (a 30 Hz cap or a busy CPU). Restore detail and retry later.
@@ -141,11 +169,20 @@ function updateResolution(now, interval) {
       applyPixelRatio(r.ceiling);
       resize();
     }
-  } else if (r.p95 < 18) {
-    if (++r.goodWindows >= r.upWindows && r.pixelRatio < r.ceiling) {
+  } else if (r.p95 < 18 * refreshes) {
+    if (++r.goodWindows >= r.upWindows) {
       r.goodWindows = 0;
-      r.lastUp = now;
-      stepResolution(1);
+      r.triedFullRate = false;
+      if (r.pixelRatio < r.ceiling) {
+        r.lastUp = now;
+        stepResolution(1);
+      } else if (r.halfRate) {
+        // Full detail fits two refreshes; try every refresh again.
+        r.lastUp = now;
+        r.halfRate = false;
+        r.triedFullRate = true;
+        r.samples.length = 0;
+      }
     }
   } else r.goodWindows = 0;
 }
@@ -466,6 +503,7 @@ if (new URLSearchParams(location.search).has("hud"))
     hud = createHud(() => ({
       quality: $("#quality").value,
       ratio: resolution.pixelRatio,
+      rate: resolution.halfRate ? "half" : "full",
       view: firstPerson ? "first person" : `height ${Math.round(viewHeight)}`,
       region: regionAt(life.player.position.x, life.player.position.z).name,
       shadow: `${shadowStep.join("/")} of ${sun.shadow.mapSize.x}`,
@@ -994,6 +1032,7 @@ $("#quality").onchange = (e) => {
   resetResolution(q);
   updateShadowMapSize();
   bloom.enabled = overrides.bloom ?? q !== "performance";
+  setSamples(overrides.samples ?? QUALITY_SAMPLES[q]);
   resize();
 };
 $("#day-select").onchange = (e) => {
@@ -1679,6 +1718,9 @@ const screenRight = new THREE.Vector2(
   frustumMatrix = new THREE.Matrix4();
 function animate(now) {
   requestAnimationFrame(animate);
+  // At half rate, skip every other refresh (with slack for timer jitter).
+  if (resolution.halfRate && !interior?.active && now - last < 1000 / 30 - 5)
+    return;
   const frameStart = performance.now();
   const interval = now - last;
   const dt = Math.min(interval / 1000, 0.045);
@@ -1898,6 +1940,14 @@ function animate(now) {
 }
 updateUI();
 requestAnimationFrame(animate);
+// Multisampling of the composer's two targets.
+function setSamples(samples) {
+  for (const target of [composer.renderTarget1, composer.renderTarget2])
+    if (target.samples !== samples) {
+      target.samples = samples;
+      target.dispose();
+    }
+}
 // Applies the benchmark overrides, or the defaults for anything not overridden.
 function applyTune() {
   const q = $("#quality").value;
@@ -1905,12 +1955,7 @@ function applyTune() {
   if (!shadowUpdate && sun.shadow.autoUpdate) sun.shadow.needsUpdate = true;
   sun.shadow.autoUpdate = shadowUpdate;
   bloom.enabled = overrides.bloom ?? q !== "performance";
-  const samples = overrides.samples ?? 4;
-  for (const target of [composer.renderTarget1, composer.renderTarget2])
-    if (target.samples !== samples) {
-      target.samples = samples;
-      target.dispose();
-    }
+  setSamples(overrides.samples ?? QUALITY_SAMPLES[q]);
   const foliage = overrides.foliage ?? true;
   for (const mesh of world.trees.foliage) mesh.visible = foliage;
   world.bushes.group.visible = foliage;
@@ -2009,6 +2054,7 @@ window.__willowmere = {
       p95: resolution.p95,
       mean: resolution.mean,
       upWindows: resolution.upWindows,
+      halfRate: resolution.halfRate,
       drawingBuffer: [canvas.width, canvas.height],
     },
     shadow: {

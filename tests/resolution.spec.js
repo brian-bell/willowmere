@@ -80,6 +80,69 @@ test.describe("dense screens", () => {
   });
 });
 
+test.describe("a device that cannot keep up at any resolution", () => {
+  test.use({ deviceScaleFactor: 2 });
+
+  test("holds every other refresh at full detail instead", async ({ page }) => {
+    test.setTimeout(240000);
+    // Every frame reports 33 ms, whatever the pixel ratio: the floor does
+    // not help, so frames should be held to every other refresh, where 33 ms
+    // fits, at the quality's full ratio.
+    await page.addInitScript(() => {
+      const requestFrame = window.requestAnimationFrame;
+      let now, lastReal;
+      window.requestAnimationFrame = (callback) =>
+        requestFrame.call(window, (real) => {
+          if (real !== lastReal) {
+            lastReal = real;
+            now = window.__willowmere ? (now ?? real) + 33.4 : real;
+          }
+          callback(now);
+        });
+    });
+    await page.goto("/");
+    await page.waitForFunction(
+      () => window.__willowmere?.getDiagnostics().resolution.halfRate,
+      null,
+      { timeout: 200000 },
+    );
+    expect(await resolution(page)).toMatchObject({
+      quality: "balanced",
+      halfRate: true,
+      pixelRatio: 1.25,
+    });
+    // Changing quality starts again at every refresh.
+    await page.locator("#settings").click();
+    await page.locator("#quality").selectOption("high");
+    await page.locator("#settings-dialog .close-modal").click();
+    expect(await resolution(page)).toMatchObject({ halfRate: false });
+  });
+});
+
+test.describe("touch-only devices", () => {
+  test.use({
+    hasTouch: true,
+    isMobile: true,
+    viewport: { width: 820, height: 1048 },
+    deviceScaleFactor: 2,
+  });
+
+  test("start on performance without multisampling", async ({ page }) => {
+    await page.goto("/?resolution=fixed");
+    await page.waitForFunction(() => window.__willowmere?.getWater().frame > 3);
+    const state = await page.evaluate(() => ({
+      quality: document.querySelector("#quality").value,
+      render: window.__willowmere.getDiagnostics().render,
+    }));
+    expect(state.quality).toBe("performance");
+    expect(state.render).toMatchObject({
+      pixelRatio: 1,
+      samples: 0,
+      bloom: false,
+    });
+  });
+});
+
 test("1x screens start on high at native resolution", async ({ page }) => {
   await page.goto("/?resolution=fixed");
   await page.waitForFunction(() => window.__willowmere?.getWater().frame > 3);

@@ -100,9 +100,10 @@ Each item names the mechanism in the code that a new change has to work with.
 The outdoor view submits the scene about three times per frame: shadows, a water reflection at a limited interval, and the multisampled main pass plus bloom. The main pass also supplies water refraction. Most passes fill the full drawing buffer, so frame time follows pixel count more than JavaScript work, which takes 4–5 ms per frame.
 
 - **Pixel ratio caps.** High and balanced render at `min(devicePixelRatio, 1.25)`; performance renders at `min(devicePixelRatio, 1)`. High previously used 1.75, which gives a 2800 × 1750 buffer on a 1600 × 1000 retina window. The caps are defined in `QUALITY_PIXEL_RATIO` in `src/main.js`. The bakery renders at its quality's cap; see [Bakery interior](#bakery-interior).
-- **Starting quality.** Screens narrower than 760 CSS pixels, or with more than 2.6 million native pixels (`innerWidth × innerHeight × devicePixelRatio²`), start on balanced. Other screens start on high. Under this rule, retina laptops and 1440p monitors start on balanced. 1x screens up to about 1920 × 1200, and small windows on dense screens, start on high. Changing the setting overrides the default for the session.
-- **Dynamic resolution.** `updateResolution` collects outdoor frame intervals in one-second windows. It starts 3 seconds after load and skips the bakery and hidden tabs. A window whose p95 exceeds 20 ms lowers the pixel ratio by 0.125, down to 0.75. Five consecutive windows with a p95 under 18 ms raise it by one step, up to the chosen quality's cap. When a window is slow within 10 seconds of a step up, the required run doubles, up to 60 windows. A single step down is not judged, because vsync can keep frames at 33 ms until the GPU fits within one refresh. If the mean frame time is no better once the floor is reached, the scaler concludes that something other than fill rate sets the pace (for example a 30 Hz cap or a busy CPU). It restores the cap and pauses for 30 seconds, doubling the pause on each later failed descent up to 5 minutes. Changing quality resets the ratio to the new cap.
-- **Opting out.** Add `?resolution=fixed` to the URL, or call `window.__willowmere.setAdaptiveResolution(false)`, to keep each quality at its cap. `npm run benchmark` uses the query parameter. `getDiagnostics().resolution` reports `adaptive`, `pixelRatio`, `ceiling`, `floor`, the last window's `p95` and `mean`, `upWindows`, and `drawingBuffer`.
+- **Multisampling.** High and balanced draw the main pass with 4× MSAA; performance draws it without (`QUALITY_SAMPLES`), which saved 18% of the frame on an A16 iPad.
+- **Starting quality.** Touch-only devices (`(hover: none) and (pointer: coarse)`: phones and tablets without a mouse or trackpad) start on performance; see [Tablets](#tablets-2026-11-01). Otherwise, screens narrower than 760 CSS pixels, or with more than 2.6 million native pixels (`innerWidth × innerHeight × devicePixelRatio²`), start on balanced. Other screens start on high. Under this rule, retina laptops and 1440p monitors start on balanced. 1x screens up to about 1920 × 1200, and small windows on dense screens, start on high. Changing the setting overrides the default for the session.
+- **Dynamic resolution.** `updateResolution` collects outdoor frame intervals in one-second windows. It starts 3 seconds after load and skips the bakery and hidden tabs. A window whose p95 exceeds 20 ms lowers the pixel ratio by 0.125, down to 0.75. Five consecutive windows with a p95 under 18 ms raise it by one step, up to the chosen quality's cap. When a window is slow within 10 seconds of a step up, the required run doubles, up to 60 windows. A single step down is not judged, because vsync can keep frames at 33 ms until the GPU fits within one refresh. If the mean frame time is no better once the floor is reached, the scaler concludes that something other than fill rate sets the pace (for example a 30 Hz cap or a busy CPU). The first time the floor is still slow, the scaler switches to half rate instead: `animate` draws every other display refresh (30 FPS at 60 Hz), which keeps frames evenly spaced, and the scaler returns to the cap and judges windows against twice the thresholds (40 and 36 ms). After the usual run of good windows at the cap it tries every refresh again, and returns to half rate if the next window within 10 seconds is slow. Once at half rate, a floor that is still slow means something other than fill rate sets the pace (for example a 30 Hz cap or a busy CPU). The scaler then restores the cap and pauses for 30 seconds, doubling the pause on each later failed descent up to 5 minutes. Changing quality resets the ratio to the new cap and returns to every refresh.
+- **Opting out.** Add `?resolution=fixed` to the URL, or call `window.__willowmere.setAdaptiveResolution(false)`, to keep each quality at its cap. `npm run benchmark` uses the query parameter. `getDiagnostics().resolution` reports `adaptive`, `pixelRatio`, `ceiling`, `floor`, the last window's `p95` and `mean`, `upWindows`, `halfRate`, and `drawingBuffer`.
 
 ## Outdoor shadows
 
@@ -256,6 +257,24 @@ Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high
 | Pond overview, height 30 | 669 | 1.85M |
 
 `tests/performance.spec.js` holds the benchmark's millpond viewpoint (the south bank at (8.6, −25.8), height 18) under 1,000 draws and 2.5M triangles, tighter than the village's 1,600. `npm run benchmark` measures it as "high, millpond"; `--ablate` adds the pond at height 30 and with water skipped.
+
+### Tablets (2026-11-01)
+
+Measured with `?hud` on an A16 iPad (Chrome for iOS, 820 × 1048 CSS pixels at device pixel ratio 2, balanced, `?resolution=fixed` at 1.25, the default view of the village green). The village drew at 29 FPS (34 ms frames, 8 ms script) for the first 25–30 seconds, then the iPad slowed itself, presumably from heat, to about 11 FPS (90 ms frames, 18 ms script) with the same draws and triangles, and stayed there. The build before the map grew does the same, so the slowdown is not the larger map's. Each cost switched off on its own, measured against the slowed state with the game as played measured either side (the overlay's Run test):
+
+| Switched off | Frame median | Change |
+| --- | --- | --- |
+| Pixel ratio 1.25 → 0.75 | 66 ms | −26% |
+| Tree leaves and shrubs | 72 ms | about −19% |
+| MSAA | 74 ms | −18% |
+| Pixel ratio 1.25 → 1 | 78 ms | −13% |
+| Water | 79 ms | −11% |
+| Shadow map updates | 83 ms | −8% |
+| Bloom | 89 ms | −2% |
+| Open country | 90 ms | 0% |
+| Coarse leaves, no water, bloom or MSAA, ratio 1 | 51 ms | −43% |
+
+So touch-only devices now start on performance, which renders at ratio 1 without MSAA or bloom, with the coarsest water and a 1024 shadow map, and the scaler holds an even 30 FPS where a device cannot keep up with every refresh.
 
 ### Streaming and distance limits (2026-10-31)
 
