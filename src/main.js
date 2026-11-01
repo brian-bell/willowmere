@@ -681,12 +681,15 @@ $$(".tool").forEach(
 const keys = new Set(),
   velocity = new THREE.Vector2(),
   clickPath = [];
+// A neighbor, flower or landmark the player tapped: walk over, then interact on arrival.
+let pendingInteraction = null;
 function releaseLook() {
   if (dragging && canvas.hasPointerCapture(dragging.id))
     canvas.releasePointerCapture(dragging.id);
   dragging = null;
   if (document.pointerLockElement === canvas) document.exitPointerLock();
 }
+const coarsePointer = matchMedia("(pointer: coarse)");
 function updateViewUI() {
   $("#game").classList.toggle("first-person", firstPerson);
   $("#view-toggle").setAttribute("aria-pressed", String(firstPerson));
@@ -695,9 +698,6 @@ function updateViewUI() {
     : "First person <kbd>V</kbd>";
   $("#free-look").hidden = !firstPerson;
   $("#view-help").hidden = !firstPerson;
-  $("#photo-hint span").textContent = firstPerson
-    ? "Drag to look · V to switch views · Press P or Esc to return"
-    : "Scroll to frame · Press P or Esc to return";
   canvas.setAttribute(
     "aria-label",
     firstPerson
@@ -715,6 +715,7 @@ function setFirstPerson(value) {
     yaw = life.player.rotation.y + Math.PI;
     pitch = -0.08;
   }
+  pendingInteraction = null;
   firstPerson = value;
   Object.assign(scene.fog, firstPerson ? FOG.firstPerson : FOG.overview);
   updateShadowMapSize();
@@ -882,6 +883,11 @@ function setPhoto(value) {
   photo = value;
   $("#game").classList.toggle("photo-mode", photo);
   $("#photo-hint").hidden = !photo;
+  $("#photo-hint span").textContent = coarsePointer.matches
+    ? "Tap anywhere to return"
+    : firstPerson
+      ? "Drag to look · V to switch views · Press P or Esc to return"
+      : "Scroll to frame · Press P or Esc to return";
   if (photo) {
     begin();
     $("#photo-hint").hidden = false;
@@ -1156,6 +1162,7 @@ window.addEventListener("keydown", (e) => {
   ) {
     begin();
     clickPath.length = 0;
+    pendingInteraction = null;
   }
 });
 window.addEventListener("keyup", (e) => {
@@ -1182,6 +1189,7 @@ $$("[data-key]").forEach((b) => {
     b.setPointerCapture(e.pointerId);
     keys.add(b.dataset.key.toLowerCase());
     clickPath.length = 0;
+    pendingInteraction = null;
     begin();
   });
   const release = () => keys.delete(b.dataset.key.toLowerCase());
@@ -1189,7 +1197,22 @@ $$("[data-key]").forEach((b) => {
   b.addEventListener("pointercancel", release);
   b.addEventListener("lostpointercapture", release);
 });
-$("#touch-interact").onclick = interact;
+$("#interaction").onclick = interact;
+// On phones the quest card folds down to its title row; a tap opens the list.
+const phoneLayout = matchMedia("(max-width: 760px), (max-height: 500px)");
+function updateQuestToggle() {
+  $(".quest-toggle").setAttribute(
+    "aria-expanded",
+    String(!phoneLayout.matches || $("#game").classList.contains("quest-open")),
+  );
+}
+$(".quest-toggle").onclick = () => {
+  if (!phoneLayout.matches) return;
+  $("#game").classList.toggle("quest-open");
+  updateQuestToggle();
+};
+phoneLayout.addEventListener("change", updateQuestToggle);
+updateQuestToggle();
 // A grid search gives point-and-click movement a route around cottages and across the bridge.
 // Colliders never move, so each cell's walkability is sampled once, on the first click.
 const ROUTE_STEP = 0.65,
@@ -1357,9 +1380,41 @@ const destination = new THREE.Mesh(
 destination.rotation.x = -Math.PI / 2;
 destination.visible = false;
 scene.add(destination);
+// Taps are generous on touch screens: anything drawn within reach of the finger counts.
+const pickPoint = new THREE.Vector3();
+function pickInteractable(x, y, rect, touch) {
+  const targets = [];
+  for (const n of life.npcs) {
+    const at = n.group?.position ?? n;
+    targets.push({ kind: "npc", key: n, x: at.x, z: at.z, lift: 0.8, reach: 44 });
+  }
+  for (const [id, g] of flowerGroups)
+    targets.push({ kind: "flower", key: id, x: g.position.x, z: g.position.z, lift: 0.2, reach: 34 });
+  for (const i of world.interactables || [])
+    targets.push({ kind: "world", key: i, x: i.x, z: i.z, lift: 1, reach: 48 });
+  let best = null,
+    bestScore = 1;
+  for (const t of targets) {
+    pickPoint.set(t.x, world.terrainHeight(t.x, t.z) + t.lift, t.z).project(camera);
+    if (Math.abs(pickPoint.z) > 1) continue;
+    const sx = ((pickPoint.x + 1) / 2) * rect.width,
+      sy = ((1 - pickPoint.y) / 2) * rect.height,
+      score = Math.hypot(sx - x, sy - y) / (touch ? t.reach : t.reach * 0.55);
+    if (score < bestScore) {
+      bestScore = score;
+      best = t;
+    }
+  }
+  return best;
+}
 canvas.addEventListener("pointerdown", (e) => {
   if (interior?.active || interiorLoading) return;
   if (e.button !== 0 || dialogue || modalOpen()) return;
+  // Touch screens have no P or Escape key, so a tap ends photo mode.
+  if (photo && e.pointerType !== "mouse") {
+    setPhoto(false);
+    return;
+  }
   begin();
   if (firstPerson) {
     if (document.pointerLockElement === canvas) interact();
@@ -1375,6 +1430,27 @@ canvas.addEventListener("pointerdown", (e) => {
     (-(e.clientY - r.top) / r.height) * 2 + 1,
   );
   raycaster.setFromCamera(mouse, camera);
+  pendingInteraction =
+    tool === "seeds" || tool === "water"
+      ? null
+      : pickInteractable(e.clientX - r.left, e.clientY - r.top, r, e.pointerType !== "mouse");
+  if (pendingInteraction) {
+    const { x, z } = pendingInteraction,
+      p = life.player.position;
+    // Someone standing behind a counter is reached from the nearest open side.
+    const sides = Array.from({ length: 8 }, (_, i) => ({
+      x: x + Math.cos((i * Math.PI) / 4) * 1.2,
+      z: z + Math.sin((i * Math.PI) / 4) * 1.2,
+    }))
+      .filter((g) => !blocked(g.x, g.z, 0.3))
+      .sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z));
+    let route = [];
+    for (const goal of [{ x, z }, ...sides]) if ((route = findPath(p, goal)).length) break;
+    clickPath.splice(0, clickPath.length, ...route);
+    destination.position.set(x, world.terrainHeight(x, z) + 0.03, z);
+    scanNearby();
+    return;
+  }
   if (pickGround(raycaster.ray, hit)) {
     const route = findPath(life.player.position, { x: hit.x, z: hit.z });
     clickPath.splice(0, clickPath.length, ...route);
@@ -1457,6 +1533,20 @@ function scanNearby() {
       });
   }
   candidates.sort((a, b) => a.d - b.d);
+  if (pendingInteraction) {
+    const target = pendingInteraction,
+      reached = candidates.find(
+        (c) => c.kind === target.kind && (c.kind === "flower" ? c.id : c.data) === target.key,
+      );
+    if (reached) {
+      pendingInteraction = null;
+      clickPath.length = 0;
+      nearest = reached;
+      interact();
+      return;
+    }
+    if (!clickPath.length) pendingInteraction = null;
+  }
   nearest = candidates[0] || null;
   const label =
     tool === "seeds"
