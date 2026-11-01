@@ -2037,8 +2037,10 @@ window.__willowmere = {
   },
   blocked,
   findPath,
+  // The pixel where a click lands on (x, z): clicks meet bridge decks and water.
   project: (x, z) => {
-    const v = new THREE.Vector3(x, 0.1, z).project(camera);
+    const y = world.surfaceHeight(x, z),
+      v = new THREE.Vector3(x, y, z).project(camera);
     return {
       x: (v.x * 0.5 + 0.5) * innerWidth,
       y: (-v.y * 0.5 + 0.5) * innerHeight,
