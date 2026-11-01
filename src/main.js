@@ -457,6 +457,23 @@ composer.addPass(new BloomOutputPass(bloom));
 renderer.info.autoReset = false;
 // Everything beyond the village streams in after the first outdoor frames.
 const streamer = createStreamer(renderer, scene, { target: sceneTarget });
+// ?hud shows frame times and logs stalls with what changed (src/hud.js).
+let hud = null;
+if (new URLSearchParams(location.search).has("hud"))
+  import("./hud.js").then(({ createHud }) => {
+    hud = createHud(() => ({
+      quality: $("#quality").value,
+      ratio: resolution.pixelRatio,
+      view: firstPerson ? "first person" : `height ${Math.round(viewHeight)}`,
+      region: regionAt(life.player.position.x, life.player.position.z).name,
+      shadow: `${shadowStep.join("/")} of ${sun.shadow.mapSize.x}`,
+      programs: renderer.info.programs.length,
+      geometries: renderer.info.memory.geometries,
+      textures: renderer.info.memory.textures,
+      streamed: streamer.finished,
+      walking: clickPath.length > 0 ? "yes" : "no",
+    }));
+  });
 let openCountryRequested = false;
 // Lit windows and lamp glass brighten at blue hour. Each chunk lists its own.
 const glowMaterials = new Set();
@@ -1488,6 +1505,7 @@ const screenRight = new THREE.Vector2(
   frustumMatrix = new THREE.Matrix4();
 function animate(now) {
   requestAnimationFrame(animate);
+  const frameStart = performance.now();
   const interval = now - last;
   const dt = Math.min(interval / 1000, 0.045);
   last = now;
@@ -1687,6 +1705,7 @@ function animate(now) {
       streamer.add(...outskirtsJobs(THREE, world)),
     );
   }
+  hud?.frame(now, performance.now() - frameStart);
 }
 updateUI();
 requestAnimationFrame(animate);
