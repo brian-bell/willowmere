@@ -1179,8 +1179,8 @@ input[type="checkbox"] {
    the village visible; tilt, yaw and pan open in a panel beside it. */
 @media (max-width: 760px), (max-height: 500px) {
   .view-controls {
-    top: 120px;
-    right: 12px;
+    top: 56px;
+    right: 10px;
     transform: none;
     width: 48px;
     flex-direction: column;
@@ -1277,18 +1277,13 @@ input[type="checkbox"] {
     grid-column: 1 / -1;
   }
 }
-/* Short landscape screens: the rail runs across the right side just above
-   the walking pad, and the panel opens upward from it. */
+/* Short landscape screens: the rail runs across the right side under the
+   top buttons, and the panel opens downward from it. */
 @media (max-height: 500px) and (orientation: landscape) {
   .view-controls,
   .first-person .view-controls {
-    top: auto;
-    bottom: 130px;
     width: auto;
     flex-direction: row;
-  }
-  .first-person .view-controls {
-    bottom: 166px;
   }
   .camera-mode-controls,
   .zoom-controls {
@@ -1304,8 +1299,7 @@ input[type="checkbox"] {
     white-space: nowrap;
   }
   .camera-extra {
-    top: auto;
-    bottom: calc(100% + 6px);
+    top: calc(100% + 6px);
     right: 0;
     width: auto;
     flex-direction: row;
@@ -1336,6 +1330,299 @@ input[type="checkbox"] {
 @media (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
   #touch-controls,
   .first-person #touch-controls {
-    bottom: 12px;
+    right: 10px;
+    bottom: 10px;
+  }
+}
+
+/* The interaction prompt doubles as the button that acts on it. */
+#interaction {
+  display: flex;
+  align-items: center;
+  border: 0;
+  cursor: pointer;
+}
+#interaction[hidden] {
+  display: none;
+}
+#interaction:hover {
+  transform: translateX(-50%) translateY(-2px);
+}
+#interaction:active {
+  transform: translateX(-50%);
+}
+.quest-toggle {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: default;
+}
+.quest-toggle:hover {
+  transform: none;
+}
+.quest-chevron {
+  display: none;
+}
+#game {
+  -webkit-tap-highlight-color: transparent;
+}
+#game button:not([data-key]) {
+  touch-action: manipulation;
+}
+#scene {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* Hover lifts stick after a tap on touch screens. */
+@media (hover: none) {
+  button:hover,
+  .view-controls button:hover:not(:disabled) {
+    transform: none;
+  }
+  #interaction:hover {
+    transform: translateX(-50%);
+  }
+}
+/* A conversation sits above every control, so its button is always reachable. */
+.dialogue {
+  z-index: 5;
+}
+#game:has(#dialogue:not([hidden])) #touch-controls {
+  display: none;
+}
+
+/* Phones: one row of round buttons along the top, the quest folded into a
+   pill, tools along the bottom, and the middle left open for the village. */
+@media (max-width: 760px), (max-height: 500px) {
+  #location,
+  .bottom-right,
+  .playing .wordmark,
+  #game:not(.playing) :is(.bottom-left, .quest-card) {
+    display: none;
+  }
+  .topbar {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+  }
+  .top-actions {
+    gap: 6px;
+    margin-left: auto;
+  }
+  .icon-button {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+  .sound-slash {
+    left: 6px;
+    top: 17px;
+  }
+  .bottom-left {
+    top: 10px;
+    right: calc(10px + 2 * 36px + 2 * 6px);
+    bottom: auto;
+    left: auto;
+    gap: 6px;
+  }
+  .bottom-left .soft-button {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    border-color: #fff4d966;
+    background: #f6eedbd9;
+    box-shadow: 0 4px 20px #243c3417;
+  }
+  .bottom-left .soft-button > span {
+    margin: 0;
+    font-size: 17px;
+  }
+  .soft-label,
+  .bottom-left kbd {
+    display: none;
+  }
+  .playing .day-card {
+    left: 0;
+    top: 0;
+    transform: none;
+    gap: 8px;
+    padding: 6px 13px 6px 10px;
+  }
+  .playing .day-card > span {
+    font-size: 19px;
+  }
+  .playing .day-card b {
+    font-size: 10px;
+    margin-bottom: 1px;
+  }
+  .playing .day-card div > span {
+    font-size: 8px;
+  }
+  .playing .day-card i {
+    padding: 0 3px;
+  }
+  #game .quest-card {
+    top: 56px;
+    left: 10px;
+    width: auto;
+    padding: 0;
+    border-radius: 18px;
+  }
+  .quest-open .quest-card {
+    max-height: calc(100dvh - 140px);
+    overflow-y: auto;
+  }
+  #game .quest-toggle {
+    min-height: 38px;
+    padding: 0 12px 0 10px;
+    gap: 6px;
+    font-size: 7px;
+    letter-spacing: 1px;
+    cursor: pointer;
+  }
+  .quest-toggle .tiny-spark {
+    font-size: 16px;
+  }
+  .quest-toggle #quest-count {
+    margin-left: 4px;
+    opacity: 0.6;
+  }
+  .quest-chevron {
+    display: inline;
+    font-size: 10px;
+    opacity: 0.6;
+    transition: transform 0.2s;
+  }
+  .quest-open .quest-chevron {
+    transform: rotate(180deg);
+  }
+  #quest-body {
+    display: none;
+    width: 200px;
+    padding: 0 14px 14px;
+  }
+  .quest-open #quest-body {
+    display: block;
+  }
+  #game .quest-card h2 {
+    margin: 2px 0 10px;
+    font-size: 17px;
+  }
+  #game .quest-card li {
+    font-size: 11px;
+  }
+  .toolbar {
+    bottom: 10px;
+    gap: 3px;
+    padding: 4px;
+    border-radius: 12px;
+  }
+  .tool {
+    width: 46px;
+    height: 48px;
+  }
+  .tool-art {
+    font-size: 20px;
+    line-height: 22px;
+  }
+  .tool-art svg {
+    width: 22px;
+    height: 22px;
+  }
+  .tool b {
+    bottom: 15px;
+  }
+  .coins {
+    font-size: 11px;
+    padding: 0 6px 0 2px;
+  }
+  .toolbar-separator {
+    height: 30px;
+    margin: 0 3px;
+  }
+  #interaction {
+    bottom: 72px;
+    min-height: 40px;
+    padding: 6px 16px 6px 6px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+  .dialogue {
+    bottom: 10px;
+    width: min(650px, calc(100vw - 20px));
+  }
+  #toast {
+    top: 100px;
+  }
+}
+/* Narrow phones: the date card drops its sun so it clears the buttons. */
+@media (max-width: 400px) and (orientation: portrait) {
+  .playing .day-card > span {
+    display: none;
+  }
+  .playing .day-card {
+    padding: 6px 12px;
+  }
+  .top-actions,
+  .bottom-left {
+    gap: 4px;
+  }
+  .bottom-left {
+    right: calc(10px + 2 * 36px + 2 * 4px);
+  }
+}
+/* Touch screens tap the world to walk and to interact, so the walking pad
+   only appears in first person, where a drag looks around instead. */
+@media (pointer: coarse) {
+  #game:not(.first-person) #touch-controls,
+  #view-help,
+  .slot {
+    display: none;
+  }
+  #interaction kbd {
+    font-size: 0;
+    line-height: 1.2;
+    padding: 5px 8px;
+    border-radius: 8px;
+  }
+  #interaction kbd::after {
+    content: "Tap";
+    font-size: 10px;
+    font-weight: 600;
+  }
+}
+@media (pointer: coarse) and (max-width: 760px) and (orientation: portrait) {
+  .first-person #touch-controls {
+    right: 10px;
+    bottom: 72px;
+  }
+  .first-person #interaction {
+    bottom: 180px;
+  }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .playing .day-card {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  #game .quest-card {
+    top: 10px;
+  }
+  .quest-open .quest-card {
+    max-height: calc(100dvh - 84px);
+  }
+  #toast {
+    top: 58px;
+  }
+  .first-person #interaction {
+    bottom: 72px;
   }
 }

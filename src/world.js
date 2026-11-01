@@ -14,6 +14,13 @@ import {
   chunkCoords,
   terrainHeight,
 } from "./world-layout.js";
+import {
+  MILLPOND,
+  millpondColliders,
+  millpondDeck,
+  millpondGrass,
+  millpondWater,
+} from "./regions/millpond-layout.js";
 export function createWorld(T, scene) {
   const initialChildren = new Set(scene.children);
   const water = createWaterSystem(scene);
@@ -266,22 +273,29 @@ export function createWorld(T, scene) {
         (minZ + maxZ) / 2,
       ),
     );
-  // Soil fills the ring around the village in four strips.
+  // Soil fills the ring around the village in strips. Under the millpond's
+  // ground only the deepest layer runs, below its bed.
+  const pond = MILLPOND.ground;
   for (const [minX, maxX, minZ, maxZ] of [
     [ground.minX, village.minX, ground.minZ, ground.maxZ],
-    [village.maxX, ground.maxX, ground.minZ, ground.maxZ],
-    [village.minX, village.maxX, ground.minZ, village.minZ],
+    [village.maxX, ground.maxX, ground.minZ, pond.minZ],
+    [pond.maxX, ground.maxX, pond.minZ, pond.maxZ],
+    [village.maxX, ground.maxX, pond.maxZ, ground.maxZ],
+    [village.minX, pond.minX, ground.minZ, village.minZ],
+    [pond.minX, village.maxX, ground.minZ, pond.minZ],
     [village.minX, village.maxX, village.maxZ, ground.maxZ],
   ])
     fieldSoil.push(
       slab(minX, maxX, minZ, maxZ, -1.18, 0.34),
       slab(minX, maxX, minZ, maxZ, -0.58, 1.06),
     );
-  // The grass is one surface with the village cut out, so no seams cross it.
-  // It meets the village's grass at its inset edge, and the brook's channel
-  // at the village's true edge, where the water and bed end. Below it, thin
-  // grass walls show at the map's rim, behind a 0.2 m soil lip, and at the
-  // channel's ends.
+  fieldSoil.push(slab(pond.minX, pond.maxX, pond.minZ, pond.maxZ, -1.18, 0.34));
+  // The grass is one surface with the village and the millpond's ground cut
+  // out, so no seams cross it. It meets the village's grass at its inset edge,
+  // and the brook's channel at the village's true south edge, where the water
+  // and bed end (north, the brook runs on into the millpond's ground). Below
+  // it, thin grass walls show at the map's rim, behind a 0.2 m soil lip, and
+  // at the channel's south end.
   const lip = 0.2,
     outerGrass = inset(ground, lip),
     villageGrass = inset(village, lip),
@@ -296,11 +310,12 @@ export function createWorld(T, scene) {
   field.holes.push(
     new T.Path(
       [
+        // North of the village, the millpond's ground mesh takes over.
         [minX, minZ],
-        [9.7, minZ],
-        [9.7, village.minZ],
-        [14.3, village.minZ],
-        [14.3, minZ],
+        [pond.minX, minZ],
+        [pond.minX, pond.minZ],
+        [pond.maxX, pond.minZ],
+        [pond.maxX, minZ],
         [maxX, minZ],
         [maxX, maxZ],
         [14.3, maxZ],
@@ -322,7 +337,6 @@ export function createWorld(T, scene) {
   wall(g.minX, g.maxX, g.maxZ - t, g.maxZ);
   wall(g.minX, g.minX + t, g.minZ + t, g.maxZ - t);
   wall(g.maxX - t, g.maxX, g.minZ + t, g.maxZ - t);
-  wall(9.7, 14.3, village.minZ - t, village.minZ);
   wall(9.7, 14.3, village.maxZ, village.maxZ + t);
   const fieldGround = [
     [fieldGrass, grass, "Open country grass"],
@@ -530,11 +544,19 @@ export function createWorld(T, scene) {
   seed = riverLayoutSeed;
   for (let i = 0; i < 568; i++) rand();
   dum.rotation.set(0, 0, 0);
-  // The brook blocks walking along its whole length, out to the village's
-  // edge where it ends; the bridge's span is the gap between the two.
+  // The brook blocks walking along its whole length; the bridge's span is the
+  // gap between the two. North, it runs on under the millpond's footbridge,
+  // whose rail starts the millpond's own colliders.
+  const footbridgeSouth = MILLPOND.footbridge.maxZ;
   colliders.push(
-    { x: 12, z: -10, w: 4.3, d: 22.5 },
+    {
+      x: 12,
+      z: (footbridgeSouth + 1.25) / 2,
+      w: 4.3,
+      d: 1.25 - footbridgeSouth,
+    },
     { x: 12, z: 13, w: 4.3, d: 16.5 },
+    ...millpondColliders(),
   );
   // Timber bridge with graceful hump, cap rails and peg details.
   for (let i = 0; i < 19; i++) {
@@ -1742,11 +1764,15 @@ export function createWorld(T, scene) {
   // Animations run only for chunks the view, or the sun's shadow, can see.
   let clock = 0;
   const visibleChunks = new Set();
-  // The walking surface: the bridge deck's hump, otherwise the terrain's grass.
+  // The walking surface: the bridge deck's hump, the millpond's footbridge
+  // and jetty, otherwise the terrain's grass.
   const getGroundHeight = (x, z) =>
     x >= 9.1 && x <= 14.86 && z >= 1.25 && z <= 4.75
       ? 0.33 + Math.sin(((x - 9.1) / 5.76) * Math.PI) * 0.39
-      : terrainHeight(x, z) + 0.05;
+      : (millpondDeck(x, z) ?? terrainHeight(x, z) + 0.05);
+  // What a click lands on: the walking surface, or water where it covers it.
+  const surfaceHeight = (x, z) =>
+    Math.max(getGroundHeight(x, z), millpondWater(x, z) ?? -Infinity);
   const { plantable } = WORLD;
   const isPlantable = (x, z) =>
     x > plantable.minX &&
@@ -1756,6 +1782,8 @@ export function createWorld(T, scene) {
     !isBlocked(x, z) &&
     // Village paths, the plaza's open middle and the brook's banks stay clear.
     !(inVillage(x, z) && (inRoad(x, z) || Math.abs(x - 12) <= 2)) &&
+    // The millpond's water, banks, jetty and boathouse stay clear.
+    millpondGrass(x, z) &&
     Math.hypot(x, z) > 2.5;
   return {
     water,
@@ -1795,7 +1823,15 @@ export function createWorld(T, scene) {
               DETAIL_RANGE);
     },
     getGroundHeight,
+    surfaceHeight,
     isPlantable,
+    // The open country's grass, which streamed regions shape their ground with.
+    groundMaterial: grass,
+    /**
+     * Registers an animation for a streamed piece at (x, z); it runs while
+     * that chunk is in view, like the village's own.
+     */
+    animate,
     colliders,
     trees,
     bushes,

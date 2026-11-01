@@ -17,8 +17,9 @@ test("the open country streams in around the village after startup", async ({
   await expect
     .poll(async () => streaming(page), { timeout: 600000 })
     .toMatchObject({ pending: 0 });
-  // The route grid plus 16 grass patches, one per chunk around the village.
-  expect((await streaming(page)).finished).toBe(17);
+  // The route grid, 16 grass patches (one per chunk around the village), the
+  // fishing float, and the millpond's six pieces.
+  expect((await streaming(page)).finished).toBe(24);
   const chunks = await page.evaluate(() => window.__willowmere.getChunks());
   const patches = chunks.flatMap((chunk) =>
     chunk.meshes
@@ -29,7 +30,9 @@ test("the open country streams in around the village after startup", async ({
   for (const patch of patches) {
     const [cx, cz] = patch.chunk.split(",").map(Number);
     expect(Math.max(Math.abs(cx), Math.abs(cz)), patch.chunk).toBe(2);
-    expect(patch.instances).toBeGreaterThan(500);
+    // The millpond's water and banks take part of two patches' ground.
+    const pond = ["0,-2", "1,-2"].includes(patch.chunk);
+    expect(patch.instances, patch.chunk).toBeGreaterThan(pond ? 200 : 500);
     // Each patch culls as a unit no larger than a rim corner.
     expect(patch.radius).toBeLessThan(18);
   }

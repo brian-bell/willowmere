@@ -38,6 +38,8 @@ const ablations = {
 const configs = [];
 for (const quality of ["high", "balanced", "performance"])
   configs.push({ name: quality, quality, tune: {}, view: "default" });
+// The millpond from its bank, at the default height (phase 3's gate).
+configs.push({ name: "high, millpond", quality: "high", tune: {}, view: "millpond" });
 if (ablate) {
   for (const [name, tune] of Object.entries(ablations))
     // Forcing a ratio the screen already has measures nothing.
@@ -58,6 +60,8 @@ if (ablate) {
   // Height 30 on every revision (the zoom cap since the map grew; four zoom
   // steps from the default), with and without the open country.
   configs.push(
+    { name: "high, millpond, height 30", quality: "high", tune: {}, view: "millpond-30" },
+    { name: "high, millpond, water skipped", quality: "high", tune: { water: false }, view: "millpond" },
     { name: "high, height 30", quality: "high", tune: {}, view: "height-30" },
     {
       name: "high, height 30, open-country grass hidden",
@@ -112,7 +116,21 @@ try {
     const info = gl?.getExtension("WEBGL_debug_renderer_info");
     return info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : "unknown";
   });
+  // Where each view stands: the millpond views on its south bank, by the
+  // jetty, the rest at the spawn on the village green.
+  const MILLPOND = { x: 8.6, z: -25.8 },
+    SPAWN = { x: -2.8, z: 6.2 };
+  let at = SPAWN;
   const setView = async (view) => {
+    const place = view.startsWith("millpond") ? MILLPOND : SPAWN;
+    // Revisions without the hook stay at the spawn.
+    if (place !== at && (await page.evaluate(() => !!window.__willowmere.moveTo))) {
+      await page.evaluate(({ x, z }) => window.__willowmere.moveTo(x, z), place);
+      at = place;
+      // Let the overview follow the player there, and the region stream in.
+      await page.waitForFunction(() => !window.__willowmere.getStreaming().pending);
+      await page.waitForTimeout(3500);
+    }
     const mode = () => page.evaluate(() => window.__willowmere.getView().mode);
     const wantFirstPerson = view === "first-person";
     if (((await mode()) === "first-person") !== wantFirstPerson)
@@ -123,7 +141,7 @@ try {
         await page.locator("#zoom-out").click();
     else if (!(await page.locator("#zoom-reset").isDisabled()))
       await page.locator("#zoom-reset").click();
-    if (view === "height-30")
+    if (view === "height-30" || view === "millpond-30")
       for (let i = 0; i < 4; i++) await page.locator("#zoom-out").click();
     // The overview eases to its height; sample once it has arrived.
     await page.waitForFunction(

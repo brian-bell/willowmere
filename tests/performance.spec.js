@@ -104,3 +104,49 @@ test("village keeps a draw-call budget with live water and a planted garden", as
   expect(Math.max(...samples.map((s) => s.geometries))).toBeLessThan(320);
   expect(errors).toEqual([]);
 });
+
+test("the millpond keeps a tighter draw budget than the village's", async ({
+  page,
+}) => {
+  test.setTimeout(900000);
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "willowmere.save.v1",
+      JSON.stringify({
+        started: true,
+        quests: { mabel: false, flower: false, plant: false },
+        plants: [],
+      }),
+    );
+  });
+  await page.goto("/?resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
+  // The benchmark's viewpoint: the pond's south bank by the jetty, at the
+  // default height, once the region has streamed in and the view arrived.
+  await page.waitForFunction(() => !window.__willowmere.getStreaming().pending, null, {
+    timeout: 600000,
+    polling: 1000,
+  });
+  await page.evaluate(() => window.__willowmere.moveTo(8.6, -25.8));
+  const samples = await page.evaluate(async () => {
+    const values = [];
+    // moveTo snaps the overview to the pond; a few frames settle the shadow
+    // and the label, then every pool gets at least one reflection turn.
+    for (let i = 0; i < 4; i++) await new Promise(requestAnimationFrame);
+    for (let i = 0; i < 12; i++) {
+      await new Promise(requestAnimationFrame);
+      values.push(window.__willowmere.getDiagnostics());
+    }
+    return values;
+  });
+  // All three pools are in view here: the pond, the brook above the village
+  // and the village's brook, each taking its turn at a reflection.
+  expect(Math.max(...samples.map((s) => s.drawCalls))).toBeLessThan(1000);
+  expect(Math.max(...samples.map((s) => s.triangles))).toBeLessThan(2.5e6);
+  expect(errors).toEqual([]);
+});
