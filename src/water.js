@@ -6,8 +6,10 @@ import {
   waterFragment,
 } from "./water-shaders.js";
 
+// `scale` sizes a body's own grid (addBody's `grid`, given for high quality).
 const QUALITY = {
   high: {
+    scale: 1,
     river: [64, 640],
     basin: 96,
     reflection: 768,
@@ -15,6 +17,7 @@ const QUALITY = {
     interval: 1 / 24,
   },
   balanced: {
+    scale: 0.75,
     river: [48, 480],
     basin: 64,
     reflection: 512,
@@ -22,6 +25,7 @@ const QUALITY = {
     interval: 1 / 15,
   },
   performance: {
+    scale: 0.375,
     river: [24, 240],
     basin: 32,
     reflection: 256,
@@ -36,7 +40,10 @@ const GRAVITY = 9.81;
 export function sampleWaterField(config, x, z) {
   const { size, radius, depth, flow = 0, obstacles = [] } = config;
   let shore;
-  if (radius) shore = radius - Math.hypot(x, z);
+  // A body can describe its own shoreline: metres inside the water at a local
+  // point, negative on dry ground.
+  if (config.shore) shore = config.shore(x, z);
+  else if (radius) shore = radius - Math.hypot(x, z);
   else {
     const bank = 0.045 * Math.sin(z * 1.7) + 0.025 * Math.sin(z * 4.1 + 0.7);
     shore = size[0] * 0.5 - Math.abs(x) - bank;
@@ -45,8 +52,8 @@ export function sampleWaterField(config, x, z) {
   for (const rock of obstacles)
     shore = Math.min(shore, Math.hypot(x - rock.x, z - rock.z) - rock.radius);
   if (shore <= 0) return [0, 0, 0, 0];
-  const depthAt =
-    depth * Math.min(1, Math.max(0.025, shore / (radius ? 0.16 : 0.72)));
+  const ramp = config.ramp ?? (radius ? 0.16 : 0.72),
+    depthAt = depth * Math.min(1, Math.max(0.025, shore / ramp));
   let vx = 0,
     vz = flow * (0.28 + 0.72 * Math.min(1, shore / 0.8));
   // Potential-flow deflection around stones; wake eddies add local circulation.
@@ -80,7 +87,9 @@ function surfaceGeometry(config) {
     ? new T.RingGeometry(config.hole || 0.0001, config.radius, 96, 28).rotateX(
         -Math.PI / 2,
       )
-    : new T.PlaneGeometry(...config.size, 48, 384).rotateX(-Math.PI / 2);
+    : new T.PlaneGeometry(...config.size, ...(config.segments || [48, 384])).rotateX(
+        -Math.PI / 2,
+      );
   const p = geometry.attributes.position,
     uv = geometry.attributes.uv;
   for (let i = 0; i < p.count; i++)
@@ -160,9 +169,11 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
   function allocate(body) {
     body.field?.dispose();
     for (const target of body.states || []) target.dispose();
-    const resolution = body.config.radius
-      ? [settings.basin, settings.basin]
-      : settings.river;
+    const resolution = body.config.grid
+      ? body.config.grid.map((n) => Math.max(8, Math.round(n * settings.scale)))
+      : body.config.radius
+        ? [settings.basin, settings.basin]
+        : settings.river;
     body.resolution = [...resolution];
     const [width, height] = resolution,
       data = new Float32Array(width * height * 4);
@@ -454,7 +465,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     u.uField.value = body.field;
     u.uTexel.value.set(1 / body.resolution[0], 1 / body.resolution[1]);
     u.uSize.value.set(...body.config.size);
-    u.uOpenEnds.value = body.config.radius ? 0 : 1;
+    u.uOpenEnds.value = (body.config.openEnds ?? !body.config.radius) ? 1 : 0;
     const count = Math.ceil(dt / body.maxStep);
     if (count) {
       u.uDt.value = dt / count;
@@ -734,7 +745,11 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       }
       // One scene reflection per frame after warmup; basins and river cache independently.
       const overdue = visible
-        .filter((b) => wallTime - b.lastReflection >= settings.interval)
+        .filter(
+          (b) =>
+            wallTime - b.lastReflection >=
+            settings.interval * (b.config.reflectionEvery ?? 1),
+        )
         .sort((a, b) => a.lastReflection - b.lastReflection);
       for (const body of overdue.filter(
         (b, i) => !b.reflectionReady || i === 0,

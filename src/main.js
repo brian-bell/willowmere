@@ -13,6 +13,8 @@ import { createFlowerFactory } from "./flowers.js";
 import { createPlayerVisibility } from "./visibility.js";
 import { createSky } from "./sky.js";
 import { createStreamer } from "./streaming.js";
+import { createFishing, FISH } from "./fishing.js";
+import { MILLPOND } from "./regions/millpond-layout.js";
 import { WORLD, regionAt, terrainField } from "./world-layout.js";
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
@@ -465,6 +467,52 @@ for (const chunk of world.chunks.values())
 const startPos = world.spawn || { x: -3, z: 5 };
 life.player.position.set(startPos.x, 0, startPos.z);
 const effects = createEffects(scene);
+// The float and line stream in with the millpond's jetty.
+const fishing = createFishing(THREE, {
+    water: world.water,
+    body: "millpond",
+    surface: MILLPOND.surface,
+  }),
+  rodTip = new THREE.Vector3();
+streamer.add({
+  x: MILLPOND.jetty.x,
+  z: MILLPOND.jetty.minZ,
+  step: () => fishing.group,
+});
+function castLine() {
+  const p = life.player.position,
+    { jetty } = MILLPOND;
+  // Out over open water beyond the jetty's end.
+  const x = jetty.x + (Math.random() - 0.5) * 1.4,
+    z = jetty.minZ - 2.2 - Math.random() * 0.9;
+  life.player.rotation.y = Math.atan2(x - p.x, z - p.z);
+  fishing.cast(x, z);
+  fishingFrom.set(p.x, p.z);
+  toast("You cast a line. Watch the float, and press E when it dips.");
+}
+const fishingFrom = new THREE.Vector2();
+function fishingResult(result) {
+  if (!result) return;
+  if (result.kind === "early") {
+    toast("Too soon. The ripples fade, and the fish drift off.");
+    return;
+  }
+  if (result.kind === "miss") {
+    toast("Something nibbled, and slipped away.");
+    return;
+  }
+  const { fish } = result,
+    first = !state.fish[fish.id];
+  state.fish[fish.id] = (state.fish[fish.id] || 0) + 1;
+  if (first) state.coins += 5;
+  if (motion) effects.burst(fishing.float.x, MILLPOND.surface + 0.3, fishing.float.z);
+  updateUI();
+  save();
+  audio.chime();
+  toast(
+    `${fish.line} You let it slip back into the pond.${first ? " A new one for the journal. +5 petals" : ""}`,
+  );
+}
 const playerVisibility = createPlayerVisibility(
   scene,
   life.player,
@@ -477,6 +525,8 @@ let state = {
   seeds: 5,
   coins: 120,
   quests: { mabel: false, flower: false, plant: false },
+  // Catches from the millpond, by species.
+  fish: {},
   gathered: [],
   plants: [],
   started: false,
@@ -835,6 +885,14 @@ function refreshJournal() {
         : "Choose the seed pouch (3), find an open patch, and press E.",
     ],
   ];
+  const caught = FISH.filter((fish) => state.fish[fish.id]);
+  if (caught.length || regionAt(life.player.position.x, life.player.position.z).id === "millpond")
+    rows.push([
+      "Quiet waters",
+      caught.length
+        ? `You’ve met ${caught.length} of ${FISH.length} millpond fish: ${caught.map((fish) => fish.name).join(", ")}.`
+        : "Cast a line from the millpond’s jetty, north of the village, and press E when the float dips.",
+    ]);
   $("#journal-content").replaceChildren(
     ...rows.map(([title, body]) => {
       const d = document.createElement("div");
@@ -950,7 +1008,16 @@ function blocked(x, z, r = 0.27) {
       const dx = Math.max(Math.abs(x - c.x) - c.w / 2, 0),
         dz = Math.max(Math.abs(z - c.z) - c.d / 2, 0);
       if (dx * dx + dz * dz < r * r) return true;
-    }
+    } else if (
+      // A shaped collider, such as the millpond, tests itself within its box.
+      c.blocks &&
+      x > c.minX - r &&
+      x < c.maxX + r &&
+      z > c.minZ - r &&
+      z < c.maxZ + r &&
+      c.blocks(x, z, r)
+    )
+      return true;
   }
   return false;
 }
@@ -971,6 +1038,10 @@ function interact() {
   if (modalOpen()) return;
   begin();
   const p = life.player.position;
+  if (fishing.active) {
+    fishingResult(fishing.press());
+    return;
+  }
   if (tool === "seeds") {
     if (state.seeds <= 0) {
       toast("Your seed pouch is empty. Finn has a few to spare.");
@@ -1060,6 +1131,10 @@ function interact() {
   const id = nearest.data.id || nearest.data.type;
   if (id === "bakery") {
     enterBakery();
+    return;
+  }
+  if (id === "jetty") {
+    castLine();
     return;
   }
   const dialogues = {
@@ -1354,15 +1429,15 @@ const raycaster = new THREE.Raycaster(),
   mouse = new THREE.Vector2(),
   groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
   hit = new THREE.Vector3();
-// Where a ray meets the terrain: intersect a level plane, then move the plane
-// to the ground height under the hit and repeat. Flat ground needs one pass;
+// Where a ray meets the ground, a deck or water: intersect a level plane, then
+// move the plane to the surface's height under the hit and repeat. Flat ground needs one pass;
 // gentle slopes settle within a few.
 function pickGround(ray, out) {
   let height = 0;
   for (let i = 0; i < 6; i++) {
     groundPlane.constant = -height;
     if (!ray.intersectPlane(groundPlane, out)) return null;
-    const next = world.terrainHeight(out.x, out.z);
+    const next = world.surfaceHeight(out.x, out.z);
     if (Math.abs(next - height) < 0.005) return out;
     height = next;
   }
@@ -1548,16 +1623,22 @@ function scanNearby() {
     if (!clickPath.length) pendingInteraction = null;
   }
   nearest = candidates[0] || null;
-  const label =
-    tool === "seeds"
+  const label = fishing.active
+    ? fishing.phase === "bite"
+      ? "Reel in!"
+      : "Wait for a bite…"
+    : tool === "seeds"
       ? "Plant a little happiness"
       : tool === "water"
         ? "Water your flowers"
-        : nearest?.label;
+        : nearest?.label === "Fishing jetty"
+          ? "Cast a line"
+          : nearest?.label;
   $("#interaction").hidden = !label || !started;
   if (label) $("#interaction span").textContent = label;
   $("#location-name").textContent = regionAt(p.x, p.z).name;
 }
+let snapView = false;
 let elapsed = 0,
   last = performance.now(),
   frame = 0,
@@ -1654,6 +1735,15 @@ function animate(now) {
   const moving = velocity.length() > 0.08;
   life.setPlayerMotion(velocity.x, velocity.y);
   life.update(dt, elapsed, moving, motion);
+  if (fishing.active) {
+    // Walking away reels the line in.
+    if (Math.hypot(p.x - fishingFrom.x, p.z - fishingFrom.y) > 0.8) fishing.cancel();
+    rodTip
+      .set(Math.sin(life.player.rotation.y) * 0.45, 1.25, Math.cos(life.player.rotation.y) * 0.45)
+      .add(p);
+    const result = fishing.update(dt, elapsed, rodTip);
+    if (result) fishingResult(result);
+  }
   if (moving && elapsed - lastStep > 0.33) {
     audio.step();
     lastStep = elapsed;
@@ -1675,7 +1765,10 @@ function animate(now) {
     );
     updateFrustum();
   }
-  cameraTarget.lerp(target, 1 - Math.exp(-dt * 1.8));
+  // A jump (moveTo) takes the view straight there.
+  if (snapView) cameraTarget.copy(target);
+  else cameraTarget.lerp(target, 1 - Math.exp(-dt * 1.8));
+  snapView = false;
   tilt = motion
     ? THREE.MathUtils.lerp(tilt, targetTilt, 1 - Math.exp(-dt * 8))
     : targetTilt;
@@ -1776,6 +1869,9 @@ function animate(now) {
     import("./regions/outskirts.js").then(({ outskirtsJobs }) =>
       streamer.add(...outskirtsJobs(THREE, world)),
     );
+    import("./regions/millpond.js").then(({ millpondJobs }) =>
+      streamer.add(...millpondJobs(THREE, world)),
+    );
   }
 }
 updateUI();
@@ -1814,6 +1910,19 @@ window.__willowmere = {
   },
   getState: () => structuredClone(state),
   getPlayer: () => ({ x: life.player.position.x, z: life.player.position.z }),
+  // Places the player (for benchmarks and tests that need a far viewpoint),
+  // optionally turned to a heading (radians, 0 faces +z).
+  moveTo(x, z, heading) {
+    life.player.position.set(x, world.getGroundHeight(x, z), z);
+    if (heading !== undefined) {
+      life.player.rotation.y = heading;
+      yaw = heading + Math.PI;
+    }
+    velocity.set(0, 0);
+    clickPath.length = 0;
+    snapView = true;
+  },
+  getFishing: () => ({ phase: fishing.phase, fish: { ...state.fish } }),
   getView: () => ({
     mode: firstPerson ? "first-person" : "overview",
     camera: camera.type,

@@ -84,11 +84,14 @@ test("every village pool shares the model across quality, lighting and paused mo
   await page.locator("#start").click();
   await page.locator("#settings").click();
   const initial = await page.evaluate(() => window.__willowmere.getWater());
-  expect(initial.bodies.map((b) => b.id)).toEqual([
+  // The village's pools come first; the millpond's stream in after startup.
+  expect(initial.bodies.slice(0, 3).map((b) => b.id)).toEqual([
     "river",
     "fountain-lower",
     "fountain-upper",
   ]);
+  for (const body of initial.bodies.slice(3))
+    expect(["millpond", "brook-north"]).toContain(body.id);
   expect(initial.simulation).toBe("GPU RGBA16F");
   // Refraction comes from the composer's own scene pass, not a second scene render.
   expect(initial.refractionSource).toBe("main pass");
@@ -113,7 +116,7 @@ test("every village pool shares the model across quality, lighting and paused mo
       quality,
     );
     const current = await page.evaluate(() => window.__willowmere.getWater());
-    expect(current.bodies).toHaveLength(3);
+    expect(current.bodies.length).toBeGreaterThanOrEqual(3);
     expect(current.time).toBe(frozen.time);
     if (quality === "performance")
       expect(current.bodies[0].resolution[0]).toBeLessThan(

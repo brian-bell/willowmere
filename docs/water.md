@@ -1,6 +1,6 @@
 # Willowmere water
 
-Every outdoor pool is registered with `createWaterSystem` in `src/water.js`: the river, the lower wishing-fountain basin, and its upper basin. They share one solver and optical shader, with separate dimensions, depth, absorption, current, wave amplitude, and boundaries. Fountain jets are owned by the same system and inject impacts into the basin they land in.
+Every outdoor pool is registered with `createWaterSystem` in `src/water.js`: the river through the village, the lower wishing-fountain basin, its upper basin, and, once the millpond streams in north of the village (`src/regions/millpond.js`), the millpond and the short stretch of brook between its weir and the village (`brook-north`). They share one solver and optical shader, with separate dimensions, depth, absorption, current, wave amplitude, and boundaries. Fountain jets are owned by the same system and inject impacts into the basin they land in.
 
 Open `/water-study.html` for a close view of the actual village water. Choose the river, fountain, millrace, bank, or village view; orbit and zoom; compare afternoon and blue hour; pause; and click the water to inject ripples. This page is included in the production build.
 
@@ -25,11 +25,13 @@ The river has a recessed bed, sloping banks, submerged pebbles, and partially su
 
 ## Quality and lifecycle
 
-| Setting     | River grid | Each basin grid | Reflection cap | Capture refraction scale | Reflection interval |
-| ----------- | ---------- | --------------- | -------------- | ------------------------ | ------------------- |
-| High        | 64 × 640   | 96 × 96         | 768²           | 100%                     | at least 1/24 s     |
-| Balanced    | 48 × 480   | 64 × 64         | 512²           | 75%                      | at least 1/15 s     |
-| Performance | 24 × 240   | 32 × 32         | 256²           | 50%                      | at least 1/8 s      |
+| Setting     | River grid | Each basin grid | Millpond grid | Brook above the village | Reflection cap | Capture refraction scale | Reflection interval |
+| ----------- | ---------- | --------------- | ------------- | ----------------------- | -------------- | ------------------------ | ------------------- |
+| High        | 64 × 640   | 96 × 96         | 112 × 78      | 64 × 48                 | 768²           | 100%                     | at least 1/24 s     |
+| Balanced    | 48 × 480   | 64 × 64         | 84 × 59       | 48 × 36                 | 512²           | 75%                      | at least 1/15 s     |
+| Performance | 24 × 240   | 32 × 32         | 42 × 29       | 24 × 18                 | 256²           | 50%                      | at least 1/8 s      |
+
+The millpond's reflection interval is three times the table's.
 
 The refraction scale applies only to the separate scene capture used by the study. Refraction resolved from the village's main pass always matches that pass's resolution, because a multisample resolve cannot scale; its cost is a copy, not a render.
 
@@ -55,7 +57,15 @@ The shared path needs `EXT_color_buffer_float`, a single RGBA color attachment, 
 
 ## Adding another pool
 
-Call `water.addBody` during world creation with a unique `id`, centre (`x`, `y`, `z`), `depth`, and either `size: [width, length]` or `radius`. Optional settings include a central `hole`, obstacle circles in local coordinates, `flow`, `amplitude`, RGB absorption coefficients, scattering color, and roughness. Build the bed below the given surface height and enclose the edges. Register an impact using `addSource`, or use `addJet` with its start and landing point. Call `disturb(id, worldX, worldZ, strength, radius)` for a discrete interaction.
+Call `water.addBody` with a unique `id`, centre (`x`, `y`, `z`), `depth`, and either `size: [width, length]` or `radius`. It can be called during world creation or later, when a region streams in; the surface uses the same shader program as every other pool, so a new body compiles nothing. Optional settings include a central `hole`, obstacle circles in local coordinates, `flow`, `amplitude`, RGB absorption coefficients, scattering color, and roughness, and:
+
+- `shore(x, z)`: the shoreline as metres inside the water at a local point (negative on dry ground), instead of the river's straight banks or a basin's circle. `ramp` sets how far from the shore the water reaches its full `depth` (0.72 m for the river).
+- `grid: [columns, rows]`: the body's own simulation grid at high quality, scaled to 75% on balanced and 37.5% on performance. Without it a rectangular body takes the river's grid and a round one the basins'. Size it to the body: the village's brook keeps 6.6 cm cells, the millpond's still water uses about 16 cm.
+- `segments: [x, z]`: the surface mesh's subdivisions (the river's 48 × 384 by default).
+- `openEnds`: whether waves fade out at the body's two short ends (the default for rectangular bodies, where one stretch of brook meets the next) or reflect from closed edges.
+- `reflectionEvery`: multiplies the quality's reflection interval for this body; the still millpond refreshes its reflection a third as often as the brook.
+
+Neighbouring stretches of one waterway can be separate bodies, so each suspends on its own when it leaves the view. Give them the same level, flow, amplitude and shoreline function where they meet, and hide the seam under something (the millpond's brook meets the village's under a footbridge); bodies at different levels meet under a weir or similar, with a cascade drawn over the drop. Build the bed below the given surface height and enclose the edges. Register an impact using `addSource`, or use `addJet` with its start and landing point. Call `disturb(id, worldX, worldZ, strength, radius)` for a discrete interaction.
 
 The world already calls `water.update(dt)`. Immediately before the main scene render, call `water.render(renderer, camera, { dt, dusk, sun, target })`, where `target` is the render target the main pass will draw into with the same camera. Omit `target` when the main pass renders to the canvas. If the caller disables `scene.matrixWorldAutoUpdate`, it must update scene transforms before calling `water.render`; otherwise water updates them before its captures. Surfaces are tagged as dynamic to exclude them from world static-geometry batching. Pass dense scenery that the captures barely resolve, such as individual leaves, to `water.excludeFromCaptures(...objects)`. Each listed object is hidden during reflection captures and the separate refraction capture, then its own visibility is restored. It still casts shadows and appears in the main render, including refraction resolved from the main pass.
 
