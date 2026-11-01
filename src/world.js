@@ -16,13 +16,51 @@ import {
   terrainMaxIn,
 } from "./world-layout.js";
 import {
-  MILLPOND,
-  millpondColliders,
-  millpondDeck,
-  millpondGrass,
-  millpondWater,
-} from "./regions/millpond-layout.js";
-import { ORCHARD, orchardColliders, orchardGrass } from "./regions/orchard-layout.js";
+  allowsPlanting,
+  regionColliders,
+  regionDeck,
+  regionWater,
+  regions,
+} from "./regions/index.js";
+import { MILLPOND } from "./regions/millpond-layout.js";
+
+/**
+ * Boxes that tile `outer` outside every box in `holes`: one column between
+ * each pair of neighbouring x edges, its spans joined with the same spans in
+ * the column before.
+ */
+function boxesOutside(outer, holes) {
+  const xs = [
+      ...new Set([outer.minX, outer.maxX, ...holes.flatMap((h) => [h.minX, h.maxX])]),
+    ]
+      .filter((x) => x >= outer.minX && x <= outer.maxX)
+      .sort((a, b) => a - b),
+    boxes = [];
+  let open = new Map();
+  for (let i = 0; i < xs.length - 1; i++) {
+    const minX = xs[i],
+      maxX = xs[i + 1],
+      next = new Map();
+    let spans = [[outer.minZ, outer.maxZ]];
+    for (const h of holes)
+      if (h.minX < maxX && h.maxX > minX)
+        spans = spans.flatMap(([a, b]) =>
+          [
+            [a, Math.min(b, h.minZ)],
+            [Math.max(a, h.maxZ), b],
+          ].filter(([c, d]) => d > c),
+        );
+    for (const [minZ, maxZ] of spans) {
+      const key = `${minZ},${maxZ}`,
+        box = open.get(key) ?? { minX, maxX, minZ, maxZ };
+      if (open.has(key)) box.maxX = maxX;
+      else boxes.push(box);
+      next.set(key, box);
+    }
+    open = next;
+  }
+  return boxes;
+}
 export function createWorld(T, scene) {
   const initialChildren = new Set(scene.children);
   const water = createWaterSystem(scene);
@@ -279,25 +317,18 @@ export function createWorld(T, scene) {
         (minZ + maxZ) / 2,
       ),
     );
-  // Soil fills the ring around the village in strips. Under the millpond's
-  // ground only the deepest layer runs, below its bed.
-  const pond = MILLPOND.ground,
-    orchard = ORCHARD.ground;
-  for (const [minX, maxX, minZ, maxZ] of [
-    [ground.minX, village.minX, ground.minZ, ground.maxZ],
-    [village.maxX, ground.maxX, ground.minZ, pond.minZ],
-    [pond.maxX, ground.maxX, pond.minZ, pond.maxZ],
-    [village.maxX, ground.maxX, pond.maxZ, ground.maxZ],
-    [village.minX, pond.minX, ground.minZ, village.minZ],
-    [pond.minX, village.maxX, ground.minZ, pond.minZ],
-    [village.minX, village.maxX, village.maxZ, ground.maxZ],
-  ])
+  // Soil fills the ring around the village in strips. Under a region with a
+  // deep bed (the millpond's) only the deepest layer runs, below its bed.
+  const regionGrounds = regions.filter((r) => r.ground).map((r) => r.ground),
+    deepBeds = regions.filter((r) => r.ground && r.deepBed).map((r) => r.ground);
+  for (const { minX, maxX, minZ, maxZ } of boxesOutside(ground, [village, ...deepBeds]))
     fieldSoil.push(
       slab(minX, maxX, minZ, maxZ, -1.18, 0.34),
       slab(minX, maxX, minZ, maxZ, -0.58, 1.06),
     );
-  fieldSoil.push(slab(pond.minX, pond.maxX, pond.minZ, pond.maxZ, -1.18, 0.34));
-  // The grass is one surface with the village and the millpond's ground cut
+  for (const { minX, maxX, minZ, maxZ } of deepBeds)
+    fieldSoil.push(slab(minX, maxX, minZ, maxZ, -1.18, 0.34));
+  // The grass is one surface with the village and each region's ground cut
   // out, so no seams cross it. It meets the village's grass at its inset edge,
   // and the brook's channel at the village's true south edge, where the water
   // and bed end (north, the brook runs on into the millpond's ground). Below
@@ -314,29 +345,61 @@ export function createWorld(T, scene) {
       new T.Vector2(outerGrass.minX, -outerGrass.maxZ),
     ]),
     { minX, maxX, minZ, maxZ } = villageGrass;
+  // The village's hole runs round its grass edge, with a notch for each
+  // region's ground that meets an edge (the orchard hill's and the
+  // millpond's, north) and for the brook's channel, south. A region's ground
+  // apart from the village is a hole of its own.
+  const meets = (a, b) => Math.abs(a - b) < 1e-6,
+    north = regionGrounds.filter((g) => meets(g.maxZ, minZ)).sort((a, b) => a.minX - b.minX),
+    east = regionGrounds.filter((g) => meets(g.minX, maxX)).sort((a, b) => a.minZ - b.minZ),
+    south = [
+      ...regionGrounds.filter((g) => meets(g.minZ, maxZ)),
+      { minX: 9.7, maxX: 14.3, maxZ: village.maxZ },
+    ].sort((a, b) => b.maxX - a.maxX),
+    west = regionGrounds.filter((g) => meets(g.maxX, minX)).sort((a, b) => b.maxZ - a.maxZ),
+    notched = new Set([...north, ...east, ...south, ...west]);
+  const hole = (points) => new T.Path(points.map(([x, z]) => new T.Vector2(x, -z)));
   field.holes.push(
-    new T.Path(
-      [
-        // North-west of the village the orchard hill's ground mesh takes
-        // over, and north of it the millpond's.
-        [orchard.minX, minZ],
-        [orchard.minX, orchard.minZ],
-        [orchard.maxX, orchard.minZ],
-        [orchard.maxX, minZ],
-        [pond.minX, minZ],
-        [pond.minX, pond.minZ],
-        [pond.maxX, pond.minZ],
-        [pond.maxX, minZ],
-        [maxX, minZ],
-        [maxX, maxZ],
-        [14.3, maxZ],
-        [14.3, village.maxZ],
-        [9.7, village.maxZ],
-        [9.7, maxZ],
-        [minX, maxZ],
-        [minX, minZ],
-      ].map(([x, z]) => new T.Vector2(x, -z)),
-    ),
+    hole([
+      ...north.flatMap((g) => [
+        [g.minX, minZ],
+        [g.minX, g.minZ],
+        [g.maxX, g.minZ],
+        [g.maxX, minZ],
+      ]),
+      [maxX, minZ],
+      ...east.flatMap((g) => [
+        [maxX, g.minZ],
+        [g.maxX, g.minZ],
+        [g.maxX, g.maxZ],
+        [maxX, g.maxZ],
+      ]),
+      [maxX, maxZ],
+      ...south.flatMap((g) => [
+        [g.maxX, maxZ],
+        [g.maxX, g.maxZ],
+        [g.minX, g.maxZ],
+        [g.minX, maxZ],
+      ]),
+      [minX, maxZ],
+      ...west.flatMap((g) => [
+        [minX, g.maxZ],
+        [g.minX, g.maxZ],
+        [g.minX, g.minZ],
+        [minX, g.minZ],
+      ]),
+      [minX, minZ],
+    ]),
+    ...regionGrounds
+      .filter((g) => !notched.has(g))
+      .map((g) =>
+        hole([
+          [g.minX, g.minZ],
+          [g.maxX, g.minZ],
+          [g.maxX, g.maxZ],
+          [g.minX, g.maxZ],
+        ]),
+      ),
   );
   fieldGrass.push(
     worldUV(new T.ShapeGeometry(field).rotateX(-Math.PI / 2).translate(0, top, 0)),
@@ -568,8 +631,7 @@ export function createWorld(T, scene) {
       d: 1.25 - footbridgeSouth,
     },
     { x: 12, z: 13, w: 4.3, d: 16.5 },
-    ...millpondColliders(),
-    ...orchardColliders(),
+    ...regionColliders(),
   );
   // Timber bridge with graceful hump, cap rails and peg details.
   for (let i = 0; i < 19; i++) {
@@ -1777,15 +1839,15 @@ export function createWorld(T, scene) {
   // Animations run only for chunks the view, or the sun's shadow, can see.
   let clock = 0;
   const visibleChunks = new Set();
-  // The walking surface: the bridge deck's hump, the millpond's footbridge
-  // and jetty, otherwise the terrain's grass.
+  // The walking surface: the bridge deck's hump, a region's decks (the
+  // millpond's footbridge and jetty), otherwise the terrain's grass.
   const getGroundHeight = (x, z) =>
     x >= 9.1 && x <= 14.86 && z >= 1.25 && z <= 4.75
       ? 0.33 + Math.sin(((x - 9.1) / 5.76) * Math.PI) * 0.39
-      : (millpondDeck(x, z) ?? terrainHeight(x, z) + 0.05);
+      : (regionDeck(x, z) ?? terrainHeight(x, z) + 0.05);
   // What a click lands on: the walking surface, or water where it covers it.
   const surfaceHeight = (x, z) =>
-    Math.max(getGroundHeight(x, z), millpondWater(x, z) ?? -Infinity);
+    Math.max(getGroundHeight(x, z), regionWater(x, z) ?? -Infinity);
   const { plantable } = WORLD;
   const isPlantable = (x, z) =>
     x > plantable.minX &&
@@ -1795,10 +1857,9 @@ export function createWorld(T, scene) {
     !isBlocked(x, z) &&
     // Village paths, the plaza's open middle and the brook's banks stay clear.
     !(inVillage(x, z) && (inRoad(x, z) || Math.abs(x - 12) <= 2)) &&
-    // The millpond's water, banks, jetty and boathouse stay clear, and the
-    // orchard's path and footings.
-    millpondGrass(x, z) &&
-    orchardGrass(x, z) &&
+    // Each region keeps its own clear (the millpond's water, banks, jetty and
+    // boathouse; the orchard's path and footings).
+    allowsPlanting(x, z) &&
     Math.hypot(x, z) > 2.5;
   return {
     water,

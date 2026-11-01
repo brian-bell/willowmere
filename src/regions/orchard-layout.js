@@ -171,3 +171,20 @@ export function orchardGrass(x, z) {
 export function pathWeight(x, z) {
   return 1 - smooth(O.pathHalfWidth - 0.18, O.pathHalfWidth + 0.22, pathDistance(x, z));
 }
+
+/** The orchard hill's entry in the region registry (src/regions/index.js). */
+export const orchardRegion = {
+  id: "orchard",
+  name: "The orchard hill",
+  // The hill north-west of the village, west of the millpond.
+  area: { maxX: 0, maxZ: -21 },
+  ground: O.ground,
+  height: hillHeight,
+  // The hill's slopes are smooth: terrainHeight evaluates them exactly, so
+  // the trees, walkers and its ground mesh agree.
+  exactHeight: true,
+  colliders: orchardColliders,
+  grass: orchardGrass,
+  // Its builder also hands back the harvest controller.
+  stream: (T, world) => import("./orchard.js").then(({ orchardJobs }) => orchardJobs(T, world)),
+};

@@ -9,6 +9,7 @@ import {
   terrainField,
   terrainHeight,
 } from "../src/world-layout.js";
+import { regions } from "../src/regions/index.js";
 
 test("the map is four times the village, with the village in the middle", () => {
   expect(WORLD.village).toEqual({ minX: -24, maxX: 24, minZ: -21, maxZ: 21 });
@@ -105,4 +106,30 @@ test("terrain is flat in the village and rises only at the millpond and orchard 
   expect(regionAt(-2, -22).name).toBe("The orchard hill");
   expect(regionAt(7, -28).name).toBe("The millpond");
   expect(regionAt(12, -20.5).name).toBe("The willow brook");
+});
+
+test("the region registry's ground boxes fit the open country's cut-outs", () => {
+  expect(new Set(regions.map((r) => r.id)).size).toBe(regions.length);
+  // The open fields come last and catch everything else.
+  expect(regions.at(-1)).toMatchObject({ id: "fields", area: {} });
+  const grounds = regions.filter((r) => r.ground).map((r) => r.ground),
+    villageGrass = { minX: -23.8, maxX: 23.8, minZ: -20.8, maxZ: 20.8 },
+    overlap = (a, b) =>
+      a.minX < b.maxX - 1e-6 &&
+      b.minX < a.maxX - 1e-6 &&
+      a.minZ < b.maxZ - 1e-6 &&
+      b.minZ < a.maxZ - 1e-6;
+  for (const [i, a] of grounds.entries()) {
+    // world.js cuts each region's ground out of the field grass: beside the
+    // village as a notch in its edge, otherwise as a hole of its own.
+    expect(overlap(a, villageGrass)).toBe(false);
+    for (const b of grounds.slice(i + 1)) expect(overlap(a, b)).toBe(false);
+  }
+  // A region's own terrain applies inside its ground box.
+  for (const r of regions.filter((r) => r.exactHeight)) {
+    const { minX, maxX, minZ, maxZ } = r.ground,
+      x = (minX + maxX) / 2,
+      z = (minZ + maxZ) / 2;
+    expect(terrainHeight(x, z)).toBe(r.height(x, z));
+  }
 });
