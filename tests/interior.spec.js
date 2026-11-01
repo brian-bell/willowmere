@@ -199,22 +199,12 @@ test("bakery door in the village enters the room at walking height", async ({
     const next = await page.evaluate(() => {
       const game = window.__willowmere,
         p = game.getPlayer();
-      // Clicking the door itself would walk in, so stop a metre short of it.
-      if (Math.hypot(p.x - 1.2, p.z + 5.2) < 1) return null;
-      const route = game.findPath(p, { x: 1.2, z: -5.2 });
+      // Stand beside the door's west side: a click on the door itself walks in,
+      // and Finn, who stands to its east, would win the prompt there.
+      if (Math.hypot(p.x - 0.6, p.z + 5) < 0.45) return null;
+      const route = game.findPath(p, { x: 0.6, z: -5 });
       if (!route.length) throw Error("Bakery door has no walking route");
-      const i = Math.min(4, route.length - 1),
-        from = route[i - 1] ?? p,
-        gap = Math.hypot(from.x - 1.2, from.z + 5.2);
-      let step = route[i];
-      if (Math.hypot(step.x - 1.2, step.z + 5.2) < 0.7)
-        step =
-          gap > 0.7
-            ? {
-                x: 1.2 + ((from.x - 1.2) * 0.7) / gap,
-                z: -5.2 + ((from.z + 5.2) * 0.7) / gap,
-              }
-            : from;
+      const step = route[Math.min(4, route.length - 1)];
       return { step, screen: game.project(step.x, step.z) };
     });
     if (!next) break;
