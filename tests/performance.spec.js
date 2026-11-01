@@ -132,7 +132,7 @@ test("the millpond keeps a tighter draw budget than the village's", async ({
     timeout: 600000,
     polling: 1000,
   });
-  await page.evaluate(() => window.__willowmere.moveTo(9, -26.4));
+  await page.evaluate(() => window.__willowmere.moveTo(8.6, -25.8));
   const samples = await page.evaluate(async () => {
     const values = [],
       start = performance.now();

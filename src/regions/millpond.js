@@ -707,7 +707,7 @@ function lilies(T, range) {
       pads.setColorAt(p++, greens[Math.floor(range(0, greens.length))]);
       if (f < flowers.count && range(0, 1) < 0.28) {
         dummy.position.set(x + range(-0.05, 0.05), M.surface + 0.05, z + range(-0.05, 0.05));
-        dummy.scale.set(0.085, 0.05, 0.085);
+        dummy.scale.set(0.075, 0.028, 0.075);
         dummy.updateMatrix();
         flowers.setMatrixAt(f, dummy.matrix);
         flowers.setColorAt(f++, blooms[Math.floor(range(0, blooms.length))]);

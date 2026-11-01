@@ -118,7 +118,7 @@ try {
   });
   // Where each view stands: the millpond views on its south bank, by the
   // jetty, the rest at the spawn on the village green.
-  const MILLPOND = { x: 9, z: -26.4 },
+  const MILLPOND = { x: 8.6, z: -25.8 },
     SPAWN = { x: -2.8, z: 6.2 };
   let at = SPAWN;
   const setView = async (view) => {
