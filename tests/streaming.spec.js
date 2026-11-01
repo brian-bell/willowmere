@@ -30,8 +30,9 @@ test("the open country streams in around the village after startup", async ({
   for (const patch of patches) {
     const [cx, cz] = patch.chunk.split(",").map(Number);
     expect(Math.max(Math.abs(cx), Math.abs(cz)), patch.chunk).toBe(2);
-    // The millpond's water and banks take most of one patch's ground.
-    expect(patch.instances).toBeGreaterThan(patch.chunk === "1,-2" ? 200 : 500);
+    // The millpond's water and banks take part of two patches' ground.
+    const pond = ["0,-2", "1,-2"].includes(patch.chunk);
+    expect(patch.instances, patch.chunk).toBeGreaterThan(pond ? 200 : 500);
     // Each patch culls as a unit no larger than a rim corner.
     expect(patch.radius).toBeLessThan(18);
   }

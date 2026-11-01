@@ -134,13 +134,11 @@ test("the millpond keeps a tighter draw budget than the village's", async ({
   });
   await page.evaluate(() => window.__willowmere.moveTo(8.6, -25.8));
   const samples = await page.evaluate(async () => {
-    const values = [],
-      start = performance.now();
-    // The overview eases over to the pond first: three seconds, and enough
-    // frames for a slow renderer's capped steps to get there too.
-    for (let i = 0; i < 40 || performance.now() - start < 3000; i++)
-      await new Promise(requestAnimationFrame);
-    for (let i = 0; i < 30; i++) {
+    const values = [];
+    // moveTo snaps the overview to the pond; a few frames settle the shadow
+    // and the label, then every pool gets at least one reflection turn.
+    for (let i = 0; i < 4; i++) await new Promise(requestAnimationFrame);
+    for (let i = 0; i < 12; i++) {
       await new Promise(requestAnimationFrame);
       values.push(window.__willowmere.getDiagnostics());
     }

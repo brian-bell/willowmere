@@ -196,7 +196,9 @@ test("the millpond streams in with its two water bodies and fishing jetty", asyn
   );
   expect(route.length).toBeGreaterThan(20);
   expect(route.at(-1).z).toBeLessThan(-29);
-  // Standing on the jetty, the label names the pond and E casts a line.
+  // Standing on the jetty, the label names the pond and E casts a line. The
+  // label and prompts wait until the title card is dismissed.
+  await page.locator("#start").click();
   await page.evaluate(() => window.__willowmere.moveTo(7, -29.8));
   await expect(page.locator("#location-name")).toHaveText("The millpond", {
     timeout: 60000,
