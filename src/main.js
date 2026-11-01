@@ -15,7 +15,14 @@ import { createSky } from "./sky.js";
 import { createStreamer } from "./streaming.js";
 import { createFishing, FISH } from "./fishing.js";
 import { MILLPOND } from "./regions/millpond-layout.js";
-import { WORLD, regionAt, terrainField } from "./world-layout.js";
+import { FRUIT_TREES } from "./regions/orchard-layout.js";
+import {
+  WORLD,
+  regionAt,
+  terrainField,
+  terrainHeight,
+  terrainMaxIn,
+} from "./world-layout.js";
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
 const canvas = $("#scene"),
@@ -220,13 +227,16 @@ const DEFAULT_VIEW_HEIGHT = 18,
   // cannot reduce; the cap lifts once zoom-based detail reduction exists.
   MAX_VIEW_HEIGHT = 30,
   ZOOM_STEP = 3;
-// Beyond these, single leaves cover only a few pixels and trees draw coarser foliage.
+// Beyond these, single leaves cover only a few pixels and trees draw coarser
+// foliage; in first person, trees further off than CROWN_DISTANCE, deep in
+// the fog, draw their crown shells instead of leaves.
 const COARSE_LEAVES_VIEW_HEIGHT = 24,
-  COARSE_LEAVES_DISTANCE = 18;
-const leafDetailFromEye = (center) =>
-  center.distanceTo(firstPersonCamera.position) > COARSE_LEAVES_DISTANCE
-    ? 1
-    : 0;
+  COARSE_LEAVES_DISTANCE = 18,
+  CROWN_DISTANCE = 40;
+const leafDetailFromEye = (center) => {
+  const distance = center.distanceTo(firstPersonCamera.position);
+  return distance > CROWN_DISTANCE ? 2 : distance > COARSE_LEAVES_DISTANCE ? 1 : 0;
+};
 const leafDetail = () =>
   overrides.leafDetail ??
   (firstPerson
@@ -279,9 +289,12 @@ const showSky = () => (sky.mesh.visible = firstPerson && (overrides.sky ?? true)
 // follows or pans and change only in small steps while it zooms.
 const shadowCamera = sun.shadow.camera;
 // The soil rim's base and the tallest canopy on the highest ground bound every
-// receiver vertically.
+// receiver vertically. A view's own ceiling counts only the ground under it,
+// and the village's receivers, which shadow sizes are fractions of, stand on
+// flat ground.
 const SHADOW_FLOOR = -1.4,
   SHADOW_CEILING = terrainField.max + WORLD.canopy,
+  SHADOW_REFERENCE_CEILING = WORLD.canopy,
   SHADOW_MARGIN = 1,
   // Depth bias in metres; the shadow map stores depth across near..far.
   SHADOW_BIAS = 0.0126,
@@ -301,6 +314,8 @@ const shadowLight = sun.position.clone().sub(sun.target.position).normalize(),
   shadowSize = new THREE.Vector2(),
   shadowCenter = new THREE.Vector2(),
   shadowView = new THREE.Box2(),
+  // The overview's ground footprint, where its tallest ground is looked up.
+  shadowFootprint = new THREE.Box2(),
   // Light-space bounds of the village's receivers (the size reference) and of
   // the whole map's (where the shadow box may go).
   villageShadow = new THREE.Box2(),
@@ -330,15 +345,15 @@ function addShadowPoint(box, point) {
   point.applyMatrix4(shadowCamera.matrixWorldInverse);
   box.expandByPoint(shadowCenter.set(point.x, point.y));
 }
-// Adds a ground box's receivers, from the soil rim to the canopy, offset by
-// (dx, dz), to a light-space box.
-function addShadowBox(box, bounds, dx, dz) {
+// Adds a ground box's receivers, from floor to ceiling, offset by (dx, dz),
+// to a light-space box.
+function addShadowBox(box, bounds, dx, dz, floor, ceiling) {
   for (let i = 0; i < 8; i++)
     addShadowPoint(
       box,
       shadowPoint.set(
         (i & 1 ? bounds.maxX : bounds.minX) + dx,
-        i & 2 ? SHADOW_CEILING : SHADOW_FLOOR,
+        i & 2 ? ceiling : floor,
         (i & 4 ? bounds.maxZ : bounds.minZ) + dz,
       ),
     );
@@ -355,11 +370,15 @@ function rollShadow(yaw) {
   shadowCamera.position.copy(sun.position);
   shadowCamera.lookAt(sun.target.position);
   shadowCamera.updateMatrixWorld();
-  for (const [box, bounds] of [
-    [villageShadow, WORLD.shadowReference],
-    [worldShadow, WORLD.shadow],
-  ])
-    addShadowBox(box.makeEmpty(), bounds, 0, 0);
+  addShadowBox(
+    villageShadow.makeEmpty(),
+    WORLD.shadowReference,
+    0,
+    0,
+    SHADOW_FLOOR,
+    SHADOW_REFERENCE_CEILING,
+  );
+  addShadowBox(worldShadow.makeEmpty(), WORLD.shadow, 0, 0, SHADOW_FLOOR, SHADOW_CEILING);
   shadowYaw = yaw;
 }
 function updateShadowMapSize() {
@@ -376,25 +395,48 @@ function updateShadowMapSize() {
 function fitShadow() {
   if (shadowYaw !== targetYaw) rollShadow(targetYaw);
   if (firstPerson) {
-    // A village-sized box centred a little ahead of the eye.
+    // A village-sized box centred a little ahead of the eye, raised to the
+    // ground the eye stands on.
     const { shadowReference: v } = WORLD,
-      ahead = FIRST_PERSON_SHADOW_AHEAD;
+      ahead = FIRST_PERSON_SHADOW_AHEAD,
+      x = firstPersonCamera.position.x - Math.sin(yaw) * ahead,
+      z = firstPersonCamera.position.z - Math.cos(yaw) * ahead,
+      lift = terrainHeight(firstPersonCamera.position.x, firstPersonCamera.position.z);
     addShadowBox(
       shadowView.makeEmpty(),
       v,
-      firstPersonCamera.position.x - (v.minX + v.maxX) / 2 - Math.sin(yaw) * ahead,
-      firstPersonCamera.position.z - (v.minZ + v.maxZ) / 2 - Math.cos(yaw) * ahead,
+      x - (v.minX + v.maxX) / 2,
+      z - (v.minZ + v.maxZ) / 2,
+      SHADOW_FLOOR + lift,
+      SHADOW_REFERENCE_CEILING + lift,
     );
   } else {
-    // Trace the overview's corner rays through every receiver height.
-    shadowView.makeEmpty();
+    // Trace the overview's corner rays through every receiver height, up to
+    // the canopy above the highest ground the view's footprint can reach.
     overviewCamera.updateMatrixWorld();
     overviewCamera.getWorldDirection(shadowRay);
+    shadowFootprint.makeEmpty();
     for (let i = 0; i < 8; i++) {
       shadowPoint
         .set(i & 1 ? 1 : -1, i & 2 ? 1 : -1, -1)
         .unproject(overviewCamera);
       const y = i & 4 ? SHADOW_CEILING : SHADOW_FLOOR;
+      shadowPoint.addScaledVector(shadowRay, (y - shadowPoint.y) / shadowRay.y);
+      shadowFootprint.expandByPoint(shadowCenter.set(shadowPoint.x, shadowPoint.z));
+    }
+    const ceiling =
+      terrainMaxIn(
+        shadowFootprint.min.x,
+        shadowFootprint.max.x,
+        shadowFootprint.min.y,
+        shadowFootprint.max.y,
+      ) + WORLD.canopy;
+    shadowView.makeEmpty();
+    for (let i = 0; i < 8; i++) {
+      shadowPoint
+        .set(i & 1 ? 1 : -1, i & 2 ? 1 : -1, -1)
+        .unproject(overviewCamera);
+      const y = i & 4 ? ceiling : SHADOW_FLOOR;
       shadowPoint.addScaledVector(shadowRay, (y - shadowPoint.y) / shadowRay.y);
       addShadowPoint(shadowView, shadowPoint);
     }
@@ -513,6 +555,77 @@ function fishingResult(result) {
     `${fish.line} You let it slip back into the pond.${first ? " A new one for the journal. +5 petals" : ""}`,
   );
 }
+// The orchard hill streams in later; its harvest controller arrives with it.
+// A shaken tree ripens again, and a hive refills, after a few minutes.
+let orchard = null;
+const FRUIT_REGROW_MS = 4 * 60 * 1000,
+  HONEY_REFILL_MS = 6 * 60 * 1000,
+  HARVEST_PRICE = { apple: 2, pear: 2, honey: 6 };
+const harvestReady = (id, wait) => Date.now() - (state.orchard[id] ?? 0) >= wait;
+function updateOrchard() {
+  if (!orchard) return;
+  for (const tree of FRUIT_TREES)
+    orchard.setPicked(tree.id, !harvestReady(tree.id, FRUIT_REGROW_MS));
+}
+function shakeTree({ tree, kind }) {
+  if (!orchard) return;
+  if (!harvestReady(tree, FRUIT_REGROW_MS)) {
+    toast(`Nothing more is ripe on this ${kind} tree yet. Give it a little while.`);
+    return;
+  }
+  const count = orchard.shake(tree, motion);
+  if (!count) return;
+  const first = !state.harvested[kind];
+  state.orchard[tree] = Date.now();
+  state.basket[kind] += count;
+  state.harvested[kind] += count;
+  if (first) state.coins += 5;
+  updateUI();
+  save();
+  audio.chime();
+  toast(
+    `You give the trunk a shove, and ${count} ripe ${kind}s tumble into the grass. Into the basket they go.${first ? " +5 petals" : ""}`,
+  );
+}
+function collectHoney({ hive }) {
+  if (!orchard) return;
+  orchard.disturbHive(hive);
+  if (!harvestReady(hive, HONEY_REFILL_MS)) {
+    toast("The bees are still filling the comb. Come back in a little while.");
+    return;
+  }
+  const first = !state.harvested.honey;
+  state.orchard[hive] = Date.now();
+  state.basket.honey++;
+  state.harvested.honey++;
+  if (first) state.coins += 5;
+  updateUI();
+  save();
+  audio.chime();
+  toast(
+    `You lift the roof gently and take a jar of wildflower honey. The bees hardly mind.${first ? " +5 petals" : ""}`,
+  );
+}
+const basketCount = () => state.basket.apple + state.basket.pear + state.basket.honey;
+// Finn buys the orchard's fruit and honey for the bakery.
+function sellBasket() {
+  const { apple, pear, honey } = state.basket,
+    petals =
+      apple * HARVEST_PRICE.apple + pear * HARVEST_PRICE.pear + honey * HARVEST_PRICE.honey,
+    goods = [
+      [apple, "apple"],
+      [pear, "pear"],
+      [honey, "jar of honey", "jars of honey"],
+    ]
+      .filter(([n]) => n)
+      .map(([n, one, many = `${one}s`]) => `${n} ${n === 1 ? one : many}`);
+  state.basket = { apple: 0, pear: 0, honey: 0 };
+  state.coins += petals;
+  updateUI();
+  save();
+  audio.chime();
+  toast(`Finn takes ${goods.join(" and ").replace(/ and (?=.* and )/, ", ")} for the bakery. +${petals} petals`);
+}
 const playerVisibility = createPlayerVisibility(
   scene,
   life.player,
@@ -527,6 +640,11 @@ let state = {
   quests: { mabel: false, flower: false, plant: false },
   // Catches from the millpond, by species.
   fish: {},
+  // The orchard's fruit and honey: what is in the basket, what has been
+  // gathered all told, and when each tree was shaken and each hive opened.
+  basket: { apple: 0, pear: 0, honey: 0 },
+  harvested: { apple: 0, pear: 0, honey: 0 },
+  orchard: {},
   gathered: [],
   plants: [],
   started: false,
@@ -885,13 +1003,23 @@ function refreshJournal() {
         : "Choose the seed pouch (3), find an open patch, and press E.",
     ],
   ];
-  const caught = FISH.filter((fish) => state.fish[fish.id]);
-  if (caught.length || regionAt(life.player.position.x, life.player.position.z).id === "millpond")
+  const caught = FISH.filter((fish) => state.fish[fish.id]),
+    here = regionAt(life.player.position.x, life.player.position.z).id;
+  if (caught.length || here === "millpond")
     rows.push([
       "Quiet waters",
       caught.length
         ? `You’ve met ${caught.length} of ${FISH.length} millpond fish: ${caught.map((fish) => fish.name).join(", ")}.`
         : "Cast a line from the millpond’s jetty, north of the village, and press E when the float dips.",
+    ]);
+  const { apple, pear, honey } = state.harvested,
+    plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  if (apple || pear || honey || here === "orchard")
+    rows.push([
+      "The orchard hill",
+      apple || pear || honey
+        ? `You’ve gathered ${plural(apple, "apple")}, ${plural(pear, "pear")} and ${plural(honey, "jar", "jars")} of honey. ${basketCount() ? "Finn will buy what’s in your basket." : "Finn buys fruit and honey for his bakes."}`
+        : "Shake a ripe apple or pear tree on the hill north-west of the village, and look in on the beehives. Finn buys fruit and honey for his bakes.",
     ]);
   $("#journal-content").replaceChildren(
     ...rows.map(([title, body]) => {
@@ -1117,7 +1245,16 @@ function interact() {
       finn: "FINN · THE BAKER",
       elio: "ELIO · THE GARDENER",
     };
-    openDialogue(names[n.id] || n.name, [oneOf(phrases)], () => {
+    const selling = n.id === "finn" && basketCount() > 0;
+    const line = selling
+      ? oneOf([
+          "Fruit from the hill! That’s tomorrow’s tarts sorted. Let me take those off your hands.",
+          "Is that orchard honey? Nothing glazes a bun like it. Here, for your trouble.",
+          "You’ve been up the orchard hill, I can tell. I’ll bake these into something good.",
+        ])
+      : oneOf(phrases);
+    openDialogue(names[n.id] || n.name, [line], () => {
+      if (selling) sellBasket();
       if (n.id === "mabel") complete("mabel");
       if (n.id === "finn" && state.seeds < 3) {
         state.seeds += 3;
@@ -1135,6 +1272,14 @@ function interact() {
   }
   if (id === "jetty") {
     castLine();
+    return;
+  }
+  if (nearest.data.type === "fruit-tree") {
+    shakeTree(nearest.data);
+    return;
+  }
+  if (nearest.data.type === "hive") {
+    collectHoney(nearest.data);
     return;
   }
   const dialogues = {
@@ -1168,6 +1313,18 @@ function interact() {
     ],
     garden: [
       "Good things grow slowly. Choose your seeds, find a little space, and begin.",
+    ],
+    windmill: [
+      "The sails creak round, slow and patient. Somewhere inside, a millstone hums.",
+      "A chalk mark by the door counts the summers: more than anyone can read.",
+      "From the doorstep you can see every chimney in the village, and the millpond shining.",
+      "The stones are warm from the afternoon. Bees drift past on their way to the clover.",
+    ],
+    "hilltop-bench": [
+      "You sit a while. The village looks like a quilt from here, stitched together by paths.",
+      "Smoke curls from the bakery’s chimney. Finn must be baking again.",
+      "Someone has carved two initials into the armrest, and a small heart between them.",
+      "The wind brings the smell of apples and warm grass. There is nowhere else to be.",
     ],
   };
   // Like a neighbor, a landmark answers each interaction with a single line.
@@ -1752,9 +1909,10 @@ function animate(now) {
   // walks, up to the map's edge.
   const follow = started ? 0.85 : 0.48,
     bounds = WORLD.camera;
+  // On the hill it rises with the ground under the player, who stays framed.
   target.set(
     THREE.MathUtils.clamp(p.x * follow, bounds.minX, bounds.maxX),
-    0,
+    terrainHeight(p.x, p.z),
     THREE.MathUtils.clamp(1.5 + (p.z - 5) * follow, bounds.minZ, bounds.maxZ),
   );
   if (Math.abs(viewHeight - targetViewHeight) > 0.01) {
@@ -1843,6 +2001,7 @@ function animate(now) {
   renderer.toneMappingExposure = THREE.MathUtils.lerp(1.05, 0.95, duskMix);
   effects.update(dt, motion);
   if (frame % 8 === 0) scanNearby();
+  if (frame % 120 === 0) updateOrchard();
   for (const material of glowMaterials)
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
   playerVisibility.update(camera, !photo && !firstPerson);
@@ -1872,6 +2031,12 @@ function animate(now) {
     import("./regions/millpond.js").then(({ millpondJobs }) =>
       streamer.add(...millpondJobs(THREE, world)),
     );
+    import("./regions/orchard.js").then(({ orchardJobs }) => {
+      const { jobs, harvest } = orchardJobs(THREE, world);
+      orchard = harvest;
+      updateOrchard();
+      streamer.add(...jobs);
+    });
   }
 }
 updateUI();
@@ -1890,7 +2055,7 @@ function applyTune() {
       target.dispose();
     }
   const foliage = overrides.foliage ?? true;
-  for (const mesh of world.trees.foliage) mesh.visible = foliage;
+  world.trees.setFoliageShown(foliage);
   world.bushes.group.visible = foliage;
   world.showFields(overrides.fields ?? true);
   world.trees.setDetail(leafDetail());
@@ -1923,6 +2088,17 @@ window.__willowmere = {
     snapView = true;
   },
   getFishing: () => ({ phase: fishing.phase, fish: { ...state.fish } }),
+  getTrees: () =>
+    world.trees.levels().map((tree) => ({
+      ...tree,
+      distance: firstPersonCamera.position.distanceTo(new THREE.Vector3(...tree.center)),
+    })),
+  getOrchard: () => ({
+    ready: !!orchard,
+    basket: { ...state.basket },
+    harvested: { ...state.harvested },
+    shaken: Object.keys(state.orchard),
+  }),
   getView: () => ({
     mode: firstPerson ? "first-person" : "overview",
     camera: camera.type,

@@ -13,6 +13,7 @@ import {
   chunkBounds,
   chunkCoords,
   terrainHeight,
+  terrainMaxIn,
 } from "./world-layout.js";
 import {
   MILLPOND,
@@ -21,6 +22,7 @@ import {
   millpondGrass,
   millpondWater,
 } from "./regions/millpond-layout.js";
+import { ORCHARD, orchardColliders, orchardGrass } from "./regions/orchard-layout.js";
 export function createWorld(T, scene) {
   const initialChildren = new Set(scene.children);
   const water = createWaterSystem(scene);
@@ -41,7 +43,11 @@ export function createWorld(T, scene) {
         // A margin covers parts that reach over the chunk's edge.
         bounds: new T.Box3(
           new T.Vector3(minX - 2, -2, minZ - 2),
-          new T.Vector3(maxX + 2, WORLD.canopy + 2, maxZ + 2),
+          new T.Vector3(
+            maxX + 2,
+            terrainMaxIn(minX - 2, maxX + 2, minZ - 2, maxZ + 2) + WORLD.canopy + 2,
+            maxZ + 2,
+          ),
         ),
         meshes: [],
         animations: [],
@@ -275,7 +281,8 @@ export function createWorld(T, scene) {
     );
   // Soil fills the ring around the village in strips. Under the millpond's
   // ground only the deepest layer runs, below its bed.
-  const pond = MILLPOND.ground;
+  const pond = MILLPOND.ground,
+    orchard = ORCHARD.ground;
   for (const [minX, maxX, minZ, maxZ] of [
     [ground.minX, village.minX, ground.minZ, ground.maxZ],
     [village.maxX, ground.maxX, ground.minZ, pond.minZ],
@@ -310,8 +317,12 @@ export function createWorld(T, scene) {
   field.holes.push(
     new T.Path(
       [
-        // North of the village, the millpond's ground mesh takes over.
-        [minX, minZ],
+        // North-west of the village the orchard hill's ground mesh takes
+        // over, and north of it the millpond's.
+        [orchard.minX, minZ],
+        [orchard.minX, orchard.minZ],
+        [orchard.maxX, orchard.minZ],
+        [orchard.maxX, minZ],
         [pond.minX, minZ],
         [pond.minX, pond.minZ],
         [pond.maxX, pond.minZ],
@@ -323,6 +334,7 @@ export function createWorld(T, scene) {
         [9.7, village.maxZ],
         [9.7, maxZ],
         [minX, maxZ],
+        [minX, minZ],
       ].map(([x, z]) => new T.Vector2(x, -z)),
     ),
   );
@@ -557,6 +569,7 @@ export function createWorld(T, scene) {
     },
     { x: 12, z: 13, w: 4.3, d: 16.5 },
     ...millpondColliders(),
+    ...orchardColliders(),
   );
   // Timber bridge with graceful hump, cap rails and peg details.
   for (let i = 0; i < 19; i++) {
@@ -1284,7 +1297,7 @@ export function createWorld(T, scene) {
     [6.7, 8.5, 1.1],
   ];
   const trees = createTrees(treePlacements, terrainHeight);
-  scene.add(trees.group);
+  scene.add(trees.group, trees.crowns);
   for (const [x, z, s] of treePlacements) {
     contact(x, z, 2.1 * s, 2.1 * s);
     colliders.push({ x, z, r: 0.33 * s });
@@ -1300,7 +1313,7 @@ export function createWorld(T, scene) {
   const bushes = createBushes(terrainHeight);
   scene.add(bushes.group);
   // Pools barely resolve single leaves; their captures skip the dense foliage.
-  water.excludeFromCaptures(...trees.foliage, bushes.group);
+  water.excludeFromCaptures(...trees.foliage, trees.crowns, bushes.group);
   for (const footprint of bushes.footprints) {
     colliders.push(footprint);
     contact(footprint.x, footprint.z, footprint.r * 2.5, footprint.r * 2.1);
@@ -1782,8 +1795,10 @@ export function createWorld(T, scene) {
     !isBlocked(x, z) &&
     // Village paths, the plaza's open middle and the brook's banks stay clear.
     !(inVillage(x, z) && (inRoad(x, z) || Math.abs(x - 12) <= 2)) &&
-    // The millpond's water, banks, jetty and boathouse stay clear.
+    // The millpond's water, banks, jetty and boathouse stay clear, and the
+    // orchard's path and footings.
     millpondGrass(x, z) &&
+    orchardGrass(x, z) &&
     Math.hypot(x, z) > 2.5;
   return {
     water,
