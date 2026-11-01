@@ -199,8 +199,10 @@ test("bakery door in the village enters the room at walking height", async ({
     const next = await page.evaluate(() => {
       const game = window.__willowmere,
         p = game.getPlayer();
-      if (Math.hypot(p.x - 1.2, p.z + 5.2) < 0.45) return null;
-      const route = game.findPath(p, { x: 1.2, z: -5.2 });
+      // Stand beside the door's west side: a click on the door itself walks in,
+      // and Finn, who stands to its east, would win the prompt there.
+      if (Math.hypot(p.x - 0.6, p.z + 5) < 0.45) return null;
+      const route = game.findPath(p, { x: 0.6, z: -5 });
       if (!route.length) throw Error("Bakery door has no walking route");
       const step = route[Math.min(4, route.length - 1)];
       return { step, screen: game.project(step.x, step.z) };
@@ -216,13 +218,16 @@ test("bakery door in the village enters the room at walking height", async ({
   await expect(page.locator("#interaction")).toContainText(
     "Enter The Daily Loaf",
   );
+  const outside = await page.evaluate(() => window.__willowmere.getPlayer());
   await page.keyboard.press("e");
   await page.waitForFunction(() => window.__willowmere.getInterior().active);
   await face(page, 4.8, 5.45);
   await page.keyboard.press("e");
   await page.waitForFunction(() => !window.__willowmere.getInterior().active);
+  // Leaving puts the player back on the step they entered from.
   const p = await page.evaluate(() => window.__willowmere.getPlayer());
-  expect(Math.hypot(p.x - 1.2, p.z + 5.2)).toBeLessThan(0.5);
+  expect(Math.hypot(p.x - outside.x, p.z - outside.z)).toBeLessThan(0.1);
+  expect(Math.hypot(p.x - 1.2, p.z + 5.2)).toBeLessThan(1);
 });
 
 test("touch walking and drag look work with reduced motion on a narrow screen", async ({

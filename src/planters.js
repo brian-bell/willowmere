@@ -47,7 +47,8 @@ const templates = {
   stem: new T.CylinderGeometry(1, 1, 1, 3, 1, true)
     .translate(0, 0.5, 0)
     .toNonIndexed(),
-  pebble: new T.DodecahedronGeometry(1, 0).toNonIndexed(),
+  // Polyhedra are built without an index already.
+  pebble: new T.DodecahedronGeometry(1, 0),
 };
 for (const geometry of Object.values(templates)) {
   geometry.deleteAttribute("uv");
