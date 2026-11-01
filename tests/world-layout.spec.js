@@ -78,14 +78,15 @@ test("chunk seeds are independent of build order", () => {
   }
 });
 
-test("terrain is flat in the village and rises only around the millpond", () => {
+test("terrain is flat in the village and rises only at the millpond and orchard hill", () => {
   for (const [x, z] of [
     [0, 0],
     [-24, -21],
     [24, 21],
     [12.3, -4.7],
     [12, -21],
-    [-30, -30],
+    [-30, 10],
+    [-47, -41],
     [35, 10],
     [100, -100],
   ])
@@ -95,9 +96,13 @@ test("terrain is flat in the village and rises only around the millpond", () => 
   // The pond's bank rises about half a metre; its bed lies below the lawn.
   expect(terrainHeight(17.6, -26.5)).toBeGreaterThan(0.35);
   expect(terrainHeight(12.5, -31.2)).toBeLessThan(-0.3);
-  expect(terrainField.max).toBeGreaterThan(0.35);
-  expect(terrainField.max).toBeLessThan(0.6);
+  // The orchard hill is the map's highest ground, a few metres up.
+  expect(terrainHeight(-25, -32)).toBeGreaterThan(3.2);
+  expect(terrainField.max).toBeGreaterThan(3.2);
+  expect(terrainField.max).toBeLessThan(4);
   expect(regionAt(12.5, -31).name).toBe("The millpond");
+  expect(regionAt(-25, -32).name).toBe("The orchard hill");
+  expect(regionAt(-2, -22).name).toBe("The orchard hill");
   expect(regionAt(7, -28).name).toBe("The millpond");
   expect(regionAt(12, -20.5).name).toBe("The willow brook");
 });

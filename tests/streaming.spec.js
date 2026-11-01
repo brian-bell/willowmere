@@ -18,8 +18,8 @@ test("the open country streams in around the village after startup", async ({
     .poll(async () => streaming(page), { timeout: 600000 })
     .toMatchObject({ pending: 0 });
   // The route grid, 16 grass patches (one per chunk around the village), the
-  // fishing float, and the millpond's six pieces.
-  expect((await streaming(page)).finished).toBe(24);
+  // fishing float, the millpond's six pieces and the orchard hill's six.
+  expect((await streaming(page)).finished).toBe(30);
   const chunks = await page.evaluate(() => window.__willowmere.getChunks());
   const patches = chunks.flatMap((chunk) =>
     chunk.meshes

@@ -3,6 +3,7 @@ import {
   inMillpondGround,
   millpondGround,
 } from "./regions/millpond-layout.js";
+import { hillHeight, inOrchardGround } from "./regions/orchard-layout.js";
 
 // One description of the map's extent, its chunk grid, its named regions and
 // its ground height. Movement, routing, the overview camera, shadows, scatter
@@ -113,6 +114,8 @@ export const REGIONS = [
   .concat(
     // The pond, its banks and the brook up to it, north of the village.
     { id: "millpond", name: "The millpond", minX: 0, maxX: 26, maxZ: -21 },
+    // The hill north-west of the village, west of the millpond.
+    { id: "orchard", name: "The orchard hill", maxX: 0, maxZ: -21 },
     { id: "fields", name: "The open fields" },
   );
 
@@ -125,7 +128,7 @@ export function regionAt(x, z) {
 
 // Terrain heights, one sample per metre over the ground slab. The village
 // stays flat; new regions bring their own heights: the millpond's banks and
-// bed so far.
+// bed, and the orchard hill.
 const TERRAIN_STEP = 1,
   terrainCols = Math.round((ground.maxX - ground.minX) / TERRAIN_STEP) + 1,
   terrainRows = Math.round((ground.maxZ - ground.minZ) / TERRAIN_STEP) + 1,
@@ -135,9 +138,13 @@ for (let row = 0; row < terrainRows; row++)
   for (let col = 0; col < terrainCols; col++) {
     const x = ground.minX + col * TERRAIN_STEP,
       z = ground.minZ + row * TERRAIN_STEP;
-    if (inVillage(x, z) || !inMillpondGround(x, z)) continue;
+    if (inVillage(x, z)) continue;
     // Heights are above the lawn's top, which sits 5 cm over the terrain.
-    const height = millpondGround(x, z) - MILLPOND.lawn;
+    const height = inMillpondGround(x, z)
+      ? millpondGround(x, z) - MILLPOND.lawn
+      : inOrchardGround(x, z)
+        ? hillHeight(x, z)
+        : 0;
     terrain[row * terrainCols + col] = height;
     terrainMax = Math.max(terrainMax, height);
   }
@@ -149,8 +156,42 @@ export const terrainField = {
   max: terrainMax,
 };
 
-/** Height of the bare ground at (x, z), bilinear between samples. */
+// The highest sample in each 4 × 4 m tile, so a view can find the tallest
+// ground under it without visiting every sample.
+const TILE = 4,
+  tileCols = Math.ceil((terrainCols - 1) / TILE),
+  tileRows = Math.ceil((terrainRows - 1) / TILE),
+  tileMax = new Float32Array(tileCols * tileRows);
+for (let row = 0; row < terrainRows; row++)
+  for (let col = 0; col < terrainCols; col++) {
+    const h = terrain[row * terrainCols + col];
+    // A sample on a tile's edge counts for the tiles on both sides.
+    for (const r of [Math.floor(row / TILE), Math.floor((row - 1) / TILE)])
+      for (const c of [Math.floor(col / TILE), Math.floor((col - 1) / TILE)])
+        if (r >= 0 && r < tileRows && c >= 0 && c < tileCols)
+          tileMax[r * tileCols + c] = Math.max(tileMax[r * tileCols + c], h);
+  }
+
+/** The highest terrain anywhere within a ground box (0 at the lowest). */
+export function terrainMaxIn(minX, maxX, minZ, maxZ) {
+  const span = TILE * TERRAIN_STEP,
+    c0 = Math.max(0, Math.floor((minX - ground.minX) / span)),
+    c1 = Math.min(tileCols - 1, Math.floor((maxX - ground.minX) / span)),
+    r0 = Math.max(0, Math.floor((minZ - ground.minZ) / span)),
+    r1 = Math.min(tileRows - 1, Math.floor((maxZ - ground.minZ) / span));
+  let max = 0;
+  for (let r = r0; r <= r1; r++)
+    for (let c = c0; c <= c1; c++) max = Math.max(max, tileMax[r * tileCols + c]);
+  return max;
+}
+
+/**
+ * Height of the bare ground at (x, z): bilinear between samples, except on
+ * the orchard hill, whose smooth slopes are evaluated exactly so the trees,
+ * walkers and its ground mesh agree.
+ */
 export function terrainHeight(x, z) {
+  if (inOrchardGround(x, z)) return hillHeight(x, z);
   const fx = Math.min(
       Math.max((x - ground.minX) / TERRAIN_STEP, 0),
       terrainCols - 1,

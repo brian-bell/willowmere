@@ -1,6 +1,7 @@
 // The open country around the village: meadow grass on the ground slab, up
-// to the millpond's banks (src/regions/millpond.js), until the orchard, marsh,
-// wood and market lane arrive in their own regions. Loaded with import() after the village is on screen, and built by
+// to the millpond's banks (src/regions/millpond.js) and over the orchard hill
+// (src/regions/orchard.js), until the marsh, wood and market lane arrive in
+// their own regions. Loaded with import() after the village is on screen, and built by
 // the streamer one patch at a time.
 import {
   WORLD,
@@ -9,6 +10,7 @@ import {
   terrainHeight,
 } from "../world-layout.js";
 import { millpondGrass } from "./millpond-layout.js";
+import { orchardGrass } from "./orchard-layout.js";
 
 // Blades per square metre, about the village meadow's density.
 const GRASS_DENSITY = 1.7;
@@ -67,7 +69,7 @@ function grassPatch(T, geometry, material, rand, b, key) {
       lean = range(-0.3, 0.3),
       height = range(0.6, 1.4);
     // Every blade draws its random numbers, so a skipped one moves no other.
-    if (!millpondGrass(x, z)) continue;
+    if (!millpondGrass(x, z) || !orchardGrass(x, z)) continue;
     dummy.position.set(x, terrainHeight(x, z) + 0.15, z);
     dummy.rotation.set(tilt, turn, lean);
     dummy.scale.set(1, height, 1);

@@ -150,3 +150,43 @@ test("the millpond keeps a tighter draw budget than the village's", async ({
   expect(Math.max(...samples.map((s) => s.triangles))).toBeLessThan(2.5e6);
   expect(errors).toEqual([]);
 });
+
+test("the orchard hill keeps the same budget as the millpond", async ({ page }) => {
+  test.setTimeout(900000);
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "willowmere.save.v1",
+      JSON.stringify({
+        started: true,
+        quests: { mabel: false, flower: false, plant: false },
+        plants: [],
+      }),
+    );
+  });
+  await page.goto("/?resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
+  await page.waitForFunction(() => !window.__willowmere.getStreaming().pending, null, {
+    timeout: 600000,
+    polling: 1000,
+  });
+  // The benchmark's viewpoint: the path beside the bench, at the default
+  // height, with the orchard, the windmill and the hives in view.
+  await page.evaluate(() => window.__willowmere.moveTo(-21, -27.6, 0.65));
+  const samples = await page.evaluate(async () => {
+    const values = [];
+    for (let i = 0; i < 4; i++) await new Promise(requestAnimationFrame);
+    for (let i = 0; i < 8; i++) {
+      await new Promise(requestAnimationFrame);
+      values.push(window.__willowmere.getDiagnostics());
+    }
+    return values;
+  });
+  expect(Math.max(...samples.map((s) => s.drawCalls))).toBeLessThan(1000);
+  expect(Math.max(...samples.map((s) => s.triangles))).toBeLessThan(2.5e6);
+  expect(errors).toEqual([]);
+});

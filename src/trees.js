@@ -136,6 +136,10 @@ export function createTrees(placements, groundHeight = () => 0) {
     specimens = [],
     foliage = [],
     lods = [];
+  // Distant crowns live in their own group, beside the trees' four batches.
+  const crowns = new T.Group();
+  crowns.name = "Distant tree crowns";
+  crowns.userData.dynamic = true;
   const dummy = new T.Object3D();
   const bark = barkTexture();
   const woodMaterial = new T.MeshStandardMaterial({
@@ -162,9 +166,19 @@ export function createTrees(placements, groundHeight = () => 0) {
     depthPacking: T.RGBADepthPacking,
     side: T.DoubleSide,
   });
+  // Leaves on raised ground (GROUND_LIFT) carry the ground's height under
+  // their tree, so shelter still counts from the ground, not from sea level.
+  // They may also shake (uLeafShake: x, z, start time, strength), as a fruit
+  // tree does when someone gives it a shove.
   function windShader(shader) {
     shader.uniforms.uTreeTime = time;
-    shader.vertexShader = "uniform float uTreeTime;\n" + shader.vertexShader;
+    shader.vertexShader =
+      `uniform float uTreeTime;
+      #ifdef GROUND_LIFT
+        attribute float groundLift;
+        uniform vec4 uLeafShake;
+      #endif
+      ` + shader.vertexShader;
     shader.vertexShader = shader.vertexShader.replace(
       "#include <begin_vertex>",
       `
@@ -172,12 +186,25 @@ export function createTrees(placements, groundHeight = () => 0) {
       #ifdef USE_INSTANCING
         vec3 anchor = instanceMatrix[3].xyz;
         float phase = anchor.x * 0.83 + anchor.z * 0.67;
-        float shelter = smoothstep(0.5, 3.0, anchor.y);
+        #ifdef GROUND_LIFT
+          float shelter = smoothstep(0.5, 3.0, anchor.y - groundLift);
+          float shaken = uTreeTime - uLeafShake.z;
+          float shake = uLeafShake.w * step(0.0, shaken) * exp(-shaken * 2.6)
+            * (1.0 - smoothstep(1.3, 2.3, distance(anchor.xz, uLeafShake.xy)));
+        #else
+          float shelter = smoothstep(0.5, 3.0, anchor.y);
+          const float shake = 0.0;
+          float shaken = 0.0;
+        #endif
         vec3 breeze = vec3(
           sin(uTreeTime * 1.15 + phase) * 0.028,
           sin(uTreeTime * 1.7 + phase * 1.3) * 0.009,
           cos(uTreeTime * 0.94 + phase) * 0.019
-        ) * shelter;
+        ) * shelter + vec3(
+          sin(shaken * 31.0 + phase * 5.0),
+          sin(shaken * 23.0 + phase * 3.0) * 0.5,
+          cos(shaken * 27.0 + phase * 4.0)
+        ) * shake;
         // Convert the world breeze into each rotated/scaled leaf's local basis.
         transformed += vec3(
           dot(instanceMatrix[0].xyz, breeze) / dot(instanceMatrix[0].xyz, instanceMatrix[0].xyz),
@@ -194,6 +221,13 @@ export function createTrees(placements, groundHeight = () => 0) {
   depthMaterial.onBeforeCompile = windShader;
   leafMaterial.customProgramCacheKey = () => "willowmere-leaf-wind-v1";
   depthMaterial.customProgramCacheKey = () => "willowmere-leaf-depth-v1";
+  // Distant crowns in first person: a few lumpy shells where the leaf
+  // clusters are, in the canopy's colours, casting ordinary shadows.
+  const crownMaterial = new T.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.9,
+  });
+  const crownGeometry = new T.IcosahedronGeometry(1, 1);
 
   function detail(geometry, position, scale, color, quaternion = null) {
     const g = geometry.clone();
@@ -398,6 +432,8 @@ export function createTrees(placements, groundHeight = () => 0) {
       }
     }
 
+    // Each leaf cluster's centre, size and colour, for the distant crown.
+    const clusters = [];
     const foliageColors = (
       autumn
         ? ["#879252", "#a5a05b", "#bdad66", "#c5b674", "#939553"]
@@ -448,6 +484,13 @@ export function createTrees(placements, groundHeight = () => 0) {
 
     function spray(center, radius, index) {
       const baseColor = foliageColors[index % foliageColors.length];
+      clusters.push({
+        center: localToWorld(center).add(
+          new T.Vector3(0, willow ? -0.12 * scale : 0, 0),
+        ),
+        radius: radius * scale,
+        color: baseColor,
+      });
       // Fill a loose ellipsoid with leafy shoots. Paired leaves follow each
       // shoot, leaving irregular edges and small windows into the branchwork.
       const count = willow ? 17 : 21;
@@ -730,6 +773,7 @@ export function createTrees(placements, groundHeight = () => 0) {
       }
     }
     specimens.push({
+      crown: crownShells(clusters, willow ? 1.25 : 1, crownMaterial, crownGeometry),
       wood: woodParts.slice(start[0]),
       details: detailParts.slice(start[1]),
       leaves: leafRecords.slice(start[2]),
@@ -746,6 +790,7 @@ export function createTrees(placements, groundHeight = () => 0) {
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.matrixAutoUpdate = false;
     group.add(mesh);
+    return mesh;
   }
   const blade = leafGeometry();
   const coarseBlade = leafGeometry([0, 0.55, 0], 1.3);
@@ -788,29 +833,36 @@ export function createTrees(placements, groundHeight = () => 0) {
         woodMaterial,
         "Fluted bark, roots and branching twigs",
       );
-    if (specimen.details.length)
-      batch(
-        specimen.details,
-        detailMaterial,
-        "Tree hollows, moss and woodland details",
-      );
+    const details = specimen.details.length
+      ? batch(
+          specimen.details,
+          detailMaterial,
+          "Tree hollows, moss and woodland details",
+        )
+      : null;
     const mesh = instances(
       specimen.leaves,
       leafMaterial,
       "Living folded leaves",
       true,
     );
-    foliage.push(mesh);
-    lods.push({
-      mesh,
-      center: canopyBounds[lods.length].getCenter(new T.Vector3()),
-      level: 0,
-    });
-    instances(
+    const litter = instances(
       specimen.litter,
       litterMaterial,
       "Leaves settled among the roots",
     );
+    crowns.add(specimen.crown);
+    foliage.push(mesh);
+    lods.push({
+      mesh,
+      fine: blade,
+      coarse: coarseBlade,
+      crown: specimen.crown,
+      // Small things at the tree's foot, hidden along with the leaves.
+      underneath: [details, litter].filter(Boolean),
+      center: canopyBounds[lods.length].getCenter(new T.Vector3()),
+      level: 0,
+    });
   }
   for (const geometry of [
     ringGeometry,
@@ -822,25 +874,138 @@ export function createTrees(placements, groundHeight = () => 0) {
     geometry.dispose();
   group.userData.treeCount = placements.length;
   group.userData.leafCount = leafRecords.length;
+  let foliageShown = true;
+  function show(lod) {
+    lod.mesh.visible = foliageShown && lod.level < 2;
+    if (lod.crown) lod.crown.visible = foliageShown && lod.level === 2;
+    for (const mesh of lod.underneath) mesh.visible = lod.level < 2;
+  }
   return {
     group,
+    crowns,
     canopyBounds,
     foliage,
     update: (elapsed) => {
       time.value = elapsed;
     },
     // Level 0 draws every leaf. Level 1 draws every other leaf as the coarse
-    // blade, for canopies that cover few pixels. A function picks the level
-    // for each tree from its canopy center.
+    // blade, for canopies that cover few pixels. Level 2 (first person, far
+    // off) draws the tree's crown shells instead of its leaves, and nothing
+    // at its foot. A function picks the level for each tree from its canopy
+    // center.
     setDetail(level) {
       for (const lod of lods) {
         const next = typeof level === "function" ? level(lod.center) : level;
         if (next === lod.level) continue;
-        lod.level = next;
         const total = lod.mesh.instanceMatrix.count;
-        lod.mesh.geometry = next ? coarseBlade : blade;
-        lod.mesh.count = next ? Math.ceil(total / 2) : total;
+        if (!next !== !lod.level) {
+          lod.mesh.geometry = next ? lod.coarse : lod.fine;
+          lod.mesh.count = next ? Math.ceil(total / 2) : total;
+        }
+        const crowned = (next === 2) !== (lod.level === 2);
+        lod.level = next;
+        if (crowned) show(lod);
       }
     },
+    /** Each canopy's level and what it shows, for tests. */
+    levels: () =>
+      lods.map((lod) => ({
+        center: lod.center.toArray(),
+        level: lod.level,
+        leaves: lod.mesh.visible,
+        crown: !!lod.crown?.visible,
+        crownShadow: !!lod.crown?.castShadow,
+      })),
+    /** Shows or hides every canopy (leaves and crowns), for measuring them. */
+    setFoliageShown(shown) {
+      foliageShown = shown;
+      for (const lod of lods) show(lod);
+    },
+    /**
+     * Adds foliage that streamed in later (a region's trees) to the levels of
+     * detail: `mesh` is its leaves, `fine` and `coarse` its two blades,
+     * `crown` its distant shells, `center` where its distance is measured.
+     */
+    adopt({ mesh, fine, coarse, crown = null, underneath = [], center }) {
+      const lod = { mesh, fine, coarse, crown, underneath, center, level: 0 };
+      lods.push(lod);
+      foliage.push(mesh);
+      show(lod);
+      return lod;
+    },
+    // Shared with streamed trees, so they add no programs or textures.
+    materials: {
+      wood: woodMaterial,
+      detail: detailMaterial,
+      crown: crownMaterial,
+      time,
+      /**
+       * Leaf materials for trees on raised ground: their geometry carries a
+       * `groundLift` instance attribute, and `shake` (a Vector4: x, z, start
+       * time, strength) shakes the leaves around a point.
+       */
+      grounded(shake) {
+        const leaf = leafMaterial.clone(),
+          depth = depthMaterial.clone();
+        for (const [material, key] of [
+          [leaf, "willowmere-leaf-wind-ground-v1"],
+          [depth, "willowmere-leaf-depth-ground-v1"],
+        ]) {
+          material.defines = { GROUND_LIFT: "" };
+          material.onBeforeCompile = (shader) => {
+            windShader(shader);
+            shader.uniforms.uLeafShake = { value: shake };
+          };
+          material.customProgramCacheKey = () => key;
+        }
+        return { leaf, depth };
+      },
+    },
+    blades: { fine: blade, coarse: coarseBlade },
   };
+}
+
+/**
+ * One tree's distant crown: a lumpy shell around each of its leaf clusters,
+ * merged into one mesh. `stretch` lengthens the shells downward (willows).
+ */
+export function crownShells(clusters, stretch, material, shell) {
+  const parts = [],
+    color = new T.Color();
+  for (const { center, radius, color: base } of clusters) {
+    const geometry = shell.clone(),
+      position = geometry.attributes.position,
+      normal = geometry.attributes.normal,
+      colors = new Float32Array(position.count * 3);
+    for (let i = 0; i < position.count; i++) {
+      const x = position.getX(i),
+        y = position.getY(i),
+        z = position.getZ(i),
+        // Lumps that depend only on the vertex's direction, so the shell
+        // stays closed; the shells sit a little inside the leaves' reach.
+        lump = 0.86 + 0.12 * Math.sin(x * 5.1 + center.x) * Math.sin(y * 4.3 + z * 3.7 + center.z),
+        down = y < 0 ? stretch : 1;
+      normal.setXYZ(i, x, y, z);
+      position.setXYZ(
+        i,
+        center.x + x * radius * lump * 1.05,
+        center.y + y * radius * lump * 0.9 * down,
+        center.z + z * radius * lump * 1.05,
+      );
+      // Darker underneath, as the leaves' own shade would make it.
+      color.copy(base).multiplyScalar(0.44 + 0.3 * (y * 0.5 + 0.5));
+      color.toArray(colors, i * 3);
+    }
+    geometry.setAttribute("color", new T.BufferAttribute(colors, 3));
+    parts.push(geometry);
+  }
+  const geometry = mergeGeometries(parts, false);
+  for (const part of parts) part.dispose();
+  geometry.computeBoundingSphere();
+  const mesh = new T.Mesh(geometry, material);
+  mesh.name = "Distant tree crown";
+  mesh.castShadow = mesh.receiveShadow = true;
+  mesh.matrixAutoUpdate = false;
+  mesh.visible = false;
+  return mesh;
 }
