@@ -129,15 +129,15 @@ test("the orchard hill streams in, and its trees and hives give fruit and honey"
     window.__willowmere.findPath({ x: -2.8, z: 6.2 }, { x: -21.2, z: -28.4 }),
   );
   expect(route.length).toBeGreaterThan(20);
-  // Standing on the hill, the player stands on its slope.
+  // Beside an apple tree high on the slope, the player stands on the hill.
   await page.evaluate(() => document.querySelector("#start").click());
   const tree = await page.evaluate(() => {
-    const t = { x: -36.2, z: -24.5 };
+    const t = { x: -29.8, z: -28 };
     window.__willowmere.moveTo(t.x, t.z + 1.1, Math.PI);
     return window.__willowmere.getPlayer();
   });
   const standing = await page.evaluate(() => window.__willowmere.getDiagnostics().position[1]);
-  expect(standing).toBeGreaterThan(0.6);
+  expect(standing).toBeGreaterThan(1.5);
   await expect(page.locator("#location-name")).toHaveText("The orchard hill", {
     timeout: 120000,
   });
@@ -155,7 +155,7 @@ test("the orchard hill streams in, and its trees and hives give fruit and honey"
   await expect(page.locator("#toast")).toContainText("Nothing more is ripe", { timeout: 60000 });
   let orchard = await page.evaluate(() => window.__willowmere.getOrchard());
   expect(orchard.basket.apple).toBe(3);
-  expect(orchard.shaken).toEqual(["apple-2"]);
+  expect(orchard.shaken).toEqual(["apple-9"]);
   // A hive gives a jar of honey.
   await page.evaluate(() => window.__willowmere.moveTo(-36.3, -31.3, Math.PI));
   await expect(page.locator("#interaction span")).toHaveText("Collect honey", {
@@ -175,7 +175,7 @@ test("the orchard hill streams in, and its trees and hives give fruit and honey"
   orchard = await page.evaluate(() => window.__willowmere.getOrchard());
   expect(orchard.basket).toEqual({ apple: 3, pear: 0, honey: 1 });
   expect(orchard.harvested).toEqual({ apple: 3, pear: 0, honey: 1 });
-  expect(tree.z).toBeCloseTo(-23.4, 1);
+  expect(tree.z).toBeCloseTo(-26.9, 1);
   expect(errors).toEqual([]);
 });
 
