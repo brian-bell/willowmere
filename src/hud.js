@@ -41,7 +41,11 @@ export function createHud(probe) {
       event.stopPropagation();
       onclick(b);
     };
-    Object.assign(b.style, { font: "inherit", marginRight: "6px", padding: "2px 8px" });
+    Object.assign(b.style, {
+      font: "inherit",
+      marginRight: "6px",
+      padding: "2px 8px",
+    });
     buttons.append(b);
   };
   panel.append(summary, buttons, list);
@@ -67,7 +71,8 @@ export function createHud(probe) {
       recent = frames.filter(([t]) => now - t < WINDOW),
       intervals = recent.map(([, i]) => i).sort((a, b) => a - b),
       cpu = recent.map(([, , c]) => c).sort((a, b) => a - b),
-      at = (list, q) => (list.length ? list[Math.floor((list.length - 1) * q)] : 0),
+      at = (list, q) =>
+        list.length ? list[Math.floor((list.length - 1) * q)] : 0,
       over = (ms) => intervals.filter((i) => i > ms).length,
       fps = intervals.length / Math.min(WINDOW / 1000, (now - start) / 1000);
     return (
