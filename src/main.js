@@ -472,7 +472,10 @@ if (new URLSearchParams(location.search).has("hud"))
       textures: renderer.info.memory.textures,
       streamed: streamer.finished,
       walking: clickPath.length > 0 ? "yes" : "no",
-    }));
+    }), {
+      counters: () => renderer.info.render,
+      tune: (settings) => window.__willowmere.tune(settings),
+    });
   });
 let openCountryRequested = false;
 // Lit windows and lamp glass brighten at blue hour. Each chunk lists its own.

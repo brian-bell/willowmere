@@ -2,17 +2,34 @@
 // such as tablets: open the game with ?hud. It shows the frame rate and the
 // slowest frames of the last few seconds, and logs every stall with what
 // changed in the frame before it (pixel ratio, shaders, uploads, shadow
-// fit, streaming, view). "Copy" puts the log on the clipboard to paste
-// into a report. Loaded only with ?hud, so normal play never pays for it.
+// fit, streaming, view). The second row of buttons switches off one cost at
+// a time through window.__willowmere.tune, and every five-second window is
+// logged with what was switched off, so one session on a device attributes
+// its frame time. "Copy" puts the log on the clipboard to paste into a
+// report. Loaded only with ?hud, so normal play never pays for it.
 const STALL = 45, // Two missed refreshes at 60 Hz.
   WINDOW = 5000,
   LOG = 40;
 
+// Each toggle is a tune override; Ratio cycles through forced pixel ratios.
+const TOGGLES = [
+  ["Coarse leaves", { leafDetail: 1 }],
+  ["No foliage", { foliage: false }],
+  ["No water", { water: false }],
+  ["Frozen shadows", { shadowUpdate: false }],
+  ["No bloom", { bloom: false }],
+  ["No MSAA", { samples: 0 }],
+  ["No fields", { fields: false }],
+];
+const RATIOS = [null, 1, 0.75, 0.5];
+
 /**
  * `probe()` returns the frame's state as a flat object of numbers and
  * strings; a stall lists the keys whose values changed in the frame before.
+ * `counters()` returns draw calls and triangles, averaged per window.
+ * `tune(settings)` applies benchmark overrides (null restores a default).
  */
-export function createHud(probe) {
+export function createHud(probe, { counters, tune } = {}) {
   const panel = document.createElement("div");
   panel.id = "hud";
   Object.assign(panel.style, {
@@ -33,8 +50,9 @@ export function createHud(probe) {
   });
   const summary = document.createElement("div"),
     buttons = document.createElement("div"),
+    toggles = document.createElement("div"),
     list = document.createElement("div");
-  const button = (label, onclick) => {
+  const button = (label, onclick, row = buttons) => {
     const b = document.createElement("button");
     b.textContent = label;
     b.onclick = (event) => {
@@ -45,10 +63,12 @@ export function createHud(probe) {
       font: "inherit",
       marginRight: "6px",
       padding: "2px 8px",
+      margin: "2px 6px 2px 0",
     });
-    buttons.append(b);
+    row.append(b);
+    return b;
   };
-  panel.append(summary, buttons, list);
+  panel.append(summary, buttons, toggles, list);
   document.body.append(panel);
   // Taps on the panel must not walk the player.
   for (const type of ["pointerdown", "pointerup", "click", "touchstart"])
@@ -56,8 +76,13 @@ export function createHud(probe) {
 
   const start = performance.now(),
     frames = [], // [time, interval, cpu]
-    stalls = [];
-  let previous = null,
+    stalls = [],
+    windows = [],
+    active = new Set();
+  let ratio = 0,
+    // The current measurement window: frame intervals, script times, counters.
+    measuring = null,
+    previous = null,
     previousFrame = null,
     last = 0,
     lastDraw = 0;
@@ -66,6 +91,36 @@ export function createHud(probe) {
     Object.entries(state)
       .map(([key, value]) => `${key} ${value}`)
       .join(", ");
+  const label = () =>
+    [...active, ...(RATIOS[ratio] ? [`ratio ${RATIOS[ratio]}`] : [])].join(
+      " + ",
+    ) || "as played";
+  // Windows start a second after a toggle, once the change has settled.
+  const newWindow = (now, settle = 0) =>
+    (measuring = {
+      from: now + settle,
+      intervals: [],
+      cpu: [],
+      calls: 0,
+      triangles: 0,
+    });
+  function closeWindow(now) {
+    const w = measuring,
+      n = w.intervals.length;
+    if (n < 3) return;
+    w.intervals.sort((a, b) => a - b);
+    w.cpu.sort((a, b) => a - b);
+    const at = (list, q) => list[Math.floor((list.length - 1) * q)];
+    windows.push(
+      `${elapsed(now)} s, ${label()}: ${(n / ((now - w.from) / 1000)).toFixed(1)} fps, ` +
+        `frame median ${at(w.intervals, 0.5).toFixed(1)} / p95 ${at(w.intervals, 0.95).toFixed(1)} ms, ` +
+        `script median ${at(w.cpu, 0.5).toFixed(1)} ms` +
+        (w.calls
+          ? `, ${Math.round(w.calls / n)} draws, ${(w.triangles / n / 1e6).toFixed(2)}M triangles`
+          : "") +
+        ` | ${previous ? describe(previous) : ""}`,
+    );
+  }
   function report() {
     const now = performance.now(),
       recent = frames.filter(([t]) => now - t < WINDOW),
@@ -88,6 +143,8 @@ export function createHud(probe) {
   function logText() {
     return (
       report() +
+      `\n\nFive-second windows (${windows.length}):\n` +
+      windows.join("\n") +
       `\n\nStalls (${stalls.length}${stalls.length >= LOG ? "+, newest kept" : ""}):\n` +
       stalls.join("\n")
     );
@@ -108,12 +165,47 @@ export function createHud(probe) {
   button("Clear", () => {
     stalls.length = 0;
     frames.length = 0;
+    windows.length = 0;
+    measuring = null;
   });
   button("Hide", (b) => {
     const hidden = (list.style.display = list.style.display ? "" : "none");
     summary.style.display = list.style.display;
     b.textContent = hidden ? "Show" : "Hide";
   });
+
+  if (tune) {
+    for (const [name, settings] of TOGGLES)
+      button(
+        name,
+        (b) => {
+          const on = !active.has(name);
+          if (on) active.add(name);
+          else active.delete(name);
+          tune(
+            on
+              ? settings
+              : Object.fromEntries(
+                  Object.keys(settings).map((key) => [key, null]),
+                ),
+          );
+          b.style.outline = on ? "2px solid #e8c25a" : "";
+          newWindow(performance.now(), 1000);
+        },
+        toggles,
+      );
+    button(
+      "Ratio auto",
+      (b) => {
+        ratio = (ratio + 1) % RATIOS.length;
+        tune({ pixelRatio: RATIOS[ratio] });
+        b.textContent = `Ratio ${RATIOS[ratio] ?? "auto"}`;
+        b.style.outline = RATIOS[ratio] ? "2px solid #e8c25a" : "";
+        newWindow(performance.now(), 1000);
+      },
+      toggles,
+    );
+  }
 
   return {
     /** Call once per outdoor frame, after it is drawn. */
@@ -130,6 +222,20 @@ export function createHud(probe) {
       if (interval) {
         frames.push([now, interval, cpu]);
         while (frames.length && now - frames[0][0] > WINDOW) frames.shift();
+        if (!measuring) newWindow(now);
+        if (now >= measuring.from) {
+          measuring.intervals.push(interval);
+          measuring.cpu.push(cpu);
+          const c = counters?.();
+          if (c) {
+            measuring.calls += c.calls;
+            measuring.triangles += c.triangles;
+          }
+          if (now - measuring.from >= WINDOW) {
+            closeWindow(now);
+            newWindow(now);
+          }
+        }
       }
       // A long interval ends at this frame. The work behind it was usually
       // the previous frame's (script or GPU), or a pause between frames.
