@@ -195,9 +195,10 @@ test("tilted map supports click-to-walk and fits mobile screens", async ({ page 
   await page.setViewportSize({ width: 390, height: 844 });
   const controls = await page.locator(".view-controls").boundingBox();
   const quest = await page.locator(".quest-card").boundingBox();
+  const topButtons = await page.locator(".top-actions").boundingBox();
   expect(controls.x).toBeGreaterThan(quest.x + quest.width);
   expect(controls.x + controls.width).toBeLessThanOrEqual(390);
-  expect(controls.y).toBeGreaterThan(100);
+  expect(controls.y).toBeGreaterThan(topButtons.y + topButtons.height);
   expect(controls.y + controls.height).toBeLessThan(700);
   // Phones get a slim rail; tilt, yaw and pan fold out on demand.
   expect(controls.width).toBeLessThan(60);
@@ -215,8 +216,10 @@ test("tilted map supports click-to-walk and fits mobile screens", async ({ page 
   await expect(page.locator(".pan-controls")).toBeHidden();
   await page.setViewportSize({ width: 844, height: 390 });
   const landscape = await page.locator(".view-controls").boundingBox();
-  expect(landscape.y).toBeGreaterThan(80);
-  expect(landscape.y + landscape.height).toBeLessThan(300);
+  const landscapeTop = await page.locator(".top-actions").boundingBox();
+  const toolbar = await page.locator(".toolbar").boundingBox();
+  expect(landscape.y).toBeGreaterThan(landscapeTop.y + landscapeTop.height);
+  expect(landscape.y + landscape.height).toBeLessThan(toolbar.y);
 });
 
 

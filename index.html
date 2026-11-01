@@ -53,10 +53,17 @@
         </div>
       </header>
       <aside class="quest-card">
-        <div class="eyebrow">
-          <span class="tiny-spark">✧</span> THE LITTLE THINGS
-          <span id="quest-count">0 / 3</span>
-        </div>
+        <button
+          type="button"
+          class="eyebrow quest-toggle"
+          aria-expanded="true"
+          aria-controls="quest-body"
+        >
+          <span class="tiny-spark" aria-hidden="true">✧</span> THE LITTLE THINGS
+          <span id="quest-count">0 / 3</span
+          ><span class="quest-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div id="quest-body">
         <h2>A warm welcome</h2>
         <p>A new place. A few familiar joys.</p>
         <ul id="quest-list">
@@ -72,6 +79,7 @@
           </li>
         </ul>
         <div class="quest-footer">Take your time. There’s no hurry.</div>
+        </div>
       </aside>
       <div id="location">
         <span>⌖</span> <span id="location-name">The village green</span>
@@ -151,24 +159,31 @@
         </div>
       </div>
       <div id="view-help" hidden>WASD walk · Drag to look · ← → turn</div>
-      <div id="interaction" hidden><kbd>E</kbd><span>Say hello</span></div>
+      <button id="interaction" type="button" hidden>
+        <kbd>E</kbd><span>Say hello</span>
+      </button>
       <div id="toast" role="status"></div>
       <div class="bottom-left">
         <button
           id="visit-bakery"
           class="soft-button"
           title="Step inside The Daily Loaf"
+          aria-label="The bakery"
         >
-          <span aria-hidden="true">⌂</span> The bakery
+          <span aria-hidden="true">⌂</span
+          ><b class="soft-label">The bakery</b>
         </button>
-        <button id="journal-button" class="soft-button">
-          <span>▤</span> Journal <kbd>J</kbd></button
+        <button id="journal-button" class="soft-button" title="Journal" aria-label="Journal">
+          <span aria-hidden="true">▤</span
+          ><b class="soft-label">Journal</b> <kbd>J</kbd></button
         ><button
           id="photo-button"
           class="soft-button"
           title="Hide interface for a scenic view"
+          aria-label="Photo"
         >
-          <span>▧</span> Photo <kbd>P</kbd>
+          <span aria-hidden="true">▧</span
+          ><b class="soft-label">Photo</b> <kbd>P</kbd>
         </button>
       </div>
       <nav class="toolbar" aria-label="Tools">
@@ -305,7 +320,6 @@
           ><button data-key="s" aria-label="Walk backward">↓</button
           ><button data-key="d" aria-label="Walk right">→</button>
         </div>
-        <button id="touch-interact">Interact</button>
       </div>
     </main>
     <script type="module" src="/src/main.js"></script>
