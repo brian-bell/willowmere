@@ -22,6 +22,29 @@ const TOGGLES = [
   ["No fields", { fields: false }],
 ];
 const RATIOS = [null, 1, 0.75, 0.5];
+// "Run test" measures each cost switched off on its own, with the game as
+// played measured between them, so a device that changes speed partway
+// (heat, power saving) shows up instead of skewing one result. The last
+// segment combines the cuts a lighter preset could make.
+const TEST = [
+  ["Coarse leaves", { leafDetail: 1 }],
+  ["No foliage", { foliage: false }],
+  ["No water", { water: false }],
+  ["Frozen shadows", { shadowUpdate: false }],
+  ["No bloom", { bloom: false }],
+  ["No MSAA", { samples: 0 }],
+  ["Ratio 1", { pixelRatio: 1 }],
+  ["Ratio 0.75", { pixelRatio: 0.75 }],
+  ["No fields", { fields: false }],
+  [
+    "Coarse leaves + no water + no bloom + no MSAA + ratio 1",
+    { leafDetail: 1, water: false, bloom: false, samples: 0, pixelRatio: 1 },
+  ],
+];
+const TEST_KEYS = [
+    ...new Set(TEST.flatMap(([, settings]) => Object.keys(settings))),
+  ],
+  SETTLE = 1500;
 
 /**
  * `probe()` returns the frame's state as a flat object of numbers and
@@ -80,6 +103,8 @@ export function createHud(probe, { counters, tune } = {}) {
     windows = [],
     active = new Set();
   let ratio = 0,
+    // The automatic test: its segments and results, while it runs.
+    test = null,
     // The current measurement window: frame intervals, script times, counters.
     measuring = null,
     previous = null,
@@ -96,8 +121,9 @@ export function createHud(probe, { counters, tune } = {}) {
       " + ",
     ) || "as played";
   // Windows start a second after a toggle, once the change has settled.
-  const newWindow = (now, settle = 0) =>
+  const newWindow = (now, settle = 0, name = null) =>
     (measuring = {
+      name,
       from: now + settle,
       intervals: [],
       cpu: [],
@@ -107,12 +133,12 @@ export function createHud(probe, { counters, tune } = {}) {
   function closeWindow(now) {
     const w = measuring,
       n = w.intervals.length;
-    if (n < 3) return;
+    if (n < 3) return null;
     w.intervals.sort((a, b) => a - b);
     w.cpu.sort((a, b) => a - b);
     const at = (list, q) => list[Math.floor((list.length - 1) * q)];
     windows.push(
-      `${elapsed(now)} s, ${label()}: ${(n / ((now - w.from) / 1000)).toFixed(1)} fps, ` +
+      `${elapsed(now)} s, ${w.name ?? label()}: ${(n / ((now - w.from) / 1000)).toFixed(1)} fps, ` +
         `frame median ${at(w.intervals, 0.5).toFixed(1)} / p95 ${at(w.intervals, 0.95).toFixed(1)} ms, ` +
         `script median ${at(w.cpu, 0.5).toFixed(1)} ms` +
         (w.calls
@@ -120,6 +146,41 @@ export function createHud(probe, { counters, tune } = {}) {
           : "") +
         ` | ${previous ? describe(previous) : ""}`,
     );
+    return at(w.intervals, 0.5);
+  }
+  // Segments alternate: as played, then the next cut, then as played again.
+  function startSegment(now) {
+    const i = test.results.length,
+      [name, settings] = i % 2 ? TEST[(i - 1) / 2] : ["As played", {}];
+    tune({
+      ...Object.fromEntries(TEST_KEYS.map((key) => [key, null])),
+      ...settings,
+    });
+    newWindow(now, SETTLE, `Test ${i + 1}/${TEST.length * 2 + 1}, ${name}`);
+    test.button.textContent = `Testing ${i + 1}/${TEST.length * 2 + 1}`;
+  }
+  function finishTest() {
+    const r = test.results,
+      lines = [
+        "Test summary (frame median; change against the as-played runs either side):",
+      ];
+    for (let i = 1; i < r.length; i += 2) {
+      const before = r[i - 1],
+        after = r[i + 1] ?? before,
+        base = (before + after) / 2,
+        drift = Math.abs(after - before) / Math.min(before, after);
+      lines.push(
+        `${TEST[(i - 1) / 2][0]}: ${r[i].toFixed(1)} ms against ${base.toFixed(1)} ms ` +
+          `(${(((r[i] - base) / base) * 100).toFixed(0)}%)` +
+          (drift > 0.2
+            ? `, unreliable: as played moved ${before.toFixed(0)}→${after.toFixed(0)} ms`
+            : ""),
+      );
+    }
+    windows.push(lines.join("\n"));
+    tune(Object.fromEntries(TEST_KEYS.map((key) => [key, null])));
+    test.button.textContent = "Run test";
+    test = null;
   }
   function report() {
     const now = performance.now(),
@@ -175,6 +236,17 @@ export function createHud(probe, { counters, tune } = {}) {
   });
 
   if (tune) {
+    button("Run test", (b) => {
+      if (test) return;
+      for (const name of active)
+        toggles.querySelector(`[data-name="${name}"]`)?.click();
+      if (ratio) {
+        ratio = RATIOS.length - 1;
+        toggles.querySelector("[data-ratio]")?.click();
+      }
+      test = { button: b, results: [] };
+      startSegment(performance.now());
+    });
     for (const [name, settings] of TOGGLES)
       button(
         name,
@@ -193,7 +265,7 @@ export function createHud(probe, { counters, tune } = {}) {
           newWindow(performance.now(), 1000);
         },
         toggles,
-      );
+      ).dataset.name = name;
     button(
       "Ratio auto",
       (b) => {
@@ -204,7 +276,7 @@ export function createHud(probe, { counters, tune } = {}) {
         newWindow(performance.now(), 1000);
       },
       toggles,
-    );
+    ).dataset.ratio = "";
   }
 
   return {
@@ -232,8 +304,14 @@ export function createHud(probe, { counters, tune } = {}) {
             measuring.triangles += c.triangles;
           }
           if (now - measuring.from >= WINDOW) {
-            closeWindow(now);
-            newWindow(now);
+            const median = closeWindow(now);
+            if (!test) newWindow(now);
+            else {
+              test.results.push(median ?? NaN);
+              if (test.results.length > TEST.length * 2) finishTest();
+              else startSegment(now);
+              if (!test) newWindow(now);
+            }
           }
         }
       }
