@@ -13,7 +13,8 @@ test("welcome quest, interaction, garden, journal, photo mode and persistence", 
     console.log("PASS: " + msg);
   };
   // Clicking a neighbor or wildflower walks over and interacts on arrival, so a
-  // walk to one stops `near` metres short and the test presses E itself.
+  // walk to one ends `near` metres short, clicking far enough from it on screen
+  // that the click walks rather than picks, and the test presses E itself.
   async function walk(x, z, near = 0.5) {
     for (let segment = 0; segment < 20; segment++) {
       const data = await page.evaluate(
@@ -23,18 +24,31 @@ test("welcome quest, interaction, garden, journal, photo mode and persistence", 
           if (Math.hypot(p.x - x, p.z - z) < near) return { done: true };
           const path = game.findPath(p, { x, z });
           if (!path.length) return { error: "No route", p };
-          const i = Math.min(path.length - 1, 5);
-          let next = path[i];
-          const from = path[i - 1] ?? p,
-            gap = Math.hypot(from.x - x, from.z - z);
-          if (Math.hypot(next.x - x, next.z - z) < near * 0.7)
-            next =
-              gap > near * 0.7
-                ? {
-                    x: x + ((from.x - x) * near * 0.7) / gap,
-                    z: z + ((from.z - z) * near * 0.7) / gap,
-                  }
-                : from;
+          // Follow the route up to five points ahead; a walk to a neighbor or
+          // flower clicks no closer to it than `near` (minus a margin).
+          const route = [p, ...path.slice(0, Math.min(path.length, 6))],
+            gap = (q) => Math.hypot(q.x - x, q.z - z),
+            reach = near > 0.5 ? near * 0.9 : 0;
+          let next = route.at(-1);
+          for (let k = route.length - 1; k > 0 && gap(next) < reach; k--) {
+            const a = route[k - 1],
+              b = route[k];
+            if (gap(a) < reach) {
+              next = a;
+              continue;
+            }
+            // Bisect the leg a→b for the point `reach` from the goal.
+            let lo = 0,
+              hi = 1;
+            for (let n = 0; n < 20; n++) {
+              const t = (lo + hi) / 2,
+                q = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+              if (gap(q) >= reach) lo = t;
+              else hi = t;
+            }
+            next = { x: a.x + (b.x - a.x) * lo, z: a.z + (b.z - a.z) * lo };
+            break;
+          }
           return { target: next, point: game.project(next.x, next.z) };
         },
         [x, z, near],
@@ -84,7 +98,7 @@ test("welcome quest, interaction, garden, journal, photo mode and persistence", 
     [-9, 2],
     [-2, -3],
   ]) {
-    await walk(x, z, 1);
+    await walk(x, z, 1.5);
     await page.waitForTimeout(300);
     await page.keyboard.press("e");
     await page.waitForTimeout(200);
