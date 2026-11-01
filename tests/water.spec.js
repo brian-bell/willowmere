@@ -109,12 +109,15 @@ test("every village pool shares the model across quality, lighting and paused mo
   );
   for (const quality of ["performance", "balanced", "high"]) {
     await page.locator("#quality").selectOption(quality);
-    await page.waitForFunction(
-      (q) =>
-        window.__willowmere.getWater().quality === q &&
-        window.__willowmere.getWater().bodies.every((b) => b.reflectionReady),
-      quality,
-    );
+    // A quality change reallocates every pool, and a pool only captures a
+    // reflection while it is in view, so the millpond's stay unready from here.
+    await page.waitForFunction((q) => {
+      const water = window.__willowmere.getWater();
+      return (
+        water.quality === q &&
+        water.bodies.slice(0, 3).every((b) => b.reflectionReady)
+      );
+    }, quality);
     const current = await page.evaluate(() => window.__willowmere.getWater());
     expect(current.bodies.length).toBeGreaterThanOrEqual(3);
     expect(current.time).toBe(frozen.time);

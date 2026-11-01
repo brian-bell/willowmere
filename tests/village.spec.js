@@ -12,19 +12,32 @@ test("welcome quest, interaction, garden, journal, photo mode and persistence", 
     if (!v) throw Error(msg);
     console.log("PASS: " + msg);
   };
-  async function walk(x, z) {
+  // Clicking a neighbor or wildflower walks over and interacts on arrival, so a
+  // walk to one stops `near` metres short and the test presses E itself.
+  async function walk(x, z, near = 0.5) {
     for (let segment = 0; segment < 20; segment++) {
       const data = await page.evaluate(
-        ([x, z]) => {
+        ([x, z, near]) => {
           const game = window.__willowmere,
             p = game.getPlayer();
-          if (Math.hypot(p.x - x, p.z - z) < 0.5) return { done: true };
+          if (Math.hypot(p.x - x, p.z - z) < near) return { done: true };
           const path = game.findPath(p, { x, z });
           if (!path.length) return { error: "No route", p };
-          const next = path[Math.min(path.length - 1, 5)];
+          const i = Math.min(path.length - 1, 5);
+          let next = path[i];
+          const from = path[i - 1] ?? p,
+            gap = Math.hypot(from.x - x, from.z - z);
+          if (Math.hypot(next.x - x, next.z - z) < near * 0.7)
+            next =
+              gap > near * 0.7
+                ? {
+                    x: x + ((from.x - x) * near * 0.7) / gap,
+                    z: z + ((from.z - z) * near * 0.7) / gap,
+                  }
+                : from;
           return { target: next, point: game.project(next.x, next.z) };
         },
-        [x, z],
+        [x, z, near],
       );
       if (data.done) return;
       if (data.error) throw Error(JSON.stringify(data));
@@ -41,7 +54,7 @@ test("welcome quest, interaction, garden, journal, photo mode and persistence", 
     }
     throw Error("Too many route segments");
   }
-  await walk(-5, 1);
+  await walk(-5, 1, 1.2);
   await page.keyboard.press("e");
   await page.waitForTimeout(200);
   assert(
@@ -71,7 +84,7 @@ test("welcome quest, interaction, garden, journal, photo mode and persistence", 
     [-9, 2],
     [-2, -3],
   ]) {
-    await walk(x, z);
+    await walk(x, z, 1);
     await page.waitForTimeout(300);
     await page.keyboard.press("e");
     await page.waitForTimeout(200);
