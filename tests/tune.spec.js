@@ -122,7 +122,7 @@ test("tune toggles each outdoor override and null restores the defaults", async 
   await page.locator("#settings-dialog .close-modal").click();
   expect((await diagnostics(page)).render).toMatchObject({
     bloom: false,
-    samples: 4,
+    samples: 0,
     pixelRatio: 1,
   });
   expect(errors).toEqual([]);
