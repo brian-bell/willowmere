@@ -1636,7 +1636,7 @@ export function createWorld(T, scene) {
       skip: initialChildren,
       selfCulled: [trees.group],
     }),
-    detail = createDetail(chunks, fieldGround);
+    detail = createDetail(chunks, fieldGround, [reeds.group, bushes.group]);
   let clock = 0;
   // The walking surface: the bridge deck's hump, a region's decks (the
   // millpond's footbridge and jetty), otherwise the terrain's grass.
@@ -1676,6 +1676,7 @@ export function createWorld(T, scene) {
         chunk.glow.add(mesh.material);
         glowMaterials.add(mesh.material);
       }
+      detail.addCaster(mesh);
       if (small) detail.addDetail(mesh, field);
       if (field) detail.addField(mesh);
     },
