@@ -9,12 +9,14 @@ import { createWorld } from "./world.js";
 import { createLife } from "./life.js";
 import { createAudio } from "./audio.js";
 import { createEffects } from "./effects.js";
-import { createFlowerFactory } from "./flowers.js";
 import { createPlayerVisibility } from "./visibility.js";
 import { createSky } from "./sky.js";
 import { createStreamer } from "./streaming.js";
-import { createFishing, FISH } from "./fishing.js";
+import { createFishing } from "./fishing.js";
 import { createNavigation } from "./game/navigation.js";
+import { createActivities } from "./game/activities.js";
+import { createHud } from "./game/hud.js";
+import { createInteractions } from "./game/interactions.js";
 import { loadState, saveState } from "./game/save.js";
 import { SHADOW_MAP_SIZES, createSunShadow } from "./game/shadows.js";
 import {
@@ -23,7 +25,6 @@ import {
 } from "./game/overview-camera.js";
 import { QUALITY_PIXEL_RATIO, createResolutionScaler, startingQuality } from "./game/resolution.js";
 import { MILLPOND } from "./regions/millpond-layout.js";
-import { FRUIT_TREES } from "./regions/orchard-layout.js";
 import { regions } from "./regions/index.js";
 import { WORLD, regionAt } from "./world-layout.js";
 const $ = (s) => document.querySelector(s),
@@ -157,125 +158,12 @@ const fishing = createFishing(THREE, {
     water: world.water,
     body: "millpond",
     surface: MILLPOND.surface,
-  }),
-  rodTip = new THREE.Vector3();
+  });
 streamer.add({
   x: MILLPOND.jetty.x,
   z: MILLPOND.jetty.minZ,
   step: () => fishing.group,
 });
-function castLine() {
-  const p = life.player.position,
-    { jetty } = MILLPOND;
-  // Out over open water beyond the jetty's end.
-  const x = jetty.x + (Math.random() - 0.5) * 1.4,
-    z = jetty.minZ - 2.2 - Math.random() * 0.9;
-  life.player.rotation.y = Math.atan2(x - p.x, z - p.z);
-  fishing.cast(x, z);
-  fishingFrom.set(p.x, p.z);
-  toast("You cast a line. Watch the float, and press E when it dips.");
-}
-const fishingFrom = new THREE.Vector2();
-function fishingResult(result) {
-  if (!result) return;
-  if (result.kind === "early") {
-    toast("Too soon. The ripples fade, and the fish drift off.");
-    return;
-  }
-  if (result.kind === "miss") {
-    toast("Something nibbled, and slipped away.");
-    return;
-  }
-  const { fish } = result,
-    first = !state.fish[fish.id];
-  state.fish[fish.id] = (state.fish[fish.id] || 0) + 1;
-  if (first) state.coins += 5;
-  if (motion) effects.burst(fishing.float.x, MILLPOND.surface + 0.3, fishing.float.z);
-  updateUI();
-  save();
-  audio.chime();
-  toast(
-    `${fish.line} You let it slip back into the pond.${first ? " A new one for the journal. +5 petals" : ""}`,
-  );
-}
-// The orchard hill streams in later; its harvest controller arrives with it.
-// A shaken tree ripens again, and a hive refills, after a few minutes.
-let orchard = null;
-// What each region's builder hands back besides its jobs, by region id.
-const regionLoaded = {
-  orchard({ harvest }) {
-    orchard = harvest;
-    updateOrchard();
-  },
-};
-const FRUIT_REGROW_MS = 4 * 60 * 1000,
-  HONEY_REFILL_MS = 6 * 60 * 1000,
-  HARVEST_PRICE = { apple: 2, pear: 2, honey: 6 };
-const harvestReady = (id, wait) => Date.now() - (state.orchard[id] ?? 0) >= wait;
-function updateOrchard() {
-  if (!orchard) return;
-  for (const tree of FRUIT_TREES)
-    orchard.setPicked(tree.id, !harvestReady(tree.id, FRUIT_REGROW_MS));
-}
-function shakeTree({ tree, kind }) {
-  if (!orchard) return;
-  if (!harvestReady(tree, FRUIT_REGROW_MS)) {
-    toast(`Nothing more is ripe on this ${kind} tree yet. Give it a little while.`);
-    return;
-  }
-  const count = orchard.shake(tree, motion);
-  if (!count) return;
-  const first = !state.harvested[kind];
-  state.orchard[tree] = Date.now();
-  state.basket[kind] += count;
-  state.harvested[kind] += count;
-  if (first) state.coins += 5;
-  updateUI();
-  save();
-  audio.chime();
-  toast(
-    `You give the trunk a shove, and ${count} ripe ${kind}s tumble into the grass. Into the basket they go.${first ? " +5 petals" : ""}`,
-  );
-}
-function collectHoney({ hive }) {
-  if (!orchard) return;
-  orchard.disturbHive(hive);
-  if (!harvestReady(hive, HONEY_REFILL_MS)) {
-    toast("The bees are still filling the comb. Come back in a little while.");
-    return;
-  }
-  const first = !state.harvested.honey;
-  state.orchard[hive] = Date.now();
-  state.basket.honey++;
-  state.harvested.honey++;
-  if (first) state.coins += 5;
-  updateUI();
-  save();
-  audio.chime();
-  toast(
-    `You lift the roof gently and take a jar of wildflower honey. The bees hardly mind.${first ? " +5 petals" : ""}`,
-  );
-}
-const basketCount = () => state.basket.apple + state.basket.pear + state.basket.honey;
-// Finn buys the orchard's fruit and honey for the bakery.
-function sellBasket() {
-  const { apple, pear, honey } = state.basket,
-    petals =
-      apple * HARVEST_PRICE.apple + pear * HARVEST_PRICE.pear + honey * HARVEST_PRICE.honey,
-    goods = [
-      [apple, "apple"],
-      [pear, "pear"],
-      [honey, "jar of honey", "jars of honey"],
-    ]
-      .filter(([n]) => n)
-      .map(([n, one, many = `${one}s`]) => `${n} ${n === 1 ? one : many}`);
-  state.basket = { apple: 0, pear: 0, honey: 0 };
-  state.coins += petals;
-  updateUI();
-  save();
-  audio.chime();
-  toast(`Finn takes ${goods.join(" and ").replace(/ and (?=.* and )/, ", ")} for the bakery. +${petals} petals`);
-}
 const playerVisibility = createPlayerVisibility(
   scene,
   life.player,
@@ -284,77 +172,39 @@ const playerVisibility = createPlayerVisibility(
 );
 // localStorage itself can throw where site data is blocked.
 const storage = () => localStorage;
-let { state, nextPlantId } = loadState(storage);
+const { state, nextPlantId } = loadState(storage);
 function save() {
   if (!saveState(storage, state))
     $("#save-status").textContent = "This visit cannot be saved";
 }
-let toastTimeout;
-function toast(message) {
-  $("#toast").textContent = message;
-  $("#toast").classList.add("show");
-  clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => $("#toast").classList.remove("show"), 3600);
-}
-function updateUI() {
-  $("#game").classList.toggle(
-    "quest-complete",
-    Object.values(state.quests).every(Boolean),
-  );
-  for (const [key, done] of Object.entries(state.quests))
-    $(`[data-quest="${key}"]`).classList.toggle("done", done);
-  $("#quest-count").textContent =
-    `${Object.values(state.quests).filter(Boolean).length} / 3`;
-  $("#flower-count").textContent = `${Math.min(state.flowers, 3)}/3`;
-  $("#inventory-flower").textContent = state.flowers;
-  $("#inventory-seed").textContent = state.seeds;
-  $("#coin-count").textContent = state.coins;
-}
-function complete(quest) {
-  if (state.quests[quest]) return;
-  state.quests[quest] = true;
-  state.coins += 25;
-  audio.chime();
-  updateUI();
-  save();
-  if (Object.values(state.quests).every(Boolean))
-    setTimeout(
-      () => toast("A warm welcome, complete. You belong here. +25 petals"),
-      500,
-    );
-}
-const gatheringSpots = [
-    [-4, 7],
-    [-9, 2],
-    [-2, -3],
-    [5, 2],
-    [6, 7],
-    [-12, 7],
-    [0, 9],
-    [-10, -1],
-  ],
-  flowerGroups = new Map();
-const makeFlower = createFlowerFactory(scene);
-const flowerAt = (x, z, planted) => {
-  const group = makeFlower(x, z, planted);
-  group.position.y = world.terrainHeight(x, z);
-  return group;
-};
-gatheringSpots.forEach(([x, z], i) => {
-  if (!state.gathered.includes(i)) flowerGroups.set(i, flowerAt(x, z));
-});
-const plantedGroups = new Map();
-state.plants.forEach((p) => {
-  const g = flowerAt(p.x, p.z, true);
-  g.scale.setScalar(p.watered ? 1.35 : 0.7);
-  plantedGroups.set(p.id, g);
+const hud = createHud({
+    canvas,
+    state,
+    onCapture() {
+      releaseLook();
+      keys.clear();
+      clickPath.length = 0;
+    },
+  }),
+  { toast, updateUI } = hud;
+const activities = createActivities({
+  scene,
+  world,
+  player: life.player,
+  state,
+  nextPlantId,
+  hud,
+  save,
+  audio,
+  effects,
+  fishing,
+  blocked: (x, z, r) => blocked(x, z, r),
+  motion: () => motion,
 });
 let tool = "hand",
   started = state.started,
   photo = false,
   motion = !matchMedia("(prefers-reduced-motion: reduce)").matches,
-  dialogue = null,
-  nearest = null,
   day = "day";
 let interior = null,
   interiorLoading = false;
@@ -367,8 +217,7 @@ async function enterBakery() {
   keys.clear();
   velocity.set(0, 0);
   clickPath.length = 0;
-  dialogue = null;
-  $("#dialogue").hidden = true;
+  hud.dismissDialogue();
   try {
     if (!interior) {
       const { createInterior } = await import("./interior.js");
@@ -446,8 +295,36 @@ $$(".tool").forEach(
 const keys = new Set(),
   velocity = new THREE.Vector2(),
   clickPath = [];
-// A neighbor, flower or landmark the player tapped: walk over, then interact on arrival.
-let pendingInteraction = null;
+// What the HUD and interactions read of the visit's live settings.
+const session = {
+  get tool() {
+    return tool;
+  },
+  get started() {
+    return started;
+  },
+  get photo() {
+    return photo;
+  },
+  get firstPerson() {
+    return firstPerson;
+  },
+  get yaw() {
+    return yaw;
+  },
+};
+const interactions = createInteractions({
+  world,
+  life,
+  hud,
+  activities,
+  fishing,
+  session,
+  clickPath,
+  begin,
+  isIndoors: () => !!interior?.active || interiorLoading,
+  enterBakery,
+});
 function releaseLook() {
   if (dragging && canvas.hasPointerCapture(dragging.id))
     canvas.releasePointerCapture(dragging.id);
@@ -480,7 +357,7 @@ function setFirstPerson(value) {
     yaw = life.player.rotation.y + Math.PI;
     pitch = -0.08;
   }
-  pendingInteraction = null;
+  interactions.pending = null;
   firstPerson = value;
   Object.assign(scene.fog, firstPerson ? FOG.firstPerson : FOG.overview);
   sunShadow.setMapSize($("#quality").value, firstPerson);
@@ -515,8 +392,8 @@ function canLook() {
     firstPerson &&
     !interior?.active &&
     !interiorLoading &&
-    !dialogue &&
-    !modalOpen()
+    !hud.inDialogue &&
+    !hud.modalOpen()
   );
 }
 function look(dx, dy) {
@@ -548,120 +425,12 @@ canvas.addEventListener("pointerup", stopLook);
 canvas.addEventListener("pointercancel", stopLook);
 canvas.addEventListener("lostpointercapture", stopLook);
 let lastStep = 0;
-function modalOpen() {
-  return !!document.querySelector("dialog[open]");
-}
-function openDialogue(name, lines, onFinish) {
-  releaseLook();
-  dialogue = { name, lines, index: 0, onFinish };
-  $("#speaker").textContent = name;
-  $("#dialogue-text").textContent = lines[0];
-  $("#dialogue-next").innerHTML =
-    lines.length > 1 ? "Continue <span>→</span>" : "Lovely <span>✓</span>";
-  $("#dialogue").hidden = false;
-  clickPath.length = 0;
-  keys.clear();
-  $("#dialogue-next").focus();
-}
-function nextDialogue() {
-  if (!dialogue) return;
-  dialogue.index++;
-  if (dialogue.index < dialogue.lines.length) {
-    $("#dialogue-text").textContent = dialogue.lines[dialogue.index];
-    $("#dialogue-next").innerHTML =
-      dialogue.index === dialogue.lines.length - 1
-        ? "Lovely <span>✓</span>"
-        : "Continue <span>→</span>";
-  } else {
-    const finish = dialogue.onFinish;
-    dialogue = null;
-    $("#dialogue").hidden = true;
-    finish?.();
-    canvas.focus();
-  }
-}
-$("#dialogue-next").onclick = nextDialogue;
-function refreshJournal() {
-  const rows = [
-    [
-      "Meet the neighbors",
-      state.quests.mabel
-        ? "Mabel saved you a place among the flowers."
-        : "Mabel tends the flowers just west of the fountain.",
-    ],
-    [
-      "A pocketful of sunshine",
-      `You’ve gathered ${state.flowers} wildflower${state.flowers === 1 ? "" : "s"}. Look for the pale rings around little bouquets.`,
-    ],
-    [
-      "Put down roots",
-      state.quests.plant
-        ? `${state.plants.length} new patch${state.plants.length === 1 ? "" : "es"} of flowers make the village a little more yours.`
-        : "Choose the seed pouch (3), find an open patch, and press E.",
-    ],
-  ];
-  const caught = FISH.filter((fish) => state.fish[fish.id]),
-    here = regionAt(life.player.position.x, life.player.position.z).id;
-  if (caught.length || here === "millpond")
-    rows.push([
-      "Quiet waters",
-      caught.length
-        ? `You’ve met ${caught.length} of ${FISH.length} millpond fish: ${caught.map((fish) => fish.name).join(", ")}.`
-        : "Cast a line from the millpond’s jetty, north of the village, and press E when the float dips.",
-    ]);
-  const { apple, pear, honey } = state.harvested,
-    plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-  if (apple || pear || honey || here === "orchard")
-    rows.push([
-      "The orchard hill",
-      apple || pear || honey
-        ? `You’ve gathered ${plural(apple, "apple")}, ${plural(pear, "pear")} and ${plural(honey, "jar", "jars")} of honey. ${basketCount() ? "Finn will buy what’s in your basket." : "Finn buys fruit and honey for his bakes."}`
-        : "Shake a ripe apple or pear tree on the hill north-west of the village, and look in on the beehives. Finn buys fruit and honey for his bakes.",
-    ]);
-  $("#journal-content").replaceChildren(
-    ...rows.map(([title, body]) => {
-      const d = document.createElement("div");
-      d.className = "journal-entry";
-      const b = document.createElement("b");
-      b.textContent = title;
-      const s = document.createElement("span");
-      s.textContent = body;
-      d.append(b, s);
-      return d;
-    }),
-  );
-}
-function openModal(id) {
-  releaseLook();
-  keys.clear();
-  clickPath.length = 0;
-  const d = $(id);
-  if (d.open) d.close();
-  else d.showModal();
-}
+hud.bindControls();
 $("#journal-button").onclick = () => {
-  refreshJournal();
-  openModal("#journal");
+  hud.refreshJournal(regionAt(life.player.position.x, life.player.position.z).id);
+  hud.openModal("#journal");
 };
-$("#settings").onclick = () => openModal("#settings-dialog");
-$$(".close-modal").forEach(
-  (b) => (b.onclick = () => b.closest("dialog").close()),
-);
-$$("dialog").forEach((d) => {
-  d.addEventListener("click", (e) => {
-    if (e.target === d) {
-      const r = d.getBoundingClientRect();
-      if (
-        e.clientX < r.left ||
-        e.clientX > r.right ||
-        e.clientY < r.top ||
-        e.clientY > r.bottom
-      )
-        d.close();
-    }
-  });
-  d.addEventListener("close", () => canvas.focus());
-});
+$("#settings").onclick = () => hud.openModal("#settings-dialog");
 function setPhoto(value) {
   photo = value;
   $("#game").classList.toggle("photo-mode", photo);
@@ -721,193 +490,6 @@ const { blocked, findPath, sampleRows: sampleRouteRows } = createNavigation({
   walk: WORLD.walk,
   colliders,
 });
-function openGrass(x, z) {
-  return (
-    world.isPlantable(x, z) &&
-    !blocked(x, z, 0.55) &&
-    state.plants.every((p) => Math.hypot(x - p.x, z - p.z) > 0.75)
-  );
-}
-const oneOf = (list) => list[Math.floor(Math.random() * list.length)];
-function interact() {
-  if (interior?.active || interiorLoading) return;
-  if (dialogue) {
-    nextDialogue();
-    return;
-  }
-  if (modalOpen()) return;
-  begin();
-  const p = life.player.position;
-  if (fishing.active) {
-    fishingResult(fishing.press());
-    return;
-  }
-  if (tool === "seeds") {
-    if (state.seeds <= 0) {
-      toast("Your seed pouch is empty. Finn has a few to spare.");
-      return;
-    }
-    const facing = firstPerson ? yaw + Math.PI : life.player.rotation.y;
-    let fx = p.x + Math.sin(facing) * 0.8,
-      fz = p.z + Math.cos(facing) * 0.8;
-    if (!openGrass(fx, fz)) {
-      toast("Find a little more room for those roots.");
-      return;
-    }
-    const plant = { id: nextPlantId++, x: fx, z: fz, watered: false };
-    state.plants.push(plant);
-    if (motion) effects.burst(fx, world.terrainHeight(fx, fz) + 0.4, fz);
-    const g = flowerAt(fx, fz, true);
-    g.scale.setScalar(0.7);
-    plantedGroups.set(plant.id, g);
-    state.seeds--;
-    complete("plant");
-    updateUI();
-    save();
-    audio.chime();
-    toast("A small beginning. Your flowers are planted.");
-    return;
-  }
-  if (tool === "water") {
-    const plant = state.plants.find(
-      (q) => Math.hypot(q.x - p.x, q.z - p.z) < 2 && !q.watered,
-    );
-    if (!plant) {
-      toast("Plant some flowers first, then give them a drink.");
-      return;
-    }
-    plant.watered = true;
-    if (motion)
-      effects.burst(plant.x, world.terrainHeight(plant.x, plant.z) + 0.4, plant.z);
-    state.coins += 5;
-    save();
-    updateUI();
-    audio.chime();
-    toast("A little water, a little sunshine. +5 petals");
-    return;
-  }
-  if (!nearest) {
-    toast("Wander closer to a neighbor, a flower, or a village landmark.");
-    return;
-  }
-  if (nearest.kind === "flower") {
-    const id = nearest.id;
-    const fg = flowerGroups.get(id);
-    if (motion)
-      effects.burst(fg.position.x, fg.position.y + 0.4, fg.position.z);
-    scene.remove(fg);
-    flowerGroups.delete(id);
-    state.gathered.push(id);
-    state.flowers++;
-    if (state.flowers >= 3) complete("flower");
-    save();
-    updateUI();
-    audio.chime();
-    toast(`A wildflower for your pocket. ${state.flowers} gathered.`);
-    nearest = null;
-    return;
-  }
-  if (nearest.kind === "npc") {
-    const n = nearest.data;
-    const phrases = n.dialogue?.length
-      ? n.dialogue
-      : ["A lovely day to be here, isn’t it?"];
-    const names = {
-      mabel: "MABEL · THE FLORIST",
-      finn: "FINN · THE BAKER",
-      elio: "ELIO · THE GARDENER",
-    };
-    const selling = n.id === "finn" && basketCount() > 0;
-    const line = selling
-      ? oneOf([
-          "Fruit from the hill! That’s tomorrow’s tarts sorted. Let me take those off your hands.",
-          "Is that orchard honey? Nothing glazes a bun like it. Here, for your trouble.",
-          "You’ve been up the orchard hill, I can tell. I’ll bake these into something good.",
-        ])
-      : oneOf(phrases);
-    openDialogue(names[n.id] || n.name, [line], () => {
-      if (selling) sellBasket();
-      if (n.id === "mabel") complete("mabel");
-      if (n.id === "finn" && state.seeds < 3) {
-        state.seeds += 3;
-        updateUI();
-        save();
-        toast("Finn tucked three seeds into your pouch.");
-      }
-    });
-    return;
-  }
-  const id = nearest.data.id || nearest.data.type;
-  if (id === "bakery") {
-    enterBakery();
-    return;
-  }
-  if (id === "jetty") {
-    castLine();
-    return;
-  }
-  if (nearest.data.type === "fruit-tree") {
-    shakeTree(nearest.data);
-    return;
-  }
-  if (nearest.data.type === "hive") {
-    collectHoney(nearest.data);
-    return;
-  }
-  const dialogues = {
-    fountain: [
-      "Listen closely. Beneath the splashing water, the whole village seems to hum.",
-      "Someone has left a little wish on the rim: “May we always have enough to share.”",
-      "A copper coin glints at the bottom, worn smooth by years of hopeful thumbs.",
-      "A sparrow perches on the rim, takes a sip, and flies off as if it has somewhere wonderful to be.",
-      "The water catches the sky and hands it back a little brighter.",
-      "Chalked on the stone in a child’s hand: “I wish for a puppy. Or two.”",
-      "You make a small wish. The fountain keeps it, the way good friends keep secrets.",
-      "The spray drifts over your hands, cool as the first morning of autumn.",
-      "Ripples spread from the falling water and fold back into stillness. Your breathing slows to match.",
-      "Mabel says the fountain was here before the village. Everyone else simply gathered round it.",
-      "A pressed daisy and a sun-warmed penny sit side by side on the ledge, both left for luck.",
-      "If you listen long enough, the splashing starts to sound like distant laughter.",
-      "Carved faintly into the basin: “Wish small, wish often.”",
-      "A dragonfly skims the surface, writes something on the water, and erases it again.",
-      "Moss has grown soft around the basin, as if the stones wanted somewhere comfortable to sit.",
-    ],
-    bakery: [
-      "Warm bread, wild honey, and a hint of cinnamon drift through the open window.",
-      "Finn is just outside. He’s always happy to share a story — and a few seeds.",
-    ],
-    home: [
-      "Your little cottage. The kettle is warm, and the afternoon can wait.",
-      "There’s nowhere you need to be. You’re home.",
-    ],
-    mill: [
-      "The old wheel turns with the river, as it has for a hundred quiet summers.",
-    ],
-    garden: [
-      "Good things grow slowly. Choose your seeds, find a little space, and begin.",
-    ],
-    windmill: [
-      "The sails creak round, slow and patient. Somewhere inside, a millstone hums.",
-      "A chalk mark by the door counts the summers: more than anyone can read.",
-      "From the doorstep you can see every chimney in the village, and the millpond shining.",
-      "The stones are warm from the afternoon. Bees drift past on their way to the clover.",
-    ],
-    "hilltop-bench": [
-      "You sit a while. The village looks like a quilt from here, stitched together by paths.",
-      "Smoke curls from the bakery’s chimney. Finn must be baking again.",
-      "Someone has carved two initials into the armrest, and a small heart between them.",
-      "The wind brings the smell of apples and warm grass. There is nowhere else to be.",
-    ],
-  };
-  // Like a neighbor, a landmark answers each interaction with a single line.
-  openDialogue(nearest.data.name.toUpperCase(), [
-    oneOf(
-      dialogues[id] || [
-        "Some places ask you to slow down. This is one of them.",
-      ],
-    ),
-  ]);
-}
 window.addEventListener("keydown", (e) => {
   if (interior?.active) {
     interior.key(e);
@@ -923,18 +505,15 @@ window.addEventListener("keydown", (e) => {
   if (k === "escape") {
     releaseLook();
     if (photo) setPhoto(false);
-    if (dialogue) {
-      dialogue = null;
-      $("#dialogue").hidden = true;
-    }
+    if (hud.inDialogue) hud.dismissDialogue();
     return;
   }
-  if (modalOpen()) return;
+  if (hud.modalOpen()) return;
   if (k === "e" || k === " ") {
-    interact();
+    interactions.interact();
     return;
   }
-  if (dialogue) return;
+  if (hud.inDialogue) return;
   if (k === "v") {
     begin();
     setFirstPerson(!firstPerson);
@@ -966,7 +545,7 @@ window.addEventListener("keydown", (e) => {
   ) {
     begin();
     clickPath.length = 0;
-    pendingInteraction = null;
+    interactions.pending = null;
   }
 });
 window.addEventListener("keyup", (e) => {
@@ -993,7 +572,7 @@ $$("[data-key]").forEach((b) => {
     b.setPointerCapture(e.pointerId);
     keys.add(b.dataset.key.toLowerCase());
     clickPath.length = 0;
-    pendingInteraction = null;
+    interactions.pending = null;
     begin();
   });
   const release = () => keys.delete(b.dataset.key.toLowerCase());
@@ -1001,7 +580,7 @@ $$("[data-key]").forEach((b) => {
   b.addEventListener("pointercancel", release);
   b.addEventListener("lostpointercapture", release);
 });
-$("#interaction").onclick = interact;
+$("#interaction").onclick = interactions.interact;
 // On phones the quest card folds down to its title row; a tap opens the list.
 const phoneLayout = matchMedia("(max-width: 760px), (max-height: 500px)");
 function updateQuestToggle() {
@@ -1054,36 +633,9 @@ const destination = new THREE.Mesh(
 destination.rotation.x = -Math.PI / 2;
 destination.visible = false;
 scene.add(destination);
-// Taps are generous on touch screens: anything drawn within reach of the finger counts.
-const pickPoint = new THREE.Vector3();
-function pickInteractable(x, y, rect, touch) {
-  const targets = [];
-  for (const n of life.npcs) {
-    const at = n.group?.position ?? n;
-    targets.push({ kind: "npc", key: n, x: at.x, z: at.z, lift: 0.8, reach: 44 });
-  }
-  for (const [id, g] of flowerGroups)
-    targets.push({ kind: "flower", key: id, x: g.position.x, z: g.position.z, lift: 0.2, reach: 34 });
-  for (const i of world.interactables || [])
-    targets.push({ kind: "world", key: i, x: i.x, z: i.z, lift: 1, reach: 48 });
-  let best = null,
-    bestScore = 1;
-  for (const t of targets) {
-    pickPoint.set(t.x, world.terrainHeight(t.x, t.z) + t.lift, t.z).project(camera);
-    if (Math.abs(pickPoint.z) > 1) continue;
-    const sx = ((pickPoint.x + 1) / 2) * rect.width,
-      sy = ((1 - pickPoint.y) / 2) * rect.height,
-      score = Math.hypot(sx - x, sy - y) / (touch ? t.reach : t.reach * 0.55);
-    if (score < bestScore) {
-      bestScore = score;
-      best = t;
-    }
-  }
-  return best;
-}
 canvas.addEventListener("pointerdown", (e) => {
   if (interior?.active || interiorLoading) return;
-  if (e.button !== 0 || dialogue || modalOpen()) return;
+  if (e.button !== 0 || hud.inDialogue || hud.modalOpen()) return;
   // Touch screens have no P or Escape key, so a tap ends photo mode.
   if (photo && e.pointerType !== "mouse") {
     setPhoto(false);
@@ -1091,7 +643,7 @@ canvas.addEventListener("pointerdown", (e) => {
   }
   begin();
   if (firstPerson) {
-    if (document.pointerLockElement === canvas) interact();
+    if (document.pointerLockElement === canvas) interactions.interact();
     else if (!dragging) {
       dragging = { id: e.pointerId, x: e.clientX, y: e.clientY };
       canvas.setPointerCapture(e.pointerId);
@@ -1104,12 +656,13 @@ canvas.addEventListener("pointerdown", (e) => {
     (-(e.clientY - r.top) / r.height) * 2 + 1,
   );
   raycaster.setFromCamera(mouse, camera);
-  pendingInteraction =
+  const target =
     tool === "seeds" || tool === "water"
       ? null
-      : pickInteractable(e.clientX - r.left, e.clientY - r.top, r, e.pointerType !== "mouse");
-  if (pendingInteraction) {
-    const { x, z } = pendingInteraction,
+      : interactions.pick(e.clientX - r.left, e.clientY - r.top, r, e.pointerType !== "mouse", camera);
+  interactions.pending = target;
+  if (target) {
+    const { x, z } = target,
       p = life.player.position;
     // Someone standing behind a counter is reached from the nearest open side.
     const sides = Array.from({ length: 8 }, (_, i) => ({
@@ -1122,7 +675,7 @@ canvas.addEventListener("pointerdown", (e) => {
     for (const goal of [{ x, z }, ...sides]) if ((route = findPath(p, goal)).length) break;
     clickPath.splice(0, clickPath.length, ...route);
     destination.position.set(x, world.terrainHeight(x, z) + 0.03, z);
-    scanNearby();
+    interactions.scan();
     return;
   }
   if (pickGround(raycaster.ray, hit)) {
@@ -1167,71 +720,6 @@ window.addEventListener("resize", () => {
 });
 $("#quality").value = startQuality;
 $("#quality").dispatchEvent(new Event("change"));
-function scanNearby() {
-  if (dialogue || photo || modalOpen()) {
-    $("#interaction").hidden = true;
-    return;
-  }
-  const p = life.player.position;
-  let candidates = [];
-  for (const n of life.npcs) {
-    const x = n.group?.position.x ?? n.x,
-      z = n.group?.position.z ?? n.z,
-      d = Math.hypot(p.x - x, p.z - z);
-    if (d < 2.25)
-      candidates.push({
-        kind: "npc",
-        data: n,
-        d,
-        label: `Say hello to ${n.name.split(" ")[0]}`,
-      });
-  }
-  for (const [id, g] of flowerGroups) {
-    const d = Math.hypot(p.x - g.position.x, p.z - g.position.z);
-    if (d < 1.65)
-      candidates.push({ kind: "flower", id, d, label: "Gather wildflowers" });
-  }
-  for (const i of world.interactables || []) {
-    const d = Math.hypot(p.x - i.x, p.z - i.z);
-    if (d < (i.radius || 2.4))
-      candidates.push({
-        kind: "world",
-        data: i,
-        d: d + 0.4,
-        label: i.id === "bakery" ? "Enter The Daily Loaf" : i.name,
-      });
-  }
-  candidates.sort((a, b) => a.d - b.d);
-  if (pendingInteraction) {
-    const target = pendingInteraction,
-      reached = candidates.find(
-        (c) => c.kind === target.kind && (c.kind === "flower" ? c.id : c.data) === target.key,
-      );
-    if (reached) {
-      pendingInteraction = null;
-      clickPath.length = 0;
-      nearest = reached;
-      interact();
-      return;
-    }
-    if (!clickPath.length) pendingInteraction = null;
-  }
-  nearest = candidates[0] || null;
-  const label = fishing.active
-    ? fishing.phase === "bite"
-      ? "Reel in!"
-      : "Wait for a bite…"
-    : tool === "seeds"
-      ? "Plant a little happiness"
-      : tool === "water"
-        ? "Water your flowers"
-        : nearest?.label === "Fishing jetty"
-          ? "Cast a line"
-          : nearest?.label;
-  $("#interaction").hidden = !label || !started;
-  if (label) $("#interaction span").textContent = label;
-  $("#location-name").textContent = regionAt(p.x, p.z).name;
-}
 let elapsed = 0,
   last = performance.now(),
   frame = 0,
@@ -1261,7 +749,7 @@ function animate(now) {
   overview.turn(dt, motion);
   const p = life.player.position;
   input.set(0, 0);
-  if (!dialogue && !modalOpen()) {
+  if (!hud.inDialogue && !hud.modalOpen()) {
     if (firstPerson) {
       yaw +=
         ((keys.has("arrowleft") ? 1 : 0) - (keys.has("arrowright") ? 1 : 0)) *
@@ -1316,15 +804,7 @@ function animate(now) {
   const moving = velocity.length() > 0.08;
   life.setPlayerMotion(velocity.x, velocity.y);
   life.update(dt, elapsed, moving, motion);
-  if (fishing.active) {
-    // Walking away reels the line in.
-    if (Math.hypot(p.x - fishingFrom.x, p.z - fishingFrom.y) > 0.8) fishing.cancel();
-    rodTip
-      .set(Math.sin(life.player.rotation.y) * 0.45, 1.25, Math.cos(life.player.rotation.y) * 0.45)
-      .add(p);
-    const result = fishing.update(dt, elapsed, rodTip);
-    if (result) fishingResult(result);
-  }
+  activities.updateFishing(dt, elapsed);
   if (moving && elapsed - lastStep > 0.33) {
     audio.step();
     lastStep = elapsed;
@@ -1352,14 +832,7 @@ function animate(now) {
     destination.scale.setScalar(1 + Math.sin(elapsed * 4) * 0.12);
     destination.material.opacity = 0.5 + Math.sin(elapsed * 3) * 0.2;
   }
-  for (const plant of state.plants) {
-    const g = plantedGroups.get(plant.id);
-    if (!g) continue;
-    const targetScale = plant.watered ? 1.35 : 0.7;
-    g.scale.setScalar(
-      THREE.MathUtils.lerp(g.scale.x, targetScale, 1 - Math.exp(-dt * 1.5)),
-    );
-  }
+  activities.grow(dt);
   duskMix = THREE.MathUtils.lerp(
     duskMix,
     day === "dusk" ? 1 : 0,
@@ -1381,8 +854,8 @@ function animate(now) {
     light.intensity = THREE.MathUtils.lerp(0.1, 18.0, duskMix);
   renderer.toneMappingExposure = THREE.MathUtils.lerp(1.05, 0.95, duskMix);
   effects.update(dt, motion);
-  if (frame % 8 === 0) scanNearby();
-  if (frame % 120 === 0) updateOrchard();
+  if (frame % 8 === 0) interactions.scan();
+  if (frame % 120 === 0) activities.updateOrchard();
   for (const material of glowMaterials)
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
   playerVisibility.update(camera, !photo && !firstPerson);
@@ -1409,7 +882,7 @@ function animate(now) {
     openCountryRequested = true;
     for (const region of regions)
       region.stream?.(THREE, world).then(({ jobs, ...loaded }) => {
-        regionLoaded[region.id]?.(loaded);
+        activities.regionLoaded[region.id]?.(loaded);
         streamer.add(...jobs);
       });
   }
@@ -1469,7 +942,7 @@ window.__willowmere = {
       distance: firstPersonCamera.position.distanceTo(new THREE.Vector3(...tree.center)),
     })),
   getOrchard: () => ({
-    ready: !!orchard,
+    ready: activities.orchardReady,
     basket: { ...state.basket },
     harvested: { ...state.harvested },
     shaken: Object.keys(state.orchard),
@@ -1521,7 +994,7 @@ window.__willowmere = {
     geometries: renderer.info.memory.geometries,
     textures: renderer.info.memory.textures,
     colliders: colliders.length,
-    flowers: flowerGroups.size,
+    flowers: activities.flowerGroups.size,
     programs: renderer.info.programs.length,
     lanterns: {
       pool: world.lanterns.length,
