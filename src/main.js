@@ -14,6 +14,7 @@ import { createPlayerVisibility } from "./visibility.js";
 import { createSky } from "./sky.js";
 import { createStreamer } from "./streaming.js";
 import { createFishing, FISH } from "./fishing.js";
+import { QUALITY_PIXEL_RATIO, createResolutionScaler, startingQuality } from "./game/resolution.js";
 import { MILLPOND } from "./regions/millpond-layout.js";
 import { FRUIT_TREES } from "./regions/orchard-layout.js";
 import { regions } from "./regions/index.js";
@@ -47,116 +48,24 @@ const renderer = new THREE.WebGLRenderer({
   antialias: false,
   powerPreference: "high-performance",
 });
-// Every pass fills the full drawing buffer, so the frame rate follows pixel
-// count. Each quality caps the pixel ratio; the scaler below lowers it while
-// frames run long. See docs/performance.md.
-const QUALITY_PIXEL_RATIO = { high: 1.25, balanced: 1.25, performance: 1 };
-// Retina laptops and large monitors start on balanced; 1x screens up to about
-// 1920 × 1200, and small windows on dense screens, start on high.
-const startQuality =
-  innerWidth < 760 || innerWidth * innerHeight * devicePixelRatio ** 2 > 2.6e6
-    ? "balanced"
-    : "high";
 // Benchmark overrides for attributing render cost (window.__willowmere.tune);
 // empty in normal play, so every `??` below takes its default.
 const overrides = {};
-const resolution = {
-  // ?resolution=fixed keeps the quality's pixel ratio for benchmarks and tests.
-  adaptive: new URLSearchParams(location.search).get("resolution") !== "fixed",
-  ceiling: Math.min(devicePixelRatio, QUALITY_PIXEL_RATIO[startQuality]),
-  floor: 0.75,
-  step: 0.125,
-  // Set with the starting quality below.
-  pixelRatio: 0,
-  samples: [],
-  windowStart: 0,
-  lastSample: 0,
-  p95: 0,
-  mean: 0,
-  // Frames before this time are not sampled: startup, or after a failed descent.
-  holdUntil: performance.now() + 3000,
-  holdFor: 30000,
-  goodWindows: 0,
-  // Consecutive good one-second windows needed to step up; doubles when a
-  // step up is undone straight away.
-  upWindows: 5,
-  lastUp: -Infinity,
-  // Mean interval when the current run of step downs began.
-  descentFrom: 0,
-  // The village's ratio while the bakery is open.
-  outdoor: 0,
-};
-function applyPixelRatio(ratio) {
-  resolution.pixelRatio = ratio;
-  renderer.setPixelRatio(ratio);
-  composer.setPixelRatio(ratio);
-  resolution.samples.length = 0;
-}
-function resetResolution(quality) {
-  Object.assign(resolution, {
-    ceiling: Math.min(devicePixelRatio, QUALITY_PIXEL_RATIO[quality]),
-    goodWindows: 0,
-    upWindows: 5,
-    lastUp: -Infinity,
-    descentFrom: 0,
-  });
-  applyPixelRatio(overrides.pixelRatio ?? resolution.ceiling);
-}
-function stepResolution(direction) {
-  const r = resolution;
-  applyPixelRatio(
-    THREE.MathUtils.clamp(
-      r.pixelRatio + direction * r.step,
-      Math.min(r.floor, r.ceiling),
-      r.ceiling,
-    ),
-  );
-  resize();
-}
-function updateResolution(now, interval) {
-  const r = resolution;
-  if (!r.adaptive || overrides.pixelRatio != null || now < r.holdUntil) return;
-  // Start a fresh window after a hidden tab, the bakery, or a long stall.
-  if (interval > 250 || now - r.lastSample > 250) {
-    r.samples.length = 0;
-    r.windowStart = now;
-  }
-  r.lastSample = now;
-  r.samples.push(interval);
-  if (now - r.windowStart < 1000) return;
-  r.samples.sort((a, b) => a - b);
-  r.p95 = r.samples[Math.floor(r.samples.length * 0.95)];
-  r.mean = r.samples.reduce((a, b) => a + b, 0) / r.samples.length;
-  r.samples.length = 0;
-  r.windowStart = now;
-  const slow = r.p95 > 20;
-  if (!slow) r.descentFrom = 0;
-  if (slow) {
-    r.goodWindows = 0;
-    // Slow again soon after stepping up: wait longer before the next try.
-    if (now - r.lastUp < 10000) r.upWindows = Math.min(r.upWindows * 2, 60);
-    if (r.pixelRatio > Math.min(r.floor, r.ceiling)) {
-      r.descentFrom ||= r.mean;
-      stepResolution(-1);
-    } else if (r.descentFrom && r.mean > r.descentFrom * 0.95) {
-      // Even the floor did not shorten frames, so something else sets the
-      // pace (a 30 Hz cap or a busy CPU). Restore detail and retry later.
-      // Single steps are not judged: vsync can hold frames at 33 ms until
-      // the GPU fits within one refresh.
-      r.descentFrom = 0;
-      r.holdUntil = now + r.holdFor;
-      r.holdFor = Math.min(r.holdFor * 2, 300000);
-      applyPixelRatio(r.ceiling);
-      resize();
-    }
-  } else if (r.p95 < 18) {
-    if (++r.goodWindows >= r.upWindows && r.pixelRatio < r.ceiling) {
-      r.goodWindows = 0;
-      r.lastUp = now;
-      stepResolution(1);
-    }
-  } else r.goodWindows = 0;
-}
+const startQuality = startingQuality(innerWidth, innerHeight, devicePixelRatio);
+const scaler = createResolutionScaler({
+    // ?resolution=fixed keeps the quality's pixel ratio for benchmarks and tests.
+    adaptive: new URLSearchParams(location.search).get("resolution") !== "fixed",
+    quality: startQuality,
+    density: () => devicePixelRatio,
+    now: performance.now(),
+    setPixelRatio(ratio) {
+      renderer.setPixelRatio(ratio);
+      composer.setPixelRatio(ratio);
+    },
+    resize: () => resize(),
+    overrides,
+  }),
+  resolution = scaler.state;
 renderer.setPixelRatio(resolution.ceiling);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -770,7 +679,7 @@ async function enterBakery() {
     // The scaler only measures the village, so the bakery uses the quality's
     // full ratio; the village resumes at its own ratio on the way out.
     resolution.outdoor = resolution.pixelRatio;
-    applyPixelRatio(resolution.ceiling);
+    scaler.apply(resolution.ceiling);
     interior.enter();
     const url = new URL(location.href);
     url.searchParams.set("interior", "bakery");
@@ -785,7 +694,7 @@ async function enterBakery() {
 }
 function leaveBakery() {
   interior?.exit();
-  applyPixelRatio(Math.min(resolution.outdoor, resolution.ceiling));
+  scaler.apply(Math.min(resolution.outdoor, resolution.ceiling));
   keys.clear();
   velocity.set(0, 0);
   const url = new URL(location.href);
@@ -1107,7 +1016,7 @@ $("#quality").onchange = (e) => {
   const q = e.target.value;
   world.water.setQuality(q);
   // The chosen quality is the scaler's ceiling.
-  resetResolution(q);
+  scaler.reset(q);
   updateShadowMapSize();
   bloom.enabled = overrides.bloom ?? q !== "performance";
   resize();
@@ -1733,7 +1642,7 @@ window.addEventListener("resize", () => {
   // Moving to a screen with another density changes the quality's ceiling.
   const q = $("#quality").value;
   if (Math.min(devicePixelRatio, QUALITY_PIXEL_RATIO[q]) !== resolution.ceiling)
-    resetResolution(q);
+    scaler.reset(q);
   resize();
 });
 $("#quality").value = startQuality;
@@ -1834,7 +1743,7 @@ function animate(now) {
     interior.update(dt, elapsed, motion);
     return;
   }
-  updateResolution(now, interval);
+  scaler.update(now, interval);
   // Take the shortest arc, including when rotation crosses the 0°/360° seam.
   const yawDelta = THREE.MathUtils.euclideanModulo(targetYaw - overviewYaw + 180, 360) - 180;
   overviewYaw = motion
@@ -2064,7 +1973,7 @@ function applyTune() {
   showSky();
   // The scaler stands aside while the ratio is forced; clearing it resumes
   // from the quality's cap.
-  if (!interior?.active) resetResolution(q);
+  if (!interior?.active) scaler.reset(q);
   resize();
 }
 window.__willowmere = {
@@ -2210,7 +2119,7 @@ window.__willowmere = {
   }),
   setAdaptiveResolution: (on) => {
     resolution.adaptive = on;
-    resetResolution($("#quality").value);
+    scaler.reset($("#quality").value);
     resize();
   },
   blocked,
