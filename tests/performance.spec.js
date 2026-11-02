@@ -261,14 +261,30 @@ test("the willow marsh keeps the same budget as the millpond", async ({ page }) 
   });
   await page.goto("/?resolution=fixed");
   await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
-  await page.waitForFunction(() => !window.__willowmere.getStreaming().pending, null, {
-    timeout: 600000,
-    polling: 1000,
-  });
   // The benchmark's viewpoint: the boardwalk at the default height, with the
   // mere, its reeds, the willows and the hide in view, then zoomed out to the
-  // cap, where the village's south side joins it.
+  // cap, where the village's south side joins it. Standing there first
+  // streams the marsh in before the rest of the map.
   await page.evaluate(() => window.__willowmere.moveTo(7.8, 31.2, 1.2));
+  await page.waitForFunction(
+    () => {
+      const names = new Set(
+        window.__willowmere.getChunks().flatMap((chunk) => chunk.meshes.map((mesh) => mesh.name)),
+      );
+      return [
+        "Marsh ground, banks and bed",
+        "Marsh footbridge and boardwalk",
+        "Marsh hide and bench",
+        "Willows (west): leaves",
+        "Willows (east): leaves",
+        "Marsh lily pads",
+        "Marsh heron",
+        "Marsh fireflies",
+      ].every((name) => names.has(name));
+    },
+    null,
+    { timeout: 600000, polling: 2000 },
+  );
   const sample = () =>
     page.evaluate(async () => {
       const values = [];
