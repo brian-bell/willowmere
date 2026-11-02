@@ -148,7 +148,7 @@ export function footbridgeDeck(x) {
 }
 
 /**
- * Colliders for the pond and its brook, in the shapes main.js's blocked()
+ * Colliders for the pond and its brook, in the shapes collides() (src/game/navigation.js)
  * understands. The pond's is a shape: it blocks a body of radius r whose
  * centre would stand in the water, except on the jetty's deck.
  */

@@ -88,7 +88,9 @@ This is a small playable prototype with a short welcome quest, free village expl
 
 ## Source map
 
-- `src/main.js`: renderer, camera, movement, collision, route finding, interactions, UI and save state.
+- `src/main.js`: wiring for the outdoor game: renderer, lights, input, first person, the bakery transitions and the frame loop.
+- `src/game/`: the outdoor game's subsystems: adaptive resolution, overview camera, sun shadow fitting, collision and route finding, save state, HUD, activities (quests, flowers, fishing, harvest), interactions and the test hooks.
+- `src/content/`: landmark lines, neighbor titles and the journal's text.
 - `src/world.js`: environment, procedural materials, foliage, collision layout and water placement.
 - `src/water.js` / `src/water-shaders.js`: shared shallow-water simulation, waves, reflections, refraction, foam, and fountain jets.
 - `src/water-study.js`: interactive close-up water study and diagnostics.
