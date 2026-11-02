@@ -178,7 +178,9 @@ export function createOverviewCamera({ camera, isFirstPerson, onZoom }) {
         THREE.MathUtils.clamp(1.5 + (p.z - 5) * follow, bounds.minZ, bounds.maxZ),
       );
       if (Math.abs(viewHeight - targetViewHeight) > 0.01) {
-        viewHeight = THREE.MathUtils.lerp(viewHeight, targetViewHeight, 1 - Math.exp(-dt * 2.4));
+        viewHeight = motion
+          ? THREE.MathUtils.lerp(viewHeight, targetViewHeight, 1 - Math.exp(-dt * 2.4))
+          : targetViewHeight;
         onZoom();
       }
       // A jump (moveTo) takes the view straight there.
