@@ -27,7 +27,7 @@ function blockedBy(colliders, x, z, r = 0.27) {
   });
 }
 
-test("the pond's banks hide its water's edge and meet the lawn level", () => {
+test("the pond's banks hide its water's edge and meet the lawn level", { tag: "@logic" }, () => {
   const { ground, surface, lawn } = MILLPOND;
   // Around the ground mesh's rim the bank has fallen back to the lawn.
   for (let x = ground.minX; x <= ground.maxX; x += 0.5)
@@ -55,7 +55,7 @@ test("the pond's banks hide its water's edge and meet the lawn level", () => {
   );
 });
 
-test("the pond and its brook block walking, except the jetty and footbridge", () => {
+test("the pond and its brook block walking, except the jetty and footbridge", { tag: "@logic" }, () => {
   const colliders = millpondColliders(),
     { jetty, footbridge } = MILLPOND;
   // Open water, the outlet above the weir, the weir and the brook below it.
@@ -98,7 +98,7 @@ test("the pond and its brook block walking, except the jetty and footbridge", ()
   expect(millpondGrass(-20, 10)).toBe(true);
 });
 
-test("the pond's water body follows its shoreline", () => {
+test("the pond's water body follows its shoreline", { tag: "@logic" }, () => {
   const config = {
     size: [18, 12],
     depth: MILLPOND.depth,
@@ -114,7 +114,7 @@ test("the pond's water body follows its shoreline", () => {
   expect(sampleWaterField(config, -7, -0.7)[3]).toBe(1);
 });
 
-test("a cast waits for a bite, which a timely press lands", () => {
+test("a cast waits for a bite, which a timely press lands", { tag: "@logic" }, () => {
   const ripples = [];
   const water = { disturb: (...args) => ripples.push(args) };
   let roll = 0.5;

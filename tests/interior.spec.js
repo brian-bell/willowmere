@@ -42,7 +42,7 @@ async function walk(page, x, z) {
 
 // Collision verification uses large steps and a rotated obstacle to catch
 // tunneling, and an actual route around the table to catch sticky sliding.
-test("visitor stays grounded and can slide around furniture without tunneling", () => {
+test("visitor stays grounded and can slide around furniture without tunneling", { tag: "@logic" }, () => {
   const walker = createInteriorWalker({
     bounds: { minX: -6, maxX: 6, minZ: -6, maxZ: 6 },
     spawn: { x: 0, z: 4, yaw: 0 },

@@ -3,7 +3,7 @@ import * as T from "three";
 import { createLife } from "../src/life.js";
 import { createFlowerFactory } from "../src/flowers.js";
 
-test("character batches retain detailed geometry and moving joints", () => {
+test("character batches retain detailed geometry and moving joints", { tag: "@logic" }, () => {
   const scene = new T.Scene();
   const life = createLife(T, scene);
   let meshes = 0,
@@ -33,7 +33,7 @@ test("character batches retain detailed geometry and moving joints", () => {
   ).toBeGreaterThan(10);
 });
 
-test("flower instances share bounded resources and grow independently", () => {
+test("flower instances share bounded resources and grow independently", { tag: "@logic" }, () => {
   const scene = new T.Scene();
   const makeFlower = createFlowerFactory(scene);
   const wild = makeFlower(0, 0);

@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import * as THREE from "three";
 import { createLife } from "../src/life.js";
 
-test("cats walk continuously, pause for idle behavior, and freeze with decorative motion", () => {
+test("cats walk continuously, pause for idle behavior, and freeze with decorative motion", { tag: "@logic" }, () => {
   const scene = new THREE.Scene();
   const life = createLife(THREE, scene);
   const cats = ["Bracken the tabby cat", "Misty the gray cat"].map((name) =>

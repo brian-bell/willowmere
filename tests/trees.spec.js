@@ -91,7 +91,7 @@ test("tree variants have finite, bounded geometry and stable wind shadows", asyn
   expect(errors).toEqual([]);
 });
 
-test("canopy bounds keep the traveler visible behind small trees", () => {
+test("canopy bounds keep the traveler visible behind small trees", { tag: "@logic" }, () => {
   const scene = new THREE.Scene();
   const player = new THREE.Group();
   player.add(

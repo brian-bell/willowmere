@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { createLife } from "../src/life.js";
 
-test("Lily and Pip stay together on their walk and pause with reduced motion", () => {
+test("Lily and Pip stay together on their walk and pause with reduced motion", { tag: "@logic" }, () => {
   const scene = new THREE.Scene();
   const life = createLife(THREE, scene);
   const lily = life.npcs.find((npc) => npc.id === "lily");
