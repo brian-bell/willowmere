@@ -294,7 +294,7 @@ Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high
 | First person by the hide (11, 34.4), facing the village | 705 / 1.67M | 829 / 2.23M |
 | First person on the boardwalk at blue hour | 323 / 0.94M | 449 / 1.50M |
 
-`tests/performance.spec.js` holds the benchmark's marsh viewpoint (7.8, 31.2) under 1,000 draws and 2.5M triangles at height 18 and at the zoom cap. `npm run benchmark` measures it as "high, marsh" and "high, marsh, first person"; `--ablate` adds the marsh at height 30.
+`tests/performance.spec.js` holds the benchmark's marsh viewpoint (7.8, 31.2) under 1,000 draws and 2.5M triangles at height 18 and at height 30. `npm run benchmark` measures it as "high, marsh" and "high, marsh, first person"; `--ablate` adds the marsh at height 30.
 
 ### Market lane (2026-11-02)
 
@@ -313,7 +313,7 @@ Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high
 | Market square, height 30 | 630 / 1.77M | 732 / 1.82M |
 | First person in the square, facing west along the lane | 1,208 / 2.62M | 1,307 / 2.65M |
 
-`tests/performance.spec.js` holds the benchmark's market viewpoint (36.5, 3.2) under 1,000 draws and 2.5M triangles at height 18 and at the zoom cap. `npm run benchmark` measures it as "high, market" and "high, market, first person"; `--ablate` adds the market at height 30.
+`tests/performance.spec.js` holds the benchmark's market viewpoint (36.5, 3.2) under 1,000 draws and 2.5M triangles at height 18 and at height 30 (then the zoom cap). `npm run benchmark` measures it as "high, market" and "high, market, first person"; `--ablate` adds the market at height 30.
 
 ### Orchard hill (2026-11-01)
 

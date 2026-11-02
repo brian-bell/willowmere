@@ -262,8 +262,8 @@ test("the willow marsh keeps the same budget as the millpond", async ({ page }) 
   await page.goto("/?resolution=fixed");
   await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
   // The benchmark's viewpoint: the boardwalk at the default height, with the
-  // mere, its reeds, the willows and the hide in view, then zoomed out to the
-  // cap, where the village's south side joins it. Standing there first
+  // mere, its reeds, the willows and the hide in view, then zoomed out to
+  // height 30, where the village's south side joins it. Standing there first
   // streams the marsh in before the rest of the map.
   await page.evaluate(() => window.__willowmere.moveTo(7.8, 31.2, 1.2));
   await page.waitForFunction(
