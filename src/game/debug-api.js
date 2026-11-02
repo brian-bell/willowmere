@@ -215,8 +215,8 @@ function geometryPrint(geometry) {
   if (!geometry) return "-";
   const names = Object.keys(geometry.attributes).sort();
   return [
-    names.join(","),
-    hash(...names.map((name) => geometry.attributes[name].array), geometry.index?.array),
+    names.map((name) => `${name}=${hash(geometry.attributes[name].array)}`).join(","),
+    hash(geometry.index?.array),
     geometry.drawRange.start,
     geometry.drawRange.count,
     geometry.groups.length,
