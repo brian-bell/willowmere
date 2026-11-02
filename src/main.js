@@ -15,6 +15,7 @@ import { createSky } from "./sky.js";
 import { createStreamer } from "./streaming.js";
 import { createFishing, FISH } from "./fishing.js";
 import { createNavigation } from "./game/navigation.js";
+import { loadState, saveState } from "./game/save.js";
 import { SHADOW_MAP_SIZES, createSunShadow } from "./game/shadows.js";
 import {
   DEFAULT_VIEW_HEIGHT,
@@ -281,42 +282,12 @@ const playerVisibility = createPlayerVisibility(
   world.colliders,
   world.treeCanopies,
 );
-const STORAGE = "willowmere.save.v1";
-let state = {
-  flowers: 0,
-  seeds: 5,
-  coins: 120,
-  quests: { mabel: false, flower: false, plant: false },
-  // Catches from the millpond, by species.
-  fish: {},
-  // The orchard's fruit and honey: what is in the basket, what has been
-  // gathered all told, and when each tree was shaken and each hive opened.
-  basket: { apple: 0, pear: 0, honey: 0 },
-  harvested: { apple: 0, pear: 0, honey: 0 },
-  orchard: {},
-  gathered: [],
-  plants: [],
-  started: false,
-};
-try {
-  const saved = JSON.parse(localStorage.getItem(STORAGE));
-  if (saved && saved.quests && Array.isArray(saved.plants))
-    state = { ...state, ...saved };
-} catch {}
-// Planted flowers are keyed by id, so their meshes can be created in any order.
-// Saves from before ids get them in planting order.
-let nextPlantId =
-  Math.max(-1, ...state.plants.map((p) => (Number.isInteger(p.id) ? p.id : -1))) + 1;
-for (const plant of state.plants)
-  if (!Number.isInteger(plant.id)) plant.id = nextPlantId++;
-let savingWorks = true;
+// localStorage itself can throw where site data is blocked.
+const storage = () => localStorage;
+let { state, nextPlantId } = loadState(storage);
 function save() {
-  try {
-    localStorage.setItem(STORAGE, JSON.stringify(state));
-  } catch {
-    savingWorks = false;
+  if (!saveState(storage, state))
     $("#save-status").textContent = "This visit cannot be saved";
-  }
 }
 let toastTimeout;
 function toast(message) {
