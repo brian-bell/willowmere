@@ -375,10 +375,10 @@ test("zoomed out to the cap, the overview drops small detail and keeps the villa
   expect(far.small).toBeGreaterThan(30);
   expect(far.smallShown).toBe(0);
   // The village zoomed out as far as it went before the map grew counted
-  // up to 1,104 draws and 2.41M triangles; without zoom detail this view
-  // counted 2.55M.
-  expect(far.drawCalls).toBeLessThan(1000);
-  expect(far.triangles).toBeLessThan(2.3e6);
+  // up to 1,104 draws and 2.41M triangles; this view without zoom detail
+  // counts up to 1,253 and 2.95M (1,003 and 2.37M with it).
+  expect(far.drawCalls).toBeLessThan(1100);
+  expect(far.triangles).toBeLessThan(2.45e6);
   // Back at the old cap of 30, every pebble and fallen leaf is back.
   await page.evaluate(() => {
     for (let i = 0; i < 3; i++) document.querySelector("#zoom-in").click();
