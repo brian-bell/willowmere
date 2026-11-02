@@ -18,6 +18,7 @@ import { createActivities } from "./game/activities.js";
 import { createDebugApi } from "./game/debug-api.js";
 import { createHud } from "./game/hud.js";
 import { createInteractions } from "./game/interactions.js";
+import { leafLevelAtDistance, overviewGroundDetail, overviewLeafLevel } from "./game/detail.js";
 import { loadState, saveState } from "./game/save.js";
 import { SHADOW_MAP_SIZES, createSunShadow } from "./game/shadows.js";
 import {
@@ -88,23 +89,11 @@ let camera = overviewCamera,
   yaw = 0,
   pitch = 0,
   dragging = null;
-// Beyond these, single leaves cover only a few pixels and trees draw coarser
-// foliage; in first person, trees further off than CROWN_DISTANCE, deep in
-// the fog, draw their crown shells instead of leaves.
-const COARSE_LEAVES_VIEW_HEIGHT = 24,
-  COARSE_LEAVES_DISTANCE = 18,
-  CROWN_DISTANCE = 40;
-const leafDetailFromEye = (center) => {
-  const distance = center.distanceTo(firstPersonCamera.position);
-  return distance > CROWN_DISTANCE ? 2 : distance > COARSE_LEAVES_DISTANCE ? 1 : 0;
-};
+const leafDetailFromEye = (center) =>
+  leafLevelAtDistance(center.distanceTo(firstPersonCamera.position));
 const leafDetail = () =>
   overrides.leafDetail ??
-  (firstPerson
-    ? leafDetailFromEye
-    : overview.viewHeight > COARSE_LEAVES_VIEW_HEIGHT
-      ? 1
-      : 0);
+  (firstPerson ? leafDetailFromEye : overviewLeafLevel(overview.viewHeight));
 const overview = createOverviewCamera({
   camera: overviewCamera,
   isFirstPerson: () => firstPerson,
@@ -863,8 +852,11 @@ function animate(now) {
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
   playerVisibility.update(camera, !photo && !firstPerson);
   world.trees.setDetail(leafDetail());
+  world.bushes.setDetail(leafDetail());
+  const groundDetail = firstPerson || overviewGroundDetail(overview.viewHeight);
   if (firstPerson) world.setDetailFocus(p.x, p.z);
-  else world.setDetailFocus();
+  else world.setDetailShown(groundDetail);
+  world.trees.setGroundDetail(groundDetail);
   streamer.update(p.x, p.z, camera);
   sunShadow.fit({ firstPerson, yaw, targetYaw: overview.targetYaw });
   scene.updateMatrixWorld();

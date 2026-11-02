@@ -2,7 +2,8 @@
 // detail, glowing materials and animations are grouped by chunk, so a view
 // only pays for the chunks it can see. The village's plain meshes bake into
 // one draw per chunk, material and shadow role; small detail (grass,
-// blossoms, pebbles) hides beyond first person's detail range. Streamed
+// blossoms, pebbles) hides beyond first person's detail range and when the
+// overview zooms far out. Streamed
 // regions join the same chunks through world.addStreamed.
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { WORLD, chunkBounds, chunkCoords, terrainMaxIn } from "./world-layout.js";
@@ -278,17 +279,25 @@ export function bakeScenery(T, scene, { chunkAt, chunkOf }, { skip, selfCulled }
   return glowMaterials;
 }
 
+// Grass, blossoms and pebbles cover only a few pixels in the distance, so
+// first person skips the parts beyond DETAIL_RANGE, and the overview hides
+// them all when zoomed far out (src/game/detail.js says when).
+export const DETAIL_RANGE = 30;
+
 /**
- * Small detail and the open country, whose visibility first person and the
- * benchmark change. `fieldGround` is the open country's ground, which
- * showFields("ground") keeps.
+ * Small detail and the open country, whose visibility first person, the
+ * overview's zoom and the benchmark change. `fieldGround` is the open
+ * country's ground, which showFields("ground") keeps.
  */
 export function createDetail(chunks, fieldGround) {
-  // Grass, blossoms and pebbles cover only a few pixels in the distance, so
-  // first person skips the parts beyond DETAIL_RANGE. Each part keeps its
-  // world-space bounds; they never move.
-  const DETAIL_RANGE = 30,
-    DETAIL_NAMES = ["Grass blades", "Meadow blossoms", "River pebbles"],
+  // Each part keeps its world-space bounds; they never move.
+  const DETAIL_NAMES = [
+      "Grass blades",
+      "Meadow blossoms",
+      "River pebbles",
+      "Riverbank shingle and pebbles",
+      "Riverbank grass tufts",
+    ],
     detailParts = [];
   function addDetail(mesh, field = false) {
     const sphere = (mesh.isInstancedMesh ? mesh.boundingSphere : mesh.geometry.boundingSphere)
@@ -321,16 +330,19 @@ export function createDetail(chunks, fieldGround) {
       for (const mesh of [...fieldGround, ...fieldPatches]) mesh.visible = fieldShown(mesh);
     },
     /**
-     * Hides small detail more than DETAIL_RANGE from (x, z), or shows it all
-     * when called without a position (the overview).
+     * First person: hides small detail more than DETAIL_RANGE from (x, z).
      */
     setDetailFocus(x, z) {
       for (const { mesh, sphere, field } of detailParts)
         mesh.visible =
           (!field || fieldShown(mesh)) &&
-          (x === undefined ||
-            Math.hypot(sphere.center.x - x, sphere.center.z - z) - sphere.radius <
-              DETAIL_RANGE);
+          Math.hypot(sphere.center.x - x, sphere.center.z - z) - sphere.radius <
+            DETAIL_RANGE;
+    },
+    /** The overview: shows or hides every piece of small detail. */
+    setDetailShown(shown) {
+      for (const { mesh, field } of detailParts)
+        mesh.visible = shown && (!field || fieldShown(mesh));
     },
   };
 }

@@ -1689,6 +1689,7 @@ export function createWorld(T, scene) {
      * shows it all when called without a position (the overview).
      */
     setDetailFocus: detail.setDetailFocus,
+    setDetailShown: detail.setDetailShown,
     getGroundHeight,
     surfaceHeight,
     isPlantable,
