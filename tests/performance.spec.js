@@ -306,3 +306,89 @@ test("the willow marsh keeps the same budget as the millpond", async ({ page }) 
   expect(Math.max(...far.map((s) => s.triangles))).toBeLessThan(2.5e6);
   expect(errors).toEqual([]);
 });
+
+test("zoomed out to the cap, the overview drops small detail and keeps the village's budget", async ({
+  page,
+}) => {
+  test.setTimeout(900000);
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "willowmere.save.v1",
+      JSON.stringify({
+        started: true,
+        quests: { mabel: false, flower: false, plant: false },
+        plants: [],
+      }),
+    );
+  });
+  await page.goto("/?resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
+  await page.waitForFunction(() => !window.__willowmere.getStreaming().pending, null, {
+    timeout: 600000,
+    polling: 1000,
+  });
+  const SMALL = [
+    "River pebbles",
+    "Riverbank shingle and pebbles",
+    "Leaves settled among the roots",
+    "Tree hollows, moss and woodland details",
+  ];
+  const zoomTo = async (button, height) => {
+    await page.evaluate((button) => {
+      for (let i = 0; i < 8; i++) document.querySelector(button).click();
+    }, button);
+    await page.waitForFunction(
+      (height) =>
+        Math.abs(window.__willowmere.getDiagnostics().camera.viewHeight - height) < 0.05,
+      height,
+      { timeout: 600000, polling: 1000 },
+    );
+  };
+  // Which small things show, and what the view submits, over a few frames.
+  const sample = () =>
+    page.evaluate(async (small) => {
+      for (let i = 0; i < 2; i++) await new Promise(requestAnimationFrame);
+      const values = [];
+      for (let i = 0; i < 4; i++) {
+        await new Promise(requestAnimationFrame);
+        values.push(window.__willowmere.getDiagnostics());
+      }
+      const meshes = window.__willowmere
+        .getChunks()
+        .flatMap((chunk) => chunk.meshes)
+        .filter((mesh) => small.some((name) => mesh.name.startsWith(name)));
+      return {
+        drawCalls: Math.max(...values.map((s) => s.drawCalls)),
+        triangles: Math.max(...values.map((s) => s.triangles)),
+        small: meshes.length,
+        smallShown: meshes.filter((mesh) => mesh.visible).length,
+      };
+    }, SMALL);
+  await zoomTo("#zoom-out", 39);
+  const far = await sample();
+  expect(far.small).toBeGreaterThan(30);
+  expect(far.smallShown).toBe(0);
+  // The village zoomed out as far as it went before the map grew counted
+  // up to 1,104 draws and 2.41M triangles in the same container.
+  expect(far.drawCalls).toBeLessThan(1000);
+  expect(far.triangles).toBeLessThan(2.2e6);
+  // Back at the old cap of 30, every blade and pebble is back.
+  await page.evaluate(() => {
+    for (let i = 0; i < 3; i++) document.querySelector("#zoom-in").click();
+  });
+  await page.waitForFunction(
+    () => window.__willowmere.getDiagnostics().camera.viewHeight < 30.05,
+    null,
+    { timeout: 600000, polling: 1000 },
+  );
+  await expect
+    .poll(async () => (await sample()).smallShown, { timeout: 600000 })
+    .toBe(far.small);
+  expect(errors).toEqual([]);
+});

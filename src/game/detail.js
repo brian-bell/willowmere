@@ -8,9 +8,10 @@
 export const COARSE_LEAVES_VIEW_HEIGHT = 24,
   COARSE_LEAVES_DISTANCE = 18,
   CROWN_DISTANCE = 40,
-  // Zoomed out past this, a grass blade, blossom or pebble is a pixel or
-  // less and the ground's own texture carries the meadow: the overview hides
-  // small ground detail, and the litter and moss at the trees' feet.
+  // Zoomed out past this, a pebble, a tuft or a fallen leaf is a pixel or
+  // less: the overview hides the brook's pebbles and bank tufts and the
+  // litter and moss at the trees' feet. Grass and blossoms stay; their
+  // speckle is the meadow's texture from above.
   FAR_DETAIL_VIEW_HEIGHT = 30;
 
 /** First person: a canopy's leaf level from its distance to the eye. */

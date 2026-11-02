@@ -855,7 +855,7 @@ function animate(now) {
   world.bushes.setDetail(leafDetail());
   const groundDetail = firstPerson || overviewGroundDetail(overview.viewHeight);
   if (firstPerson) world.setDetailFocus(p.x, p.z);
-  else world.setDetailShown(groundDetail);
+  else world.setOverviewDetail(groundDetail);
   world.trees.setGroundDetail(groundDetail);
   streamer.update(p.x, p.z, camera);
   sunShadow.fit({ firstPerson, yaw, targetYaw: overview.targetYaw });

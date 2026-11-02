@@ -280,9 +280,12 @@ export function bakeScenery(T, scene, { chunkAt, chunkOf }, { skip, selfCulled }
 }
 
 // Grass, blossoms and pebbles cover only a few pixels in the distance, so
-// first person skips the parts beyond DETAIL_RANGE, and the overview hides
-// them all when zoomed far out (src/game/detail.js says when).
+// first person skips the parts beyond DETAIL_RANGE. Zoomed far out (when,
+// src/game/detail.js says), the overview hides the pebbles and the tufts on
+// the brook's banks; the grass and blossoms stay, because their speckle is the
+// meadow's texture from above and costs few triangles.
 export const DETAIL_RANGE = 30;
+const FAR_HIDDEN = ["River pebbles", "Riverbank shingle and pebbles", "Riverbank grass tufts"];
 
 /**
  * Small detail and the open country, whose visibility first person, the
@@ -303,7 +306,8 @@ export function createDetail(chunks, fieldGround) {
     const sphere = (mesh.isInstancedMesh ? mesh.boundingSphere : mesh.geometry.boundingSphere)
       .clone()
       .applyMatrix4(mesh.matrixWorld);
-    detailParts.push({ mesh, sphere, field });
+    const far = FAR_HIDDEN.some((name) => mesh.name.startsWith(name));
+    detailParts.push({ mesh, sphere, field, far });
   }
   // The open country's ground and grass, which a benchmark can hide to
   // measure them: shown is true, false, or "ground" for the ground alone.
@@ -339,10 +343,13 @@ export function createDetail(chunks, fieldGround) {
           Math.hypot(sphere.center.x - x, sphere.center.z - z) - sphere.radius <
             DETAIL_RANGE;
     },
-    /** The overview: shows or hides every piece of small detail. */
-    setDetailShown(shown) {
-      for (const { mesh, field } of detailParts)
-        mesh.visible = shown && (!field || fieldShown(mesh));
+    /**
+     * The overview: shows every piece of small detail, or hides the pebbles
+     * and bank tufts when zoomed far out (`near` false).
+     */
+    setOverviewDetail(near) {
+      for (const { mesh, field, far } of detailParts)
+        mesh.visible = (near || !far) && (!field || fieldShown(mesh));
     },
   };
 }

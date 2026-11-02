@@ -1684,12 +1684,10 @@ export function createWorld(T, scene) {
      * or "ground" to hide only its grass.
      */
     showFields: detail.showFields,
-    /**
-     * Hides small detail more than DETAIL_RANGE (bake.js) from (x, z), or
-     * shows it all when called without a position (the overview).
-     */
+    /** First person: hides small detail more than DETAIL_RANGE (bake.js) from (x, z). */
     setDetailFocus: detail.setDetailFocus,
-    setDetailShown: detail.setDetailShown,
+    /** The overview: shows small detail, or drops the smallest when zoomed far out. */
+    setOverviewDetail: detail.setOverviewDetail,
     getGroundHeight,
     surfaceHeight,
     isPlantable,
