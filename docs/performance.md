@@ -236,6 +236,8 @@ Screenshots at device scale 2 with reduced motion compare the counter, the oven 
 
 `tests/market.spec.js` checks that the market lane runs from the mill road to the rim on flat, grass-free gravel clear of every footing, with a shopper's place at each stall; that the footbridge's deck humps over the brook between its rails and routes from the kitchen gardens to the square; that Finn's bread rounds pay per loaf and then rest, and the stalls sell seeds and keepsakes only in the golden afternoon (all `@logic`); and that the lane streams in with Hazel and Bram, carries the player on the footbridge, takes a round of Finn's loaves, sells Pip a hat that survives a reload, and covers its stalls at blue hour.
 
+`tests/marsh.spec.js` checks that the brook runs on from the village into the mere with its banks above the water's edge and its ground meeting the lawn at every edge; that the water and the brook's channel block walking except along the boardwalk and the humped footbridge, whose decks ramp down without a step, and that walkers route from the village to the hide's door and out along the boardwalk; that the hide shows one bird at a time, afternoon birds in the afternoon and blue hour's at blue hour, pays for each first sighting, and that old saves gain the marsh's state (all `@logic`); and that the marsh streams in first when the player stands at the hide, with Wren and the heron, lets the player watch a bird into the journal, and lifts them onto the boardwalk.
+
 `tests/orchard.spec.js` checks that the orchard hill meets the lawn at the edge of its ground, before the village and the millpond, with no slope steeper than about 35°; that its path runs from the village's edge to the windmill's door clear of every tree, hive and bench, with each tree reachable; that the hill streams in, routes from the village green to the bench, carries the player on its slope, and that shaking a tree and opening a hive fill the basket and survive a reload; and that in first person trees beyond 40 m draw crowns that cast shadows while nearer ones keep their leaves, and the overview gives every tree its leaves back.
 
 `tests/routing.spec.js` checks that a click on the far bank of the brook routes over the bridge and walks there, that clicks in the water or off the map return no route, that the open country and the once-sealed pocket south of the mill route, and that the lanterns keep a fixed pool of point lights with no new shader programs at dusk.
@@ -244,6 +246,29 @@ These tests assert rendering work and behavior instead of a machine-dependent FP
 ## Change history
 
 Per-change measurements, each against the previous `main` (`1a2624c`) at the time, in the order the changes landed. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the current combined baseline.
+
+### Willow marsh (2026-11-02)
+
+Phase 5's second region. South of the village the brook runs on under a third footbridge into a shallow mere with two reedy islands, a boardwalk on stilts across its western shallows, a little bird hide with a turf roof on the south bank, a bench, four weeping willows, a heron that wades and strikes, lily pads, loosestrife and iris, and fireflies at blue hour. Wren, who watches birds by the bench, joins through `life.addResident`. The marsh's shape, heights, decks, colliders and grass mask load with the village from `src/regions/marsh-layout.js`; eleven jobs stream in from `src/regions/marsh.js` (the ground, the water, the crossings, the hide and bench, a job of willows on each bank, the reeds, the lilies and flowers, the heron, the fireflies, and Wren).
+
+- **Water.** One more water body, `marsh`, with its own 120 × 90 grid (see [the water notes](water.md)). Its seam with the village brook hides under the new footbridge. It reflects every second frame, like the millpond.
+- **Willows.** Built a tree per slice as instanced grounded leaves (4,560 a side), with distant crowns for first person beyond 40 m. They have no shade shells inside the crowns: through a willow's thin curtains these show as dark balls.
+- **Reeds.** The village's reed builder now takes its segment counts, so each of the marsh's reeds uses about half a village reed's triangles (82k for all of them), and they build twelve plants per slice.
+- **Fireflies.** One instanced mesh of 80 small icosahedra in an additive basic material, hidden until blue hour. The heron's body and neck are two meshes. The marsh overview compiles 71 shader programs against `main`'s 67 there.
+- **The village.** The scatter still tests the colliders it always had, so the village's random stream is unchanged. Its field grass gives way where the marsh ground begins, and the brook's south piece now stops at the new footbridge.
+
+Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high quality, `?resolution=fixed`, with the frame-locked probe, against `main` (`db3b858`):
+
+| View | `main` draws / triangles | Willow marsh draws / triangles |
+| --- | --- | --- |
+| Marsh overview from the east trail (22.9, 29.2), height 18 | 304 / 1.28M (empty field) | 413 / 1.77M |
+| Marsh overview, height 30 | 369 / 1.46M | 465 / 1.97M |
+| Village's south edge (10, 18), height 18 | 710 / 2.22M | 770 / 2.65M |
+| First person on the boardwalk (7.1, 29.6) | 257 / 0.68M | 395 / 1.23M |
+| First person by the hide (11, 34.4), facing the village | 705 / 1.67M | 829 / 2.23M |
+| First person on the boardwalk at blue hour | 323 / 0.94M | 449 / 1.50M |
+
+`tests/performance.spec.js` holds the benchmark's marsh viewpoint (7.8, 31.2) under 1,000 draws and 2.5M triangles at height 18 and at the zoom cap. `npm run benchmark` measures it as "high, marsh" and "high, marsh, first person"; `--ablate` adds the marsh at height 30.
 
 ### Market lane (2026-11-02)
 
