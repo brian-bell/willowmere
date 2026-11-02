@@ -18,7 +18,6 @@ import {
 import {
   allowsGrass,
   allowsPlanting,
-  regionColliders,
   regionDeck,
   regionWater,
   regions,
@@ -629,12 +628,22 @@ export function createWorld(T, scene) {
   const footbridgeSouth = MILLPOND.footbridge.maxZ,
     { minZ: crossingNorth, maxZ: crossingSouth } = MARKET.bridge,
     brookPiece = (north, south) => ({ x: 12, z: (north + south) / 2, w: 4.3, d: south - north });
+  const crossing = [brookPiece(4.75, crossingNorth), brookPiece(crossingSouth, 21.25)],
+    lane = regions.find((r) => r.id === "market").colliders(),
+    laneSet = new Set([...crossing, ...lane]);
   colliders.push(
     brookPiece(footbridgeSouth, 1.25),
-    brookPiece(4.75, crossingNorth),
-    brookPiece(crossingSouth, 21.25),
-    ...regionColliders(),
+    ...crossing,
+    ...regions.flatMap((r) => (r.id === "market" ? lane : (r.colliders?.() ?? []))),
   );
+  // The village's grass scatter draws its random stream against the colliders
+  // it always had: the brook in one piece south of the bridge and no market
+  // lane, so every blade, and everything placed after them, stays where it
+  // was. The lane's footings clear their grass after the scatter instead.
+  const scatterColliders = () => [
+    ...colliders.filter((c) => !laneSet.has(c)),
+    brookPiece(4.75, 21.25),
+  ];
   // Timber bridge with graceful hump, cap rails and peg details.
   for (let i = 0; i < 19; i++) {
     const x = 9.1 + i * 0.32,
@@ -1407,8 +1416,8 @@ export function createWorld(T, scene) {
       (x > 14.4 && x < 17.6 && z > -5 && z < 5)
     );
   }
-  function isBlocked(x, z) {
-    return colliders.some((c) =>
+  function isBlocked(x, z, list = colliders) {
+    return list.some((c) =>
       c.w
         ? Math.abs(x - c.x) < c.w / 2 + 0.45 &&
           Math.abs(z - c.z) < c.d / 2 + 0.45
@@ -1416,10 +1425,11 @@ export function createWorld(T, scene) {
     );
   }
   let tries = 0;
+  const scatterBlockers = scatterColliders();
   while (bi < 3400 && tries++ < 22000) {
     const x = range(-22.7, 22.7),
       z = range(-19.5, 19.5);
-    if (inRoad(x, z) || isBlocked(x, z)) continue;
+    if (inRoad(x, z) || isBlocked(x, z, scatterBlockers)) continue;
     const y = terrainHeight(x, z);
     dum.position.set(x, y + 0.15, z);
     dum.rotation.set(range(-0.3, 0.3), rand() * 6.28, range(-0.3, 0.3));
