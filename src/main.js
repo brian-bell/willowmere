@@ -16,6 +16,7 @@ import { createStreamer } from "./streaming.js";
 import { createFishing, FISH } from "./fishing.js";
 import { MILLPOND } from "./regions/millpond-layout.js";
 import { FRUIT_TREES } from "./regions/orchard-layout.js";
+import { regions } from "./regions/index.js";
 import {
   WORLD,
   regionAt,
@@ -558,6 +559,13 @@ function fishingResult(result) {
 // The orchard hill streams in later; its harvest controller arrives with it.
 // A shaken tree ripens again, and a hive refills, after a few minutes.
 let orchard = null;
+// What each region's builder hands back besides its jobs, by region id.
+const regionLoaded = {
+  orchard({ harvest }) {
+    orchard = harvest;
+    updateOrchard();
+  },
+};
 const FRUIT_REGROW_MS = 4 * 60 * 1000,
   HONEY_REFILL_MS = 6 * 60 * 1000,
   HARVEST_PRICE = { apple: 2, pear: 2, honey: 6 };
@@ -2022,21 +2030,15 @@ function animate(now) {
     });
   composer.render();
   if (frame === 3) $("#loading").classList.add("loaded");
-  // The open country's code loads once the village is on screen.
+  // Every region's builder, the open country's included, loads once the
+  // village is on screen.
   if (frame >= 3 && !openCountryRequested) {
     openCountryRequested = true;
-    import("./regions/outskirts.js").then(({ outskirtsJobs }) =>
-      streamer.add(...outskirtsJobs(THREE, world)),
-    );
-    import("./regions/millpond.js").then(({ millpondJobs }) =>
-      streamer.add(...millpondJobs(THREE, world)),
-    );
-    import("./regions/orchard.js").then(({ orchardJobs }) => {
-      const { jobs, harvest } = orchardJobs(THREE, world);
-      orchard = harvest;
-      updateOrchard();
-      streamer.add(...jobs);
-    });
+    for (const region of regions)
+      region.stream?.(THREE, world).then(({ jobs, ...loaded }) => {
+        regionLoaded[region.id]?.(loaded);
+        streamer.add(...jobs);
+      });
   }
 }
 updateUI();

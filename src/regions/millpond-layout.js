@@ -199,3 +199,21 @@ export function millpondGrass(x, z) {
     return false;
   return true;
 }
+
+/** The millpond's entry in the region registry (src/regions/index.js). */
+export const millpondRegion = {
+  id: "millpond",
+  name: "The millpond",
+  // The pond, its banks and the brook up to it, north of the village.
+  area: { minX: 0, maxX: 26, maxZ: -21 },
+  ground: M.ground,
+  height: (x, z) => millpondGround(x, z) - M.lawn,
+  // The pond's bed dips below the field soil's upper layer.
+  deepBed: true,
+  deck: millpondDeck,
+  water: millpondWater,
+  colliders: millpondColliders,
+  grass: millpondGrass,
+  stream: (T, world) =>
+    import("./millpond.js").then(({ millpondJobs }) => ({ jobs: millpondJobs(T, world) })),
+};
