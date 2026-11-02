@@ -367,14 +367,15 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       ],
     },
   ];
-  const residents = npcDefinitions.map((def) => {
+  function resident(def) {
     const figure = person(def);
     figure.root.position.set(def.x, groundHeight(def.x, def.z), def.z);
-    figure.root.rotation.y = def.id === "finn" ? 0.2 : -0.5;
+    figure.root.rotation.y = def.facing ?? (def.id === "finn" ? 0.2 : -0.5);
     figure.root.name = def.name;
     scene.add(figure.root);
     return { ...def, group: figure.root, figure };
-  });
+  }
+  const residents = npcDefinitions.map(resident);
   // Lily and Pip take a quiet lap of the open lane east of the fountain.
   const girl = person({
     coat: 0xc77b9a,
@@ -492,6 +493,16 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
   waggingTail.castShadow = true;
   puppyTail.add(waggingTail);
   sphere(puppyTail, cream, 0, 0.39, -0.18, 0.046, 0.057, 0.046);
+  // A little straw boater from the market's milliner, once it is bought.
+  const pipHat = new THREE.Group();
+  pipHat.name = "Pip's straw hat";
+  pipHat.position.set(0, 0.25, 0.0);
+  pipHat.rotation.x = -0.12;
+  pipHat.visible = false;
+  puppyHead.add(pipHat);
+  m(pipHat, "cylinder", 0xe3c27a, 0, 0, 0, 0.2, 0.018, 0.2);
+  m(pipHat, "cylinder", 0xe8c983, 0, 0.055, 0, 0.12, 0.1, 0.12);
+  m(pipHat, "cylinder", 0xb5584a, 0, 0.03, 0, 0.123, 0.032, 0.123);
 
   const leash = new THREE.Group();
   leash.name = "Lily and Pip leash";
@@ -923,10 +934,24 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       wings[1].rotation.z = -wings[0].rotation.z;
     });
   }
+  const npcs = [...residents.map(({ figure, ...npc }) => npc), lily];
   return {
     player,
-    npcs: [...residents.map(({ figure, ...npc }) => npc), lily],
+    npcs,
     update,
     setPlayerMotion,
+    /** Adds a resident who streamed in with their region (the market lane's). */
+    addResident(def) {
+      const npc = resident(def);
+      batchParts(npc.group);
+      residents.push(npc);
+      const { figure, ...entry } = npc;
+      npcs.push(entry);
+      return entry;
+    },
+    /** Shows or hides Pip's straw hat. */
+    setPipHat(on) {
+      pipHat.visible = on;
+    },
   };
 }

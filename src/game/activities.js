@@ -2,11 +2,13 @@ import * as THREE from "three";
 import { createFlowerFactory } from "../flowers.js";
 import { MILLPOND } from "../regions/millpond-layout.js";
 import { FRUIT_TREES } from "../regions/orchard-layout.js";
+import { DELIVERY_THANKS, STALL_LINES, STALL_PROMPTS } from "../content/market.js";
+import { STALLS, buyFromStall, deliverLoaf, finnDelivery, stallOffer } from "./market.js";
 
 // What the player does and earns: the welcome quests, gathering and planting
-// flowers, fishing from the millpond's jetty, and the orchard's fruit and
-// honey, which Finn buys. Each changes the save, then updates the HUD, saves
-// and chimes.
+// flowers, fishing from the millpond's jetty, the orchard's fruit and honey,
+// which Finn buys, and the market lane's bread deliveries and stalls. Each
+// changes the save, then updates the HUD, saves and chimes.
 
 // Wildflower bouquets to gather, by index into the save's `gathered` list.
 const GATHERING_SPOTS = [
@@ -19,6 +21,8 @@ const GATHERING_SPOTS = [
   [0, 9],
   [-10, -1],
 ];
+// The paper lantern from the market hangs by Rosewood's gate.
+const COTTAGE_LANTERN = { x: -4.55, z: -2.75 };
 // A shaken tree ripens again, and a hive refills, after a few minutes.
 const FRUIT_REGROW_MS = 4 * 60 * 1000,
   HONEY_REFILL_MS = 6 * 60 * 1000,
@@ -27,12 +31,13 @@ const FRUIT_REGROW_MS = 4 * 60 * 1000,
 /**
  * `blocked(x, z, r)` is the walking test planting keeps clear of;
  * `nextPlantId` comes with the loaded save; `motion()` says whether
- * decorative motion (bursts, shaking) plays.
+ * decorative motion (bursts, shaking) plays; `setPipHat(on)` dresses Pip.
  */
 export function createActivities({
   scene,
   world,
   player,
+  setPipHat,
   state,
   nextPlantId,
   hud,
@@ -266,6 +271,60 @@ export function createActivities({
     );
   }
 
+  // The market lane: Finn's bread deliveries, and the stalls.
+  /** Finn's part in a delivery round: "give", "carrying" or "resting" (see market.js). */
+  const finnDeliveries = () => finnDelivery(state, Date.now());
+  function deliveryGiven() {
+    save();
+    toast("Two warm loaves, wrapped in a cloth, go into your bag. One for Hazel, one for Bram.");
+  }
+  /** Whether `resident` has a loaf coming. */
+  const expectsLoaf = (resident) => state.deliveries.carrying.includes(resident);
+  function deliver(resident) {
+    const result = deliverLoaf(state, resident, Date.now());
+    if (!result) return;
+    reward(
+      result.round
+        ? `That’s the round done. Finn will be pleased. +${result.petals} petals`
+        : `One loaf delivered. +${result.petals} petals`,
+    );
+  }
+  const thanks = (resident) => DELIVERY_THANKS[resident];
+  // The keepsakes show once bought: Pip's hat, and the lantern by the gate.
+  let cottageLantern = null;
+  function showKeepsakes() {
+    setPipHat(state.bought.pipHat);
+    if (state.bought.lantern && !cottageLantern) {
+      cottageLantern = lanternPost(THREE, world.materials.glass);
+      const { x, z } = COTTAGE_LANTERN;
+      cottageLantern.position.set(x, world.terrainHeight(x, z), z);
+      scene.add(cottageLantern);
+      cottageLantern.updateMatrixWorld(true);
+    }
+  }
+  showKeepsakes();
+  /** The prompt at a stall. */
+  function stallLabel(id, dusk) {
+    const offer = stallOffer(state, id, dusk);
+    if (!offer.open) return `${offer.name} · closed`;
+    if (offer.owned) return offer.name;
+    return STALL_PROMPTS[id](offer.price);
+  }
+  /** Buys from a stall; returns the line its stallholder's sign answers with. */
+  function shop(id, dusk) {
+    const result = buyFromStall(state, id, dusk),
+      price = STALLS[id].price;
+    if (result === "closed") return STALL_LINES.closed;
+    if (result === "browse")
+      return STALL_LINES.browse[Math.floor(Math.random() * STALL_LINES.browse.length)];
+    if (result === "owned") return STALL_LINES.owned[id];
+    if (result === "short") return STALL_LINES.short(price);
+    showKeepsakes();
+    if (motion()) effects.burst(player.position.x, player.position.y + 1, player.position.z);
+    reward(`−${price} petals`);
+    return STALL_LINES.bought[id];
+  }
+
   return {
     complete,
     flowerGroups,
@@ -282,8 +341,18 @@ export function createActivities({
     collectHoney,
     basketCount,
     sellBasket,
+    finnDeliveries,
+    deliveryGiven,
+    expectsLoaf,
+    deliver,
+    thanks,
+    stallLabel,
+    shop,
     get orchardReady() {
       return !!orchard;
+    },
+    get pipHat() {
+      return state.bought.pipHat;
     },
     /** What each region's builder hands back besides its jobs, by region id. */
     regionLoaded: {
@@ -293,4 +362,26 @@ export function createActivities({
       },
     },
   };
+}
+
+// A shepherd's-crook post with a paper lantern hung from it, its glass the
+// village lamps' (which glows at blue hour).
+function lanternPost(T, glass) {
+  const group = new T.Group(),
+    wood = new T.MeshStandardMaterial({ color: "#65513e", roughness: 0.9 });
+  group.name = "Cottage lantern";
+  const part = (geometry, material, x, y, z, rz = 0) => {
+    const mesh = new T.Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    mesh.rotation.z = rz;
+    mesh.castShadow = true;
+    group.add(mesh);
+    return mesh;
+  };
+  part(new T.CylinderGeometry(0.035, 0.045, 1.7, 8), wood, 0, 0.85, 0);
+  part(new T.TorusGeometry(0.16, 0.025, 6, 12, Math.PI), wood, -0.16, 1.7, 0);
+  part(new T.CylinderGeometry(0.006, 0.006, 0.22, 4), wood, -0.32, 1.59, 0);
+  part(new T.SphereGeometry(0.12, 12, 9), glass, -0.32, 1.38, 0).scale.y = 1.2;
+  part(new T.CylinderGeometry(0.06, 0.06, 0.04, 8), wood, -0.32, 1.53, 0);
+  return group;
 }

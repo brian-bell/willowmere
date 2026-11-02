@@ -54,12 +54,22 @@ test("regions name the same village places as always, and the fields beyond", { 
       expect(regionAt(x, z).name).toBe(legacy(x, z));
   for (const [x, z] of [
     [-30, 0],
-    [30, 0],
+    [36, 25],
+    [36, -25],
     [0, -30],
     [12, 30],
     [-47, 41],
   ])
     expect(regionAt(x, z).name).toBe("The open fields");
+  // East of the village, between the millpond's latitude and the southern
+  // fields, runs the market lane.
+  for (const [x, z] of [
+    [24.5, 3],
+    [33.5, 2.6],
+    [45, -10],
+    [30, 16],
+  ])
+    expect(regionAt(x, z).name).toBe("The market lane");
 });
 
 test("chunk seeds are independent of build order", { tag: "@logic" }, () => {

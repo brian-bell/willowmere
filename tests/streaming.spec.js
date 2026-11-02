@@ -18,8 +18,9 @@ test("the open country streams in around the village after startup", async ({
     .poll(async () => streaming(page), { timeout: 600000 })
     .toMatchObject({ pending: 0 });
   // The route grid, 16 grass patches (one per chunk around the village), the
-  // fishing float, the millpond's six pieces and the orchard hill's six.
-  expect((await streaming(page)).finished).toBe(30);
+  // fishing float, the millpond's six pieces, the orchard hill's six and the
+  // market lane's seven (six pieces and its residents).
+  expect((await streaming(page)).finished).toBe(37);
   const chunks = await page.evaluate(() => window.__willowmere.getChunks());
   const patches = chunks.flatMap((chunk) =>
     chunk.meshes
@@ -30,11 +31,15 @@ test("the open country streams in around the village after startup", async ({
   for (const patch of patches) {
     const [cx, cz] = patch.chunk.split(",").map(Number);
     expect(Math.max(Math.abs(cx), Math.abs(cz)), patch.chunk).toBe(2);
-    // The millpond's water and banks take part of two patches' ground, and
-    // the orchard hill's path a strip of a third.
+    // The millpond's water and banks take part of two patches' ground, the
+    // orchard hill's path a strip of a third, and the market lane's gravel and
+    // buildings part of the three east of the village.
     const pond = ["0,-2", "1,-2"].includes(patch.chunk),
-      path = patch.chunk === "-1,-2";
-    expect(patch.instances, patch.chunk).toBeGreaterThan(pond ? 200 : path ? 400 : 500);
+      path = patch.chunk === "-1,-2",
+      market = ["2,-1", "2,0", "2,1"].includes(patch.chunk);
+    expect(patch.instances, patch.chunk).toBeGreaterThan(
+      pond || market ? 200 : path ? 400 : 500,
+    );
     // Each patch culls as a unit no larger than a rim corner.
     expect(patch.radius).toBeLessThan(18);
   }

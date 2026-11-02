@@ -7,8 +7,8 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * The journal's entries as [title, text] rows, for a save's `state` and the
- * region id the player stands in. The millpond and orchard entries appear
- * once the player has been there or gathered something from them.
+ * region id the player stands in. The millpond, orchard and market lane
+ * entries appear once the player has been there or done something there.
  */
 export function journalEntries(state, here) {
   const rows = [
@@ -46,5 +46,18 @@ export function journalEntries(state, here) {
         ? `You’ve gathered ${plural(apple, "apple")}, ${plural(pear, "pear")} and ${plural(honey, "jar", "jars")} of honey. ${basket ? "Finn will buy what’s in your basket." : "Finn buys fruit and honey for his bakes."}`
         : "Shake a ripe apple or pear tree on the hill north-west of the village, and look in on the beehives. Finn buys fruit and honey for his bakes.",
     ]);
+  const { made, carrying } = state.deliveries,
+    { lantern, pipHat, seeds } = state.bought;
+  if (made || carrying.length || lantern || pipHat || seeds || here === "market") {
+    const keepsakes = [pipHat && "a straw hat for Pip", lantern && "a lantern for your gate"].filter(Boolean);
+    rows.push([
+      "The market lane",
+      carrying.length
+        ? `Warm loaves in your bag for ${carrying.map((id) => (id === "hazel" ? "Hazel at the Copper Kettle" : "Bram at the post office")).join(" and ")}. The lane runs east from the mill bridge.`
+        : made || keepsakes.length || seeds
+          ? `You’ve delivered ${plural(made, "loaf", "loaves")} for Finn${keepsakes.length ? `, and bought ${keepsakes.join(" and ")}` : ""}. The stalls trade in the golden afternoon.`
+          : "Finn sends bread to the market lane, east of the mill. The stalls there trade in the golden afternoon: seeds, lanterns, and a hat for Pip.",
+    ]);
+  }
   return rows;
 }

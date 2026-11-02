@@ -234,6 +234,8 @@ Screenshots at device scale 2 with reduced motion compare the counter, the oven 
 
 `tests/millpond.spec.js` checks that the pond's banks always stand above its water's edge and fall back to the lawn at the edge of its ground, that the pond and its brook block walking except along the jetty and footbridge, that the pond's water body follows its shoreline, that a cast waits for a bite which a timely press lands, and that the millpond streams in with its two water bodies and grids, routes from the village green to the jetty's end, and casts a line there.
 
+`tests/market.spec.js` checks that the market lane runs from the mill road to the rim on flat, grass-free gravel clear of every footing, with a shopper's place at each stall; that the footbridge's deck humps over the brook between its rails and routes from the kitchen gardens to the square; that Finn's bread rounds pay per loaf and then rest, and the stalls sell seeds and keepsakes only in the golden afternoon (all `@logic`); and that the lane streams in with Hazel and Bram, carries the player on the footbridge, takes a round of Finn's loaves, sells Pip a hat that survives a reload, and covers its stalls at blue hour.
+
 `tests/orchard.spec.js` checks that the orchard hill meets the lawn at the edge of its ground, before the village and the millpond, with no slope steeper than about 35°; that its path runs from the village's edge to the windmill's door clear of every tree, hive and bench, with each tree reachable; that the hill streams in, routes from the village green to the bench, carries the player on its slope, and that shaking a tree and opening a hive fill the basket and survive a reload; and that in first person trees beyond 40 m draw crowns that cast shadows while nearer ones keep their leaves, and the overview gives every tree its leaves back.
 
 `tests/routing.spec.js` checks that a click on the far bank of the brook routes over the bridge and walks there, that clicks in the water or off the map return no route, that the open country and the once-sealed pocket south of the mill route, and that the lanterns keep a fixed pool of point lights with no new shader programs at dusk.
@@ -242,6 +244,25 @@ These tests assert rendering work and behavior instead of a machine-dependent FP
 ## Change history
 
 Per-change measurements, each against the previous `main` (`1a2624c`) at the time, in the order the changes landed. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the current combined baseline.
+
+### Market lane (2026-11-02)
+
+Phase 5 of the map expansion. A gravel lane leaves the mill road just east of the village's bridge and runs east to the map's rim, through a market square with four stalls under striped awnings and bunting, past the Copper Kettle tea room and the post office, to a signpost, a parked cart and hedgerows where it leaves the map. A second footbridge crosses the brook south of the first, with paths to the square and to the kitchen gardens' road. The lane is flat and has no ground mesh of its own: its shape, colliders, decks and grass mask load with the village from `src/regions/market-layout.js`, and everything else streams in from `src/regions/market.js` (seven jobs: the gravel, the footbridge, the tea room, the post office, the stalls with bunting, lamps and shrubs, the lane's end, and the residents Hazel and Bram, who join through `life.addResident`).
+
+- **Draws.** Each piece is one vertex-coloured mesh with one shared material, plus one mesh on the village's lamp glass for its windows, paper lanterns and lamps (so they glow at blue hour) and a painted sign or two. The gravel is one mesh in the village paths' material. No new shader programs.
+- **Lamps.** The lane's three lamps join the fixed pool of six point lights through `world.addLamps`; the pool still moves to the lamps nearest the view.
+- **The village.** The paths that reach into the village clear its grass after the scatter, and the scatter itself still tests the colliders it always had (the brook in one piece, no footbridge), so the village's random stream is unchanged. A frame-locked comparison against `main` shows identical pixels at spawn and on the orchard hill; elsewhere only the new gravel and footbridge differ.
+
+Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high quality, `?resolution=fixed`, against `main` (`5c01565`):
+
+| View | `main` draws / triangles | Market lane draws / triangles |
+| --- | --- | --- |
+| Village overview at spawn, height 18 | 753 / 2.58M | 757 / 2.60M |
+| Market square (33.5, 3), height 18 | 437 / 1.50M (empty field) | 541 / 1.56M |
+| Market square, height 30 | 630 / 1.77M | 732 / 1.82M |
+| First person in the square, facing west along the lane | 1,208 / 2.62M | 1,307 / 2.65M |
+
+`tests/performance.spec.js` holds the benchmark's market viewpoint (36.5, 3.2) under 1,000 draws and 2.5M triangles at height 18 and at the zoom cap. `npm run benchmark` measures it as "high, market" and "high, market, first person"; `--ablate` adds the market at height 30.
 
 ### Orchard hill (2026-11-01)
 

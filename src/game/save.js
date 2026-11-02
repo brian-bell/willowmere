@@ -1,6 +1,8 @@
 // The visit's progress, saved to this browser. Loading spreads a save over
 // the defaults; saves from before planted flowers had ids get them here.
 
+import { marketDefaults } from "./market.js";
+
 export const STORAGE = "willowmere.save.v1";
 
 export function defaultState() {
@@ -16,6 +18,8 @@ export function defaultState() {
     basket: { apple: 0, pear: 0, honey: 0 },
     harvested: { apple: 0, pear: 0, honey: 0 },
     orchard: {},
+    // Finn's bread deliveries and what the market stalls sold.
+    ...marketDefaults(),
     gathered: [],
     plants: [],
     started: false,

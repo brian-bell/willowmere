@@ -16,13 +16,14 @@ import {
   terrainMaxIn,
 } from "./world-layout.js";
 import {
+  allowsGrass,
   allowsPlanting,
-  regionColliders,
   regionDeck,
   regionWater,
   regions,
 } from "./regions/index.js";
 import { MILLPOND } from "./regions/millpond-layout.js";
+import { MARKET } from "./regions/market-layout.js";
 
 /**
  * Boxes that tile `outer` outside every box in `holes`: one column between
@@ -619,20 +620,30 @@ export function createWorld(T, scene) {
   seed = riverLayoutSeed;
   for (let i = 0; i < 568; i++) rand();
   dum.rotation.set(0, 0, 0);
-  // The brook blocks walking along its whole length; the bridge's span is the
-  // gap between the two. North, it runs on under the millpond's footbridge,
-  // whose rail starts the millpond's own colliders.
-  const footbridgeSouth = MILLPOND.footbridge.maxZ;
+  // The brook blocks walking along its whole length; the bridges' spans are
+  // the gaps between its pieces: the village's bridge, and south of it the
+  // market lane's footbridge, whose rails are the market's own colliders.
+  // North, it runs on under the millpond's footbridge, whose rail starts the
+  // millpond's own colliders.
+  const footbridgeSouth = MILLPOND.footbridge.maxZ,
+    { minZ: crossingNorth, maxZ: crossingSouth } = MARKET.bridge,
+    brookPiece = (north, south) => ({ x: 12, z: (north + south) / 2, w: 4.3, d: south - north });
+  const crossing = [brookPiece(4.75, crossingNorth), brookPiece(crossingSouth, 21.25)],
+    lane = regions.find((r) => r.id === "market").colliders(),
+    laneSet = new Set([...crossing, ...lane]);
   colliders.push(
-    {
-      x: 12,
-      z: (footbridgeSouth + 1.25) / 2,
-      w: 4.3,
-      d: 1.25 - footbridgeSouth,
-    },
-    { x: 12, z: 13, w: 4.3, d: 16.5 },
-    ...regionColliders(),
+    brookPiece(footbridgeSouth, 1.25),
+    ...crossing,
+    ...regions.flatMap((r) => (r.id === "market" ? lane : (r.colliders?.() ?? []))),
   );
+  // The village's grass scatter draws its random stream against the colliders
+  // it always had: the brook in one piece south of the bridge and no market
+  // lane, so every blade, and everything placed after them, stays where it
+  // was. The lane's footings clear their grass after the scatter instead.
+  const scatterColliders = () => [
+    ...colliders.filter((c) => !laneSet.has(c)),
+    brookPiece(4.75, 21.25),
+  ];
   // Timber bridge with graceful hump, cap rails and peg details.
   for (let i = 0; i < 19; i++) {
     const x = 9.1 + i * 0.32,
@@ -1405,8 +1416,8 @@ export function createWorld(T, scene) {
       (x > 14.4 && x < 17.6 && z > -5 && z < 5)
     );
   }
-  function isBlocked(x, z) {
-    return colliders.some((c) =>
+  function isBlocked(x, z, list = colliders) {
+    return list.some((c) =>
       c.w
         ? Math.abs(x - c.x) < c.w / 2 + 0.45 &&
           Math.abs(z - c.z) < c.d / 2 + 0.45
@@ -1414,10 +1425,11 @@ export function createWorld(T, scene) {
     );
   }
   let tries = 0;
+  const scatterBlockers = scatterColliders();
   while (bi < 3400 && tries++ < 22000) {
     const x = range(-22.7, 22.7),
       z = range(-19.5, 19.5);
-    if (inRoad(x, z) || isBlocked(x, z)) continue;
+    if (inRoad(x, z) || isBlocked(x, z, scatterBlockers)) continue;
     const y = terrainHeight(x, z);
     dum.position.set(x, y + 0.15, z);
     dum.rotation.set(range(-0.3, 0.3), rand() * 6.28, range(-0.3, 0.3));
@@ -1442,6 +1454,30 @@ export function createWorld(T, scene) {
       fi++;
     }
   }
+  // Regions' paths that reach into the village (the market lane's) stay
+  // clear. Dropping blades after the scatter leaves every other placement,
+  // and the random stream after it, as it was.
+  const at = new T.Vector3(),
+    tint = new T.Color(),
+    keep = (mesh, count, colors) => {
+      let kept = 0;
+      for (let i = 0; i < count; i++) {
+        mesh.getMatrixAt(i, dum.matrix);
+        at.setFromMatrixPosition(dum.matrix);
+        if (!allowsGrass(at.x, at.z)) continue;
+        if (kept !== i) {
+          mesh.setMatrixAt(kept, dum.matrix);
+          if (colors) {
+            mesh.getColorAt(i, tint);
+            mesh.setColorAt(kept, tint);
+          }
+        }
+        kept++;
+      }
+      return kept;
+    };
+  bi = keep(blades, bi);
+  fi = keep(blossoms, fi, true);
   blades.count = bi;
   blossoms.count = fi;
   blades.name = "Grass blades";
@@ -1468,7 +1504,10 @@ export function createWorld(T, scene) {
       });
     }
   }
-  const reeds = createReeds(reedPlacements, (x, z) => {
+  // None stand under a region's bridge deck (the market lane's footbridge).
+  // Each reed seeds its own shape from where it stands, so the rest keep theirs.
+  const underDeck = (x, z) => [-0.4, 0, 0.4].some((dz) => regionDeck(x, z + dz) != null);
+  const reeds = createReeds(reedPlacements.filter((p) => !underDeck(p.x, p.z)), (x, z) => {
     const [depth] = sampleWaterField(riverConfig, x - riverConfig.x, z);
     return riverConfig.y - depth - 0.02;
   });
@@ -1738,6 +1777,8 @@ export function createWorld(T, scene) {
     }
     mesh.removeFromParent();
   }
+  // Every lit material, the village's and those streamed in after it.
+  const glowMaterials = new Set();
   // Batches group by material, shadow role and vertex layout, then by chunk.
   const batches = new Map(),
     remove = [],
@@ -1748,8 +1789,10 @@ export function createWorld(T, scene) {
     for (const child of [...node.children]) collect(child, dynamic);
     if (!node.isMesh && !node.isPoints) return;
     // Lit materials brighten at blue hour; main.js finds them through their chunk.
-    if (!Array.isArray(node.material) && node.material.emissive?.getHex() > 0)
+    if (!Array.isArray(node.material) && node.material.emissive?.getHex() > 0) {
       chunkOf(node).glow.add(node.material);
+      glowMaterials.add(node.material);
+    }
     if (node.isInstancedMesh) {
       instanced.push(node);
       return;
@@ -1871,7 +1914,12 @@ export function createWorld(T, scene) {
      */
     addStreamed(mesh, { detail = false, field = false } = {}) {
       mesh.updateMatrixWorld();
-      chunkOf(mesh).meshes.push(mesh);
+      const chunk = chunkOf(mesh);
+      chunk.meshes.push(mesh);
+      if (mesh.material?.emissive?.getHex() > 0) {
+        chunk.glow.add(mesh.material);
+        glowMaterials.add(mesh.material);
+      }
       if (detail) addDetail(mesh, field);
       if (field) {
         fieldPatches.push(mesh);
@@ -1938,5 +1986,17 @@ export function createWorld(T, scene) {
     lanterns,
     lamps,
     placeLanterns,
+    /** Lamps a region streamed in, at the glass's height; the light pool visits them too. */
+    addLamps(points) {
+      for (const { x, z } of points) {
+        const lamp = new T.Vector3(x, 2.4, z);
+        lamps.push(lamp);
+        lampsByDistance.push(lamp);
+      }
+    },
+    // Lit windows and lamp glass, which brighten at blue hour.
+    glowMaterials,
+    // Shared with streamed regions, so their paths and lamps match the village's.
+    materials: { path, glass },
   };
 }

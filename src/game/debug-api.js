@@ -65,6 +65,15 @@ export function createDebugApi(g) {
       harvested: { ...g.state.harvested },
       shaken: Object.keys(g.state.orchard),
     }),
+    getMarket: () => ({
+      residents: g.life.npcs.map((n) => n.id),
+      deliveries: structuredClone(g.state.deliveries),
+      bought: { ...g.state.bought },
+      coins: g.state.coins,
+      seeds: g.state.seeds,
+      pipHat: g.life.player.parent?.getObjectByName("Pip's straw hat")?.visible ?? false,
+      lantern: !!g.scene.getObjectByName("Cottage lantern"),
+    }),
     getView: () => ({
       mode: g.firstPerson ? "first-person" : "overview",
       camera: g.camera.type,

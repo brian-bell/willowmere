@@ -27,16 +27,19 @@
 //   grass(x, z)   false where meadow grass may not grow (water, paths,
 //                 footings). Called anywhere: true outside the region.
 //   planting(x, z) where flowers may be planted; `grass` when missing.
-//   stream(T, world)  loads the builder with import() once the village is on
-//                 screen and resolves to { jobs, ...api } for the streamer;
-//                 main.js hands the rest to the region's game logic
-//                 (activities.regionLoaded).
+//   stream(T, world, game)  loads the builder with import() once the village
+//                 is on screen and resolves to { jobs, ...api } for the
+//                 streamer; main.js hands the rest to the region's game logic
+//                 (activities.regionLoaded). `game` carries what a builder may
+//                 add to beyond the world: `life`, for its residents.
 import { millpondRegion } from "./millpond-layout.js";
 import { orchardRegion } from "./orchard-layout.js";
+import { marketRegion } from "./market-layout.js";
 
 export const regions = [
   millpondRegion,
   orchardRegion,
+  marketRegion,
   // The open country: the label everywhere else, and its grass.
   {
     id: "fields",
