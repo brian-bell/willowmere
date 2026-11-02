@@ -107,9 +107,13 @@ test("lamps share a fixed pool of point lights", async ({ page }) => {
     page.evaluate(() => window.__willowmere.getDiagnostics().lanterns);
   const before = await lanterns();
   expect(before.pointLights).toBe(before.pool);
-  // While the village has no more lamps than the pool, every lamp is lit.
-  expect(before.lamps).toBeLessThanOrEqual(before.pool);
-  for (const lamp of before.lampPositions)
+  // The village has no more lamps than the pool, so from the green every
+  // village lamp is lit (the market lane's lamps may have streamed in, further off).
+  const villageLamps = before.lampPositions.filter(
+    ([x, , z]) => Math.abs(x) <= 24 && Math.abs(z) <= 21,
+  );
+  expect(villageLamps.length).toBeLessThanOrEqual(before.pool);
+  for (const lamp of villageLamps)
     expect(
       before.lit.some(
         (p) =>

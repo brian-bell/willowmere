@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { LANDMARK_LINES, QUIET_PLACE_LINES } from "../content/landmarks.js";
-import { FINN_BUYS, NEIGHBOR_TITLES, SMALL_TALK } from "../content/neighbors.js";
+import { FINN_BUYS, LILY_HAT, NEIGHBOR_TITLES, SMALL_TALK } from "../content/neighbors.js";
+import { FINN_DELIVERY_GIVE, FINN_DELIVERY_WAITING } from "../content/market.js";
+import { STALLS } from "./market.js";
 import { regionAt } from "../world-layout.js";
 
 // What E (or a tap) does: finds the nearest neighbor, bouquet or landmark,
@@ -34,9 +36,25 @@ export function createInteractions({
   function talkTo(n) {
     const phrases = n.dialogue?.length ? n.dialogue : SMALL_TALK;
     const selling = n.id === "finn" && activities.basketCount() > 0;
-    const line = selling ? oneOf(FINN_BUYS) : oneOf(phrases);
+    // Finn hands out bread for the market lane when he is not buying; the
+    // lane's residents take the loaf that is theirs.
+    const delivery = n.id === "finn" && !selling ? activities.finnDeliveries() : null,
+      receiving = activities.expectsLoaf(n.id);
+    const line = selling
+      ? oneOf(FINN_BUYS)
+      : delivery === "give"
+        ? oneOf(FINN_DELIVERY_GIVE)
+        : delivery === "carrying"
+          ? oneOf(FINN_DELIVERY_WAITING)
+          : receiving
+            ? oneOf(activities.thanks(n.id))
+            : n.id === "lily" && activities.pipHat
+              ? oneOf(LILY_HAT)
+              : oneOf(phrases);
     hud.openDialogue(NEIGHBOR_TITLES[n.id] || n.name, [line], () => {
       if (selling) activities.sellBasket();
+      if (delivery === "give") activities.deliveryGiven();
+      if (receiving) activities.deliver(n.id);
       if (n.id === "mabel") activities.complete("mabel");
       if (n.id === "finn") activities.restockSeeds();
     });
@@ -93,6 +111,13 @@ export function createInteractions({
       activities.collectHoney(nearest.data);
       return;
     }
+    if (nearest.data.type === "stall") {
+      const { stall } = nearest.data;
+      hud.openDialogue(STALLS[stall].name.toUpperCase(), [
+        activities.shop(stall, session.dusk),
+      ]);
+      return;
+    }
     // Like a neighbor, a landmark answers each interaction with a single line.
     hud.openDialogue(nearest.data.name.toUpperCase(), [
       oneOf(LANDMARK_LINES[id] || QUIET_PLACE_LINES),
@@ -130,7 +155,12 @@ export function createInteractions({
           kind: "world",
           data: i,
           d: d + 0.4,
-          label: i.id === "bakery" ? "Enter The Daily Loaf" : i.name,
+          label:
+            i.id === "bakery"
+              ? "Enter The Daily Loaf"
+              : i.type === "stall"
+                ? activities.stallLabel(i.stall, session.dusk)
+                : i.name,
         });
     }
     candidates.sort((a, b) => a.d - b.d);

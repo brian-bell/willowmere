@@ -147,10 +147,8 @@ renderer.info.autoReset = false;
 // Everything beyond the village streams in after the first outdoor frames.
 const streamer = createStreamer(renderer, scene, { target: sceneTarget });
 let openCountryRequested = false;
-// Lit windows and lamp glass brighten at blue hour. Each chunk lists its own.
-const glowMaterials = new Set();
-for (const chunk of world.chunks.values())
-  for (const material of chunk.glow) glowMaterials.add(material);
+// Lit windows and lamp glass brighten at blue hour, streamed regions' too.
+const glowMaterials = world.glowMaterials;
 const startPos = world.spawn || { x: -3, z: 5 };
 life.player.position.set(startPos.x, 0, startPos.z);
 const effects = createEffects(scene);
@@ -192,6 +190,7 @@ const activities = createActivities({
   scene,
   world,
   player: life.player,
+  setPipHat: (on) => life.setPipHat(on),
   state,
   nextPlantId,
   hud,
@@ -312,6 +311,9 @@ const session = {
   },
   get yaw() {
     return yaw;
+  },
+  get dusk() {
+    return day === "dusk";
   },
 };
 const interactions = createInteractions({
@@ -882,7 +884,7 @@ function animate(now) {
   if (frame >= 3 && !openCountryRequested) {
     openCountryRequested = true;
     for (const region of regions)
-      region.stream?.(THREE, world).then(({ jobs, ...loaded }) => {
+      region.stream?.(THREE, world, { life }).then(({ jobs, ...loaded }) => {
         activities.regionLoaded[region.id]?.(loaded);
         streamer.add(...jobs);
       });

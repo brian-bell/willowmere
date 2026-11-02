@@ -38,13 +38,16 @@ const ablations = {
 const configs = [];
 for (const quality of ["high", "balanced", "performance"])
   configs.push({ name: quality, quality, tune: {}, view: "default" });
-// The millpond from its bank, at the default height (phase 3's gate), and the
+// The millpond from its bank, at the default height (phase 3's gate), the
 // orchard hill from beside its bench, at the default height and at eye level
-// looking back over the village (phase 4's gate).
+// looking back over the village (phase 4's gate), and the market square at the
+// default height and at eye level looking along the lane (phase 5's).
 configs.push(
   { name: "high, millpond", quality: "high", tune: {}, view: "millpond" },
   { name: "high, orchard", quality: "high", tune: {}, view: "orchard" },
   { name: "high, orchard, first person", quality: "high", tune: {}, view: "orchard-first-person" },
+  { name: "high, market", quality: "high", tune: {}, view: "market" },
+  { name: "high, market, first person", quality: "high", tune: {}, view: "market-first-person" },
 );
 if (ablate) {
   for (const [name, tune] of Object.entries(ablations))
@@ -69,6 +72,7 @@ if (ablate) {
     { name: "high, millpond, height 30", quality: "high", tune: {}, view: "millpond-30" },
     { name: "high, millpond, water skipped", quality: "high", tune: { water: false }, view: "millpond" },
     { name: "high, orchard, height 30", quality: "high", tune: {}, view: "orchard-30" },
+    { name: "high, market, height 30", quality: "high", tune: {}, view: "market-30" },
     { name: "high, height 30", quality: "high", tune: {}, view: "height-30" },
     {
       name: "high, height 30, open-country grass hidden",
@@ -125,9 +129,11 @@ try {
   });
   // Where each view stands: the millpond views on its south bank, by the
   // jetty, the orchard views on the hill's path by the bench, facing the
-  // village, the rest at the spawn on the village green.
+  // village, the market views in the square, facing west along the lane past
+  // the stalls and the tea room, the rest at the spawn on the village green.
   const MILLPOND = { x: 8.6, z: -25.8 },
     ORCHARD = { x: -21, z: -27.6, heading: 0.65 },
+    MARKET = { x: 36.5, z: 3.2, heading: -1.75 },
     SPAWN = { x: -2.8, z: 6.2 };
   let at = SPAWN;
   const setView = async (view) => {
@@ -135,7 +141,9 @@ try {
       ? MILLPOND
       : view.startsWith("orchard")
         ? ORCHARD
-        : SPAWN;
+        : view.startsWith("market")
+          ? MARKET
+          : SPAWN;
     // Revisions without the hook stay at the spawn.
     if (place !== at && (await page.evaluate(() => !!window.__willowmere.moveTo))) {
       await page.evaluate(
