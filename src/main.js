@@ -14,6 +14,7 @@ import { createPlayerVisibility } from "./visibility.js";
 import { createSky } from "./sky.js";
 import { createStreamer } from "./streaming.js";
 import { createFishing, FISH } from "./fishing.js";
+import { createNavigation } from "./game/navigation.js";
 import { SHADOW_MAP_SIZES, createSunShadow } from "./game/shadows.js";
 import {
   DEFAULT_VIEW_HEIGHT,
@@ -745,35 +746,10 @@ $("#reset-position").onclick = () => {
   toast("Back home, on the village green.");
 };
 const colliders = world.colliders || [];
-const { walk } = WORLD;
-function blocked(x, z, r = 0.27) {
-  if (
-    x < walk.minX + r ||
-    x > walk.maxX - r ||
-    z < walk.minZ + r ||
-    z > walk.maxZ - r
-  )
-    return true;
-  for (const c of colliders) {
-    if (c.r !== undefined) {
-      if (Math.hypot(x - c.x, z - c.z) < r + c.r) return true;
-    } else if (c.w !== undefined) {
-      const dx = Math.max(Math.abs(x - c.x) - c.w / 2, 0),
-        dz = Math.max(Math.abs(z - c.z) - c.d / 2, 0);
-      if (dx * dx + dz * dz < r * r) return true;
-    } else if (
-      // A shaped collider, such as the millpond, tests itself within its box.
-      c.blocks &&
-      x > c.minX - r &&
-      x < c.maxX + r &&
-      z > c.minZ - r &&
-      z < c.maxZ + r &&
-      c.blocks(x, z, r)
-    )
-      return true;
-  }
-  return false;
-}
+const { blocked, findPath, sampleRows: sampleRouteRows } = createNavigation({
+  walk: WORLD.walk,
+  colliders,
+});
 function openGrass(x, z) {
   return (
     world.isPlantable(x, z) &&
@@ -1071,142 +1047,12 @@ $(".quest-toggle").onclick = () => {
 phoneLayout.addEventListener("change", updateQuestToggle);
 updateQuestToggle();
 // A grid search gives point-and-click movement a route around cottages and across the bridge.
-// Colliders never move, so each cell's walkability is sampled once, on the first click.
-const ROUTE_STEP = 0.65,
-  ROUTE = {
-    step: ROUTE_STEP,
-    minX: walk.minX,
-    minZ: walk.minZ,
-    cols: Math.floor((walk.maxX - walk.minX) / ROUTE_STEP + 1e-6) + 1,
-    rows: Math.floor((walk.maxZ - walk.minZ) / ROUTE_STEP + 1e-6) + 1,
-    radius: 0.34,
-  };
-const routeWalkable = new Uint8Array(ROUTE.cols * ROUTE.rows);
-let routeRows = 0;
-// Samples rows until the deadline, or all of them; true once the grid is done.
-function sampleRouteRows(deadline = Infinity) {
-  const { step, minX, minZ, cols, rows, radius } = ROUTE;
-  while (routeRows < rows) {
-    const z = routeRows++;
-    for (let x = 0; x < cols; x++)
-      if (!blocked(minX + x * step, minZ + z * step, radius))
-        routeWalkable[z * cols + x] = 1;
-    if (performance.now() > deadline) break;
-  }
-  return routeRows === rows;
-}
 // The grid streams in with the open country; a click before then finishes it.
 streamer.add({
   x: 0,
   z: 0,
   step: (deadline) => (sampleRouteRows(deadline) ? [] : null),
 });
-function walkableCells() {
-  sampleRouteRows();
-  return routeWalkable;
-}
-const ROUTE_MOVES = [
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1],
-  [1, 1],
-  [1, -1],
-  [-1, 1],
-  [-1, -1],
-];
-function findPath(start, end) {
-  if (blocked(end.x, end.z, 0.3)) return [];
-  const { step, minX, minZ, cols, rows } = ROUTE,
-    walkable = walkableCells(),
-    toCell = (v, min, count) =>
-      THREE.MathUtils.clamp(Math.round((v - min) / step), 0, count - 1),
-    toWorld = (i) => ({
-      x: minX + (i % cols) * step,
-      z: minZ + Math.floor(i / cols) * step,
-    }),
-    sx = toCell(start.x, minX, cols),
-    sz = toCell(start.z, minZ, rows),
-    ex = toCell(end.x, minX, cols),
-    ez = toCell(end.z, minZ, rows),
-    startCell = sz * cols + sx,
-    cost = new Float32Array(cols * rows).fill(Infinity),
-    came = new Int32Array(cols * rows).fill(-1),
-    closed = new Uint8Array(cols * rows),
-    // Binary min-heap of cells keyed by estimated total cost; stale entries are skipped.
-    heapCell = [],
-    heapF = [];
-  const push = (cell, f) => {
-    let i = heapCell.length;
-    heapCell.push(cell);
-    heapF.push(f);
-    while (i > 0) {
-      const parent = (i - 1) >> 1;
-      if (heapF[parent] <= f) break;
-      heapCell[i] = heapCell[parent];
-      heapF[i] = heapF[parent];
-      i = parent;
-    }
-    heapCell[i] = cell;
-    heapF[i] = f;
-  };
-  const pop = () => {
-    const top = heapCell[0],
-      lastCell = heapCell.pop(),
-      lastF = heapF.pop(),
-      n = heapCell.length;
-    if (n) {
-      let i = 0;
-      for (;;) {
-        let child = 2 * i + 1;
-        if (child >= n) break;
-        if (child + 1 < n && heapF[child + 1] < heapF[child]) child++;
-        if (heapF[child] >= lastF) break;
-        heapCell[i] = heapCell[child];
-        heapF[i] = heapF[child];
-        i = child;
-      }
-      heapCell[i] = lastCell;
-      heapF[i] = lastF;
-    }
-    return top;
-  };
-  cost[startCell] = 0;
-  push(startCell, 0);
-  let found = -1;
-  while (heapCell.length) {
-    const cell = pop();
-    if (closed[cell]) continue;
-    const cx = cell % cols,
-      cz = (cell - cx) / cols;
-    if (Math.abs(cx - ex) + Math.abs(cz - ez) <= 1) {
-      found = cell;
-      break;
-    }
-    closed[cell] = 1;
-    for (const [dx, dz] of ROUTE_MOVES) {
-      const nx = cx + dx,
-        nz = cz + dz,
-        next = nz * cols + nx;
-      if (nx < 0 || nx >= cols || nz < 0 || nz >= rows || closed[next])
-        continue;
-      if (!walkable[next]) continue;
-      if (dx && dz && !(walkable[cz * cols + nx] && walkable[nz * cols + cx]))
-        continue;
-      const g = cost[cell] + Math.hypot(dx, dz);
-      if (g < cost[next]) {
-        cost[next] = g;
-        came[next] = cell;
-        push(next, g + Math.hypot(nx - ex, nz - ez));
-      }
-    }
-  }
-  if (found < 0) return [];
-  const result = [end];
-  for (let cell = found; cell !== startCell && cell >= 0; cell = came[cell])
-    result.push(toWorld(cell));
-  return result.reverse();
-}
 const raycaster = new THREE.Raycaster(),
   mouse = new THREE.Vector2(),
   groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),

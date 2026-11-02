@@ -11,21 +11,7 @@ import {
 } from "../src/regions/millpond-layout.js";
 import { createFishing, FISH } from "../src/fishing.js";
 import { sampleWaterField } from "../src/water.js";
-
-// The same test main.js's blocked() makes for a shaped collider.
-function blockedBy(colliders, x, z, r = 0.27) {
-  return colliders.some((c) => {
-    if (c.r !== undefined) return Math.hypot(x - c.x, z - c.z) < r + c.r;
-    if (c.w !== undefined) {
-      const dx = Math.max(Math.abs(x - c.x) - c.w / 2, 0),
-        dz = Math.max(Math.abs(z - c.z) - c.d / 2, 0);
-      return dx * dx + dz * dz < r * r;
-    }
-    return (
-      x > c.minX - r && x < c.maxX + r && z > c.minZ - r && z < c.maxZ + r && c.blocks(x, z, r)
-    );
-  });
-}
+import { collides as blockedBy } from "../src/game/navigation.js";
 
 test("the pond's banks hide its water's edge and meet the lawn level", { tag: "@logic" }, () => {
   const { ground, surface, lawn } = MILLPOND;
