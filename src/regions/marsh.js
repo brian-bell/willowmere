@@ -94,7 +94,7 @@ export function marshJobs(T, world, { life, dusk = () => 0 } = {}) {
         trees.reduce((n, t) => n + t.z, 0) / trees.length,
         willowBuilder(T, world, side, trees),
         (meshes) => {
-          const [wood, shells, leaves, crown] = meshes;
+          const [wood, leaves, crown] = meshes;
           added(meshes);
           // The leaves' bounds enclose both blades and the wind's sway.
           leaves.geometry = leaves.userData.coarse;
@@ -107,7 +107,6 @@ export function marshJobs(T, world, { life, dusk = () => 0 } = {}) {
             fine: leaves.userData.fine,
             coarse: leaves.userData.coarse,
             crown,
-            underneath: [shells],
             center: leaves.boundingSphere.center.clone(),
           });
         },
@@ -480,20 +479,19 @@ function hideAndBench(T, range, material) {
 const WILLOW_LEAVES = ["#567c58", "#6b925b", "#82a464", "#9ab577", "#739659"];
 
 /**
- * Builds a group of willows a tree per slice, then returns its four meshes:
- * wood, the shady shells inside the crowns, the leaves, and the distant
- * crowns. Each willow's limbs arch up and out from a short leaning trunk, and
+ * Builds a group of willows a tree per slice, then returns its three meshes:
+ * wood, the leaves, and the distant crowns. (No shady shells inside the
+ * crowns, as other trees have: through a willow's thin curtains they show as
+ * dark balls.) Each willow's limbs arch up and out from a short leaning trunk, and
  * curtains of leafy strands hang from them almost to the ground.
  */
 function willowBuilder(T, world, side, trees) {
   const { materials, blades } = world.trees,
     leafMaterials = materials.grounded(new T.Vector4(0, 0, -1e4, 0)),
     wood = [],
-    shells = [],
     leaves = [],
     crownClusters = [],
     leafColors = WILLOW_LEAVES.map((c) => new T.Color(c)),
-    shellColor = new T.Color("#3f6439"),
     axis = new T.Vector3(0, 0, 1);
   let next = 0;
   function leaf(position, direction, size, color, base, rand) {
@@ -595,7 +593,6 @@ function willowBuilder(T, world, side, trees) {
         radius = cluster.radius * s,
         baseColor = leafColors[(index + c) % leafColors.length];
       crownClusters.push({ center, radius, color: baseColor });
-      shells.push({ center, radius: radius * 0.5, color: shellColor });
       const count = 84;
       for (let j = 0; j < count; j++) {
         const y = 1 - (2 * (j + 0.5)) / count,
@@ -633,10 +630,6 @@ function willowBuilder(T, world, side, trees) {
     woodGeometry.computeBoundingSphere();
     const woodMesh = new T.Mesh(woodGeometry, materials.wood);
     woodMesh.name = `${name}: bark and boughs`;
-    const shellMesh = crownShells(shells, 1, materials.crown, new T.IcosahedronGeometry(1, 1));
-    shellMesh.name = `${name}: canopy shade`;
-    shellMesh.visible = true;
-    shellMesh.castShadow = false;
     const ordered = [...leaves.filter((_, i) => i % 2 === 0), ...leaves.filter((_, i) => i % 2)],
       lift = new T.InstancedBufferAttribute(Float32Array.from(ordered, (l) => l.lift), 1),
       fine = blades.fine.clone(),
@@ -661,12 +654,12 @@ function willowBuilder(T, world, side, trees) {
     // Willows' distant crowns hang lower than they spread.
     const crownMesh = crownShells(crownClusters, 1.3, materials.crown, new T.IcosahedronGeometry(1, 1));
     crownMesh.name = `${name}: distant crowns`;
-    for (const mesh of [woodMesh, shellMesh, leafMesh, crownMesh]) {
+    for (const mesh of [woodMesh, leafMesh, crownMesh]) {
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
     }
     woodMesh.castShadow = true;
-    return [woodMesh, shellMesh, leafMesh, crownMesh];
+    return [woodMesh, leafMesh, crownMesh];
   };
 }
 

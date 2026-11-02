@@ -159,15 +159,10 @@ test("the marsh streams in, and its hide shows the player a bird", async ({ page
   });
   await page.goto("/?resolution=fixed");
   await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
-  await expect
-    .poll(async () => (await page.evaluate(() => window.__willowmere.getStreaming())).pending, {
-      timeout: 900000,
-    })
-    .toBe(0);
-  const names = (await page.evaluate(() => window.__willowmere.getChunks()))
-    .flatMap((chunk) => chunk.meshes)
-    .map((mesh) => mesh.name);
-  for (const name of [
+  // Standing at the hide puts the marsh's jobs first in the streamer's queue;
+  // the rest of the map can keep streaming in behind them.
+  await page.evaluate(() => window.__willowmere.moveTo(13.5, 37));
+  const expected = [
     "Marsh ground, banks and bed",
     "Marsh footbridge and boardwalk",
     "Marsh hide and bench",
@@ -176,21 +171,29 @@ test("the marsh streams in, and its hide shows the player a bird", async ({ page
     "Marsh lily pads",
     "Marsh heron",
     "Marsh fireflies",
-  ])
-    expect(names).toContain(name);
+  ];
+  await expect
+    .poll(
+      async () => {
+        const names = new Set(
+          (await page.evaluate(() => window.__willowmere.getChunks()))
+            .flatMap((chunk) => chunk.meshes)
+            .map((mesh) => mesh.name),
+        );
+        const { wren } = await page.evaluate(() => window.__willowmere.getMarsh());
+        return [...expected.filter((name) => !names.has(name)), ...(wren ? [] : ["Wren"])];
+      },
+      { timeout: 900000, intervals: [5000] },
+    )
+    .toEqual([]);
   const water = await page.evaluate(() => window.__willowmere.getWater());
   expect(JSON.stringify(water)).toContain("marsh");
   let marsh = await page.evaluate(() => window.__willowmere.getMarsh());
   expect(marsh).toMatchObject({ wren: true, heron: true, birds: {} });
-  // The boardwalk's deck lifts the player over the water.
-  const deck = await page.evaluate(() => {
-    window.__willowmere.moveTo(7.1, 29.6);
-    return window.__willowmere.getDiagnostics().position[1];
-  });
-  expect(deck).toBeGreaterThan(0.3);
-  // At the hide's door, a watch shows a bird and writes it in the journal.
-  await page.evaluate(() => window.__willowmere.moveTo(13.5, 37));
-  await expect(page.locator("#interaction span")).toHaveText("Watch for birds", { timeout: 180000 });
+  // At the hide's door, where the player has stood all along, a watch shows a
+  // bird and writes it in the journal.
+  await expect(page.locator("#interaction")).toBeVisible({ timeout: 180000 });
+  await expect(page.locator("#interaction span")).toHaveText("Watch for birds");
   await expect(page.locator("#location-name")).toHaveText("The willow marsh");
   await page.keyboard.press("e");
   await expect(page.locator("#dialogue")).toBeVisible({ timeout: 60000 });
@@ -202,5 +205,11 @@ test("the marsh streams in, and its hide shows the player a bird", async ({ page
   expect(marsh.coins).toBe(125);
   await page.locator("#journal-button").click();
   await expect(page.locator("#journal-content")).toContainText("1 of 7 marsh birds");
+  // The boardwalk's deck lifts the player over the water.
+  const deck = await page.evaluate(() => {
+    window.__willowmere.moveTo(7.1, 29.6);
+    return window.__willowmere.getDiagnostics().position[1];
+  });
+  expect(deck).toBeGreaterThan(0.3);
   expect(errors).toEqual([]);
 });
