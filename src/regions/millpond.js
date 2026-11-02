@@ -4,8 +4,8 @@
 // Loaded with import() once the village is on screen and built by the streamer
 // a piece at a time. Its shape, colliders and ground heights live in
 // millpond-layout.js, which loads with the village.
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { chunkRandom } from "../world-layout.js";
+import { createKit } from "./kit.js";
 import { createReeds } from "../reeds.js";
 import {
   MILLPOND as M,
@@ -307,58 +307,9 @@ function cascade(T) {
 
 // Every structure shares one vertex-coloured material: one draw per pass.
 function structures(T, range) {
-  const parts = [],
-    color = new T.Color(),
-    matrix = new T.Matrix4(),
-    rotation = new T.Euler(),
-    quaternion = new T.Quaternion(),
-    position = new T.Vector3(),
-    scale = new T.Vector3();
-  const unitBox = new T.BoxGeometry(1, 1, 1),
-    unitCylinder = new T.CylinderGeometry(1, 1, 1, 10),
-    unitSphere = new T.IcosahedronGeometry(1, 2);
-  function add(base, hex, x, y, z, sx, sy, sz, rx = 0, ry = 0, rz = 0) {
-    const geometry = base.clone();
-    matrix.compose(
-      position.set(x, y, z),
-      quaternion.setFromEuler(rotation.set(rx, ry, rz)),
-      scale.set(sx, sy, sz),
-    );
-    geometry.applyMatrix4(matrix);
-    color.set(hex);
-    const count = geometry.attributes.position.count,
-      colors = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) color.toArray(colors, i * 3);
-    geometry.setAttribute("color", new T.BufferAttribute(colors, 3));
-    parts.push(geometry);
-  }
-  const box = (hex, x, y, z, w, h, d, ry = 0, rx = 0, rz = 0) =>
-    add(unitBox, hex, x, y, z, w, h, d, rx, ry, rz);
-  const post = (hex, x, z, bottom, top, r = 0.07) =>
-    add(unitCylinder, hex, x, (bottom + top) / 2, z, r, top - bottom, r);
-  // A beam between two points.
-  const up = new T.Vector3(0, 1, 0),
-    from = new T.Vector3(),
-    to = new T.Vector3();
-  function beam(hex, a, b, width = 0.08) {
-    from.set(...a);
-    to.set(...b);
-    const length = from.distanceTo(to),
-      geometry = unitBox.clone();
-    quaternion.setFromUnitVectors(up, to.clone().sub(from).normalize());
-    matrix.compose(
-      position.copy(from).add(to).multiplyScalar(0.5),
-      quaternion,
-      scale.set(width, length, width),
-    );
-    geometry.applyMatrix4(matrix);
-    color.set(hex);
-    const count = geometry.attributes.position.count,
-      colors = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) color.toArray(colors, i * 3);
-    geometry.setAttribute("color", new T.BufferAttribute(colors, 3));
-    parts.push(geometry);
-  }
+  const k = createKit(T, { segments: 10, sphereDetail: 2 }),
+    { add, box, post, beam } = k,
+    { cylinder: unitCylinder, sphere: unitSphere } = k.unit;
   const wood = ["#8a6a4a", "#7f6145", "#93724f"],
     darkWood = "#5f4c3a",
     weathered = "#9b8a72",
@@ -558,30 +509,21 @@ function structures(T, range) {
       new T.Quaternion().setFromEuler(new T.Euler(0, bench.turn, 0)),
       new T.Vector3(1, 1, 1),
     );
-  const before = parts.length;
-  for (const zz of [-0.22, 0, 0.22]) box(pick(wood), 0, 0.55, zz, 1.8, 0.09, 0.16);
-  for (const yy of [0.9, 1.12]) box(pick(wood), 0, yy, -0.33, 1.8, 0.15, 0.08);
-  for (const xx of [-0.7, 0.7]) {
-    box(darkWood, xx, 0.27, 0, 0.12, 0.6, 0.56);
-    box(darkWood, xx, 0.78, -0.33, 0.1, 0.86, 0.1);
-  }
-  for (let i = before; i < parts.length; i++) parts[i].applyMatrix4(benchMatrix);
+  k.transformed(benchMatrix, () => {
+    for (const zz of [-0.22, 0, 0.22]) box(pick(wood), 0, 0.55, zz, 1.8, 0.09, 0.16);
+    for (const yy of [0.9, 1.12]) box(pick(wood), 0, yy, -0.33, 1.8, 0.15, 0.08);
+    for (const xx of [-0.7, 0.7]) {
+      box(darkWood, xx, 0.27, 0, 0.12, 0.6, 0.56);
+      box(darkWood, xx, 0.78, -0.33, 0.1, 0.86, 0.1);
+    }
+  });
 
-  const geometry = mergeGeometries(
-    parts.map((part) => (part.index ? part.toNonIndexed() : part)),
-    false,
-  );
-  for (const part of parts) part.dispose();
-  for (const base of [unitBox, unitCylinder, unitSphere, hull]) base.dispose();
-  geometry.computeBoundingSphere();
-  const mesh = new T.Mesh(
-    geometry,
+  const mesh = k.mesh(
+    "Millpond weir, footbridge, jetty and boathouse",
     new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 }),
   );
-  mesh.name = "Millpond weir, footbridge, jetty and boathouse";
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  mesh.matrixAutoUpdate = false;
+  k.dispose();
+  hull.dispose();
   return mesh;
 }
 
