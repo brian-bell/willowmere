@@ -9,21 +9,25 @@ import { createWorld } from "./world.js";
 import { createLife } from "./life.js";
 import { createAudio } from "./audio.js";
 import { createEffects } from "./effects.js";
-import { createFlowerFactory } from "./flowers.js";
 import { createPlayerVisibility } from "./visibility.js";
 import { createSky } from "./sky.js";
 import { createStreamer } from "./streaming.js";
-import { createFishing, FISH } from "./fishing.js";
-import { MILLPOND } from "./regions/millpond-layout.js";
-import { FRUIT_TREES } from "./regions/orchard-layout.js";
-import { regions } from "./regions/index.js";
+import { createFishing } from "./fishing.js";
+import { createNavigation } from "./game/navigation.js";
+import { createActivities } from "./game/activities.js";
+import { createDebugApi } from "./game/debug-api.js";
+import { createHud } from "./game/hud.js";
+import { createInteractions } from "./game/interactions.js";
+import { loadState, saveState } from "./game/save.js";
+import { SHADOW_MAP_SIZES, createSunShadow } from "./game/shadows.js";
 import {
-  WORLD,
-  regionAt,
-  terrainField,
-  terrainHeight,
-  terrainMaxIn,
-} from "./world-layout.js";
+  DEFAULT_VIEW_HEIGHT,
+  createOverviewCamera,
+} from "./game/overview-camera.js";
+import { QUALITY_PIXEL_RATIO, createResolutionScaler, startingQuality } from "./game/resolution.js";
+import { MILLPOND } from "./regions/millpond-layout.js";
+import { regions } from "./regions/index.js";
+import { WORLD, regionAt } from "./world-layout.js";
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
 const canvas = $("#scene"),
@@ -47,116 +51,24 @@ const renderer = new THREE.WebGLRenderer({
   antialias: false,
   powerPreference: "high-performance",
 });
-// Every pass fills the full drawing buffer, so the frame rate follows pixel
-// count. Each quality caps the pixel ratio; the scaler below lowers it while
-// frames run long. See docs/performance.md.
-const QUALITY_PIXEL_RATIO = { high: 1.25, balanced: 1.25, performance: 1 };
-// Retina laptops and large monitors start on balanced; 1x screens up to about
-// 1920 × 1200, and small windows on dense screens, start on high.
-const startQuality =
-  innerWidth < 760 || innerWidth * innerHeight * devicePixelRatio ** 2 > 2.6e6
-    ? "balanced"
-    : "high";
 // Benchmark overrides for attributing render cost (window.__willowmere.tune);
 // empty in normal play, so every `??` below takes its default.
 const overrides = {};
-const resolution = {
-  // ?resolution=fixed keeps the quality's pixel ratio for benchmarks and tests.
-  adaptive: new URLSearchParams(location.search).get("resolution") !== "fixed",
-  ceiling: Math.min(devicePixelRatio, QUALITY_PIXEL_RATIO[startQuality]),
-  floor: 0.75,
-  step: 0.125,
-  // Set with the starting quality below.
-  pixelRatio: 0,
-  samples: [],
-  windowStart: 0,
-  lastSample: 0,
-  p95: 0,
-  mean: 0,
-  // Frames before this time are not sampled: startup, or after a failed descent.
-  holdUntil: performance.now() + 3000,
-  holdFor: 30000,
-  goodWindows: 0,
-  // Consecutive good one-second windows needed to step up; doubles when a
-  // step up is undone straight away.
-  upWindows: 5,
-  lastUp: -Infinity,
-  // Mean interval when the current run of step downs began.
-  descentFrom: 0,
-  // The village's ratio while the bakery is open.
-  outdoor: 0,
-};
-function applyPixelRatio(ratio) {
-  resolution.pixelRatio = ratio;
-  renderer.setPixelRatio(ratio);
-  composer.setPixelRatio(ratio);
-  resolution.samples.length = 0;
-}
-function resetResolution(quality) {
-  Object.assign(resolution, {
-    ceiling: Math.min(devicePixelRatio, QUALITY_PIXEL_RATIO[quality]),
-    goodWindows: 0,
-    upWindows: 5,
-    lastUp: -Infinity,
-    descentFrom: 0,
-  });
-  applyPixelRatio(overrides.pixelRatio ?? resolution.ceiling);
-}
-function stepResolution(direction) {
-  const r = resolution;
-  applyPixelRatio(
-    THREE.MathUtils.clamp(
-      r.pixelRatio + direction * r.step,
-      Math.min(r.floor, r.ceiling),
-      r.ceiling,
-    ),
-  );
-  resize();
-}
-function updateResolution(now, interval) {
-  const r = resolution;
-  if (!r.adaptive || overrides.pixelRatio != null || now < r.holdUntil) return;
-  // Start a fresh window after a hidden tab, the bakery, or a long stall.
-  if (interval > 250 || now - r.lastSample > 250) {
-    r.samples.length = 0;
-    r.windowStart = now;
-  }
-  r.lastSample = now;
-  r.samples.push(interval);
-  if (now - r.windowStart < 1000) return;
-  r.samples.sort((a, b) => a - b);
-  r.p95 = r.samples[Math.floor(r.samples.length * 0.95)];
-  r.mean = r.samples.reduce((a, b) => a + b, 0) / r.samples.length;
-  r.samples.length = 0;
-  r.windowStart = now;
-  const slow = r.p95 > 20;
-  if (!slow) r.descentFrom = 0;
-  if (slow) {
-    r.goodWindows = 0;
-    // Slow again soon after stepping up: wait longer before the next try.
-    if (now - r.lastUp < 10000) r.upWindows = Math.min(r.upWindows * 2, 60);
-    if (r.pixelRatio > Math.min(r.floor, r.ceiling)) {
-      r.descentFrom ||= r.mean;
-      stepResolution(-1);
-    } else if (r.descentFrom && r.mean > r.descentFrom * 0.95) {
-      // Even the floor did not shorten frames, so something else sets the
-      // pace (a 30 Hz cap or a busy CPU). Restore detail and retry later.
-      // Single steps are not judged: vsync can hold frames at 33 ms until
-      // the GPU fits within one refresh.
-      r.descentFrom = 0;
-      r.holdUntil = now + r.holdFor;
-      r.holdFor = Math.min(r.holdFor * 2, 300000);
-      applyPixelRatio(r.ceiling);
-      resize();
-    }
-  } else if (r.p95 < 18) {
-    if (++r.goodWindows >= r.upWindows && r.pixelRatio < r.ceiling) {
-      r.goodWindows = 0;
-      r.lastUp = now;
-      stepResolution(1);
-    }
-  } else r.goodWindows = 0;
-}
+const startQuality = startingQuality(innerWidth, innerHeight, devicePixelRatio);
+const scaler = createResolutionScaler({
+    // ?resolution=fixed keeps the quality's pixel ratio for benchmarks and tests.
+    adaptive: new URLSearchParams(location.search).get("resolution") !== "fixed",
+    quality: startQuality,
+    density: () => devicePixelRatio,
+    now: performance.now(),
+    setPixelRatio(ratio) {
+      renderer.setPixelRatio(ratio);
+      composer.setPixelRatio(ratio);
+    },
+    resize: () => resize(),
+    overrides,
+  }),
+  resolution = scaler.state;
 renderer.setPixelRatio(resolution.ceiling);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -176,58 +88,6 @@ let camera = overviewCamera,
   yaw = 0,
   pitch = 0,
   dragging = null;
-const cameraOffset = new THREE.Vector3(27, 36, 44);
-const cameraDistance = cameraOffset.length(),
-  cameraHeading = Math.atan2(cameraOffset.x, cameraOffset.z),
-  DEFAULT_TILT = THREE.MathUtils.radToDeg(
-    Math.asin(cameraOffset.y / cameraDistance),
-  ),
-  MIN_TILT = 20,
-  MAX_TILT = 75,
-  TILT_STEP = 5;
-let tilt = DEFAULT_TILT,
-  targetTilt = DEFAULT_TILT;
-const YAW_STEP = 15;
-let overviewYaw = 0,
-  targetYaw = 0;
-function setYaw(angle) {
-  targetYaw = THREE.MathUtils.euclideanModulo(angle, 360);
-  $("#yaw-angle").textContent = `${Math.round(targetYaw)}°`;
-  $("#yaw-reset").disabled = targetYaw === 0;
-}
-const PAN_STEP = 3,
-  PAN_LIMIT = 18,
-  pan = new THREE.Vector2(),
-  targetPan = new THREE.Vector2(),
-  panOffset = new THREE.Vector3(),
-  viewTarget = new THREE.Vector3();
-function setPan(x, y) {
-  targetPan.set(
-    THREE.MathUtils.clamp(x, -PAN_LIMIT, PAN_LIMIT),
-    THREE.MathUtils.clamp(y, -PAN_LIMIT, PAN_LIMIT),
-  );
-  $("#pan-left").disabled = targetPan.x <= -PAN_LIMIT;
-  $("#pan-right").disabled = targetPan.x >= PAN_LIMIT;
-  $("#pan-up").disabled = targetPan.y <= -PAN_LIMIT;
-  $("#pan-down").disabled = targetPan.y >= PAN_LIMIT;
-  $("#pan-reset").disabled = targetPan.lengthSq() === 0;
-}
-function setTilt(angle) {
-  targetTilt = THREE.MathUtils.clamp(angle, MIN_TILT, MAX_TILT);
-  updateTiltControls();
-}
-function updateTiltControls() {
-  $("#tilt-up").disabled = targetTilt >= MAX_TILT;
-  $("#tilt-down").disabled = targetTilt <= MIN_TILT;
-  $("#tilt-angle").textContent = `${Math.round(targetTilt)}°`;
-  $("#tilt-reset").disabled = targetTilt === DEFAULT_TILT;
-}
-const DEFAULT_VIEW_HEIGHT = 18,
-  MIN_VIEW_HEIGHT = 10,
-  // At 39 the overview held about twice the village's content, which culling
-  // cannot reduce; the cap lifts once zoom-based detail reduction exists.
-  MAX_VIEW_HEIGHT = 30,
-  ZOOM_STEP = 3;
 // Beyond these, single leaves cover only a few pixels and trees draw coarser
 // foliage; in first person, trees further off than CROWN_DISTANCE, deep in
 // the fog, draw their crown shells instead of leaves.
@@ -242,37 +102,18 @@ const leafDetail = () =>
   overrides.leafDetail ??
   (firstPerson
     ? leafDetailFromEye
-    : viewHeight > COARSE_LEAVES_VIEW_HEIGHT
+    : overview.viewHeight > COARSE_LEAVES_VIEW_HEIGHT
       ? 1
       : 0);
-let viewHeight = 29,
-  targetViewHeight = 29;
-function updateZoomControls() {
-  $("#zoom-in").disabled = firstPerson || targetViewHeight <= MIN_VIEW_HEIGHT;
-  $("#zoom-out").disabled = firstPerson || targetViewHeight >= MAX_VIEW_HEIGHT;
-  $("#zoom-reset").disabled =
-    firstPerson || targetViewHeight === DEFAULT_VIEW_HEIGHT;
-}
-function setZoom(height) {
-  targetViewHeight = THREE.MathUtils.clamp(
-    height,
-    MIN_VIEW_HEIGHT,
-    MAX_VIEW_HEIGHT,
-  );
-  updateZoomControls();
-}
-const target = new THREE.Vector3(0, 0, 1.5),
-  cameraTarget = target.clone();
+const overview = createOverviewCamera({
+  camera: overviewCamera,
+  isFirstPerson: () => firstPerson,
+  onZoom: () => updateFrustum(),
+});
 const hemi = new THREE.HemisphereLight("#eaf2df", "#607b66", 1.5);
 scene.add(hemi);
 const ambient = new THREE.AmbientLight("#ccdabb", 0.22);
 scene.add(ambient);
-// Eye-level views resolve finer shadow texels than the village overview.
-const SHADOW_MAP_SIZES = {
-  high: { overview: 2048, firstPerson: 4096 },
-  balanced: { overview: 1536, firstPerson: 2048 },
-  performance: { overview: 1024, firstPerson: 1024 },
-};
 const sun = new THREE.DirectionalLight("#fff0d6", 2.4);
 sun.position.set(-16, 32, 15);
 sun.castShadow = true;
@@ -284,205 +125,8 @@ scene.add(sun.target);
 const sky = createSky(THREE, sun);
 scene.add(sky.mesh);
 const showSky = () => (sky.mesh.visible = firstPerson && (overrides.sky ?? true));
-// The sun never moves. Its shadow camera rolls with each yaw step so the overview's
-// footprint lines up with the map, and its bounds follow the receivers in view in
-// fixed sizes and whole-texel steps, so shadow edges hold still while the view
-// follows or pans and change only in small steps while it zooms.
-const shadowCamera = sun.shadow.camera;
-// The soil rim's base and the tallest canopy on the highest ground bound every
-// receiver vertically. A view's own ceiling counts only the ground under it,
-// and the village's receivers, which shadow sizes are fractions of, stand on
-// flat ground.
-const SHADOW_FLOOR = -1.4,
-  SHADOW_CEILING = terrainField.max + WORLD.canopy,
-  SHADOW_REFERENCE_CEILING = WORLD.canopy,
-  SHADOW_MARGIN = 1,
-  // Depth bias in metres; the shadow map stores depth across near..far.
-  SHADOW_BIAS = 0.0126,
-  // Fractions of the village's light-space extent, about 12% apart, so a
-  // texel's size never depends on the map's. The largest steps cover views
-  // wider than the village; any larger view takes the whole map.
-  SHADOW_STEPS = Array.from({ length: 17 }, (_, i) =>
-    i < 10 ? 0.32 * 1.12 ** i : 1.12 ** (i - 10),
-  ),
-  // First person fits the shadow to a village-sized box of ground around the
-  // eye, reaching this far ahead of it, so eye-level detail keeps the
-  // 4096 map's density on a map of any size, and turning only shifts it.
-  FIRST_PERSON_SHADOW_AHEAD = 10;
-const shadowLight = sun.position.clone().sub(sun.target.position).normalize(),
-  shadowPoint = new THREE.Vector3(),
-  shadowRay = new THREE.Vector3(),
-  shadowSize = new THREE.Vector2(),
-  shadowCenter = new THREE.Vector2(),
-  shadowView = new THREE.Box2(),
-  // The overview's ground footprint, where its tallest ground is looked up.
-  shadowFootprint = new THREE.Box2(),
-  // Light-space bounds of the village's receivers (the size reference) and of
-  // the whole map's (where the shadow box may go).
-  villageShadow = new THREE.Box2(),
-  worldShadow = new THREE.Box2(),
-  shadowStep = [10, 10];
-let shadowYaw = null;
-// The depth range spans the world's receivers along the light, with a metre spare.
-{
-  let near = Infinity,
-    far = -Infinity;
-  const { shadow } = WORLD;
-  for (let i = 0; i < 8; i++) {
-    shadowPoint.set(
-      i & 1 ? shadow.maxX : shadow.minX,
-      i & 2 ? SHADOW_CEILING : SHADOW_FLOOR,
-      i & 4 ? shadow.maxZ : shadow.minZ,
-    );
-    const depth = sun.position.clone().sub(shadowPoint).dot(shadowLight);
-    near = Math.min(near, depth);
-    far = Math.max(far, depth);
-  }
-  shadowCamera.near = Math.max(0.1, near - 1);
-  shadowCamera.far = far + 1;
-  sun.shadow.bias = -SHADOW_BIAS / (shadowCamera.far - shadowCamera.near);
-}
-function addShadowPoint(box, point) {
-  point.applyMatrix4(shadowCamera.matrixWorldInverse);
-  box.expandByPoint(shadowCenter.set(point.x, point.y));
-}
-// Adds a ground box's receivers, from floor to ceiling, offset by (dx, dz),
-// to a light-space box.
-function addShadowBox(box, bounds, dx, dz, floor, ceiling) {
-  for (let i = 0; i < 8; i++)
-    addShadowPoint(
-      box,
-      shadowPoint.set(
-        (i & 1 ? bounds.maxX : bounds.minX) + dx,
-        i & 2 ? ceiling : floor,
-        (i & 4 ? bounds.maxZ : bounds.minZ) + dz,
-      ),
-    );
-  return box;
-}
-function rollShadow(yaw) {
-  // Point light-space x along the screen's right edge, projected across the sunlight.
-  const heading = cameraHeading + THREE.MathUtils.degToRad(yaw);
-  shadowPoint.set(Math.cos(heading), 0, -Math.sin(heading));
-  shadowPoint
-    .addScaledVector(shadowLight, -shadowPoint.dot(shadowLight))
-    .normalize();
-  shadowCamera.up.crossVectors(shadowLight, shadowPoint);
-  shadowCamera.position.copy(sun.position);
-  shadowCamera.lookAt(sun.target.position);
-  shadowCamera.updateMatrixWorld();
-  addShadowBox(
-    villageShadow.makeEmpty(),
-    WORLD.shadowReference,
-    0,
-    0,
-    SHADOW_FLOOR,
-    SHADOW_REFERENCE_CEILING,
-  );
-  addShadowBox(worldShadow.makeEmpty(), WORLD.shadow, 0, 0, SHADOW_FLOOR, SHADOW_CEILING);
-  shadowYaw = yaw;
-}
-function updateShadowMapSize() {
-  const size =
-    SHADOW_MAP_SIZES[$("#quality").value][
-      firstPerson ? "firstPerson" : "overview"
-    ];
-  if (sun.shadow.mapSize.x === size) return;
-  sun.shadow.mapSize.setScalar(size);
-  sun.shadow.map?.dispose();
-  sun.shadow.map = null;
-  if (!sun.shadow.autoUpdate) sun.shadow.needsUpdate = true;
-}
-function fitShadow() {
-  if (shadowYaw !== targetYaw) rollShadow(targetYaw);
-  if (firstPerson) {
-    // A village-sized box centred a little ahead of the eye, raised to the
-    // ground the eye stands on.
-    const { shadowReference: v } = WORLD,
-      ahead = FIRST_PERSON_SHADOW_AHEAD,
-      x = firstPersonCamera.position.x - Math.sin(yaw) * ahead,
-      z = firstPersonCamera.position.z - Math.cos(yaw) * ahead,
-      lift = terrainHeight(firstPersonCamera.position.x, firstPersonCamera.position.z);
-    addShadowBox(
-      shadowView.makeEmpty(),
-      v,
-      x - (v.minX + v.maxX) / 2,
-      z - (v.minZ + v.maxZ) / 2,
-      SHADOW_FLOOR + lift,
-      SHADOW_REFERENCE_CEILING + lift,
-    );
-  } else {
-    // Trace the overview's corner rays through every receiver height, up to
-    // the canopy above the highest ground the view's footprint can reach.
-    overviewCamera.updateMatrixWorld();
-    overviewCamera.getWorldDirection(shadowRay);
-    shadowFootprint.makeEmpty();
-    for (let i = 0; i < 8; i++) {
-      shadowPoint
-        .set(i & 1 ? 1 : -1, i & 2 ? 1 : -1, -1)
-        .unproject(overviewCamera);
-      const y = i & 4 ? SHADOW_CEILING : SHADOW_FLOOR;
-      shadowPoint.addScaledVector(shadowRay, (y - shadowPoint.y) / shadowRay.y);
-      shadowFootprint.expandByPoint(shadowCenter.set(shadowPoint.x, shadowPoint.z));
-    }
-    const ceiling =
-      terrainMaxIn(
-        shadowFootprint.min.x,
-        shadowFootprint.max.x,
-        shadowFootprint.min.y,
-        shadowFootprint.max.y,
-      ) + WORLD.canopy;
-    shadowView.makeEmpty();
-    for (let i = 0; i < 8; i++) {
-      shadowPoint
-        .set(i & 1 ? 1 : -1, i & 2 ? 1 : -1, -1)
-        .unproject(overviewCamera);
-      const y = i & 4 ? ceiling : SHADOW_FLOOR;
-      shadowPoint.addScaledVector(shadowRay, (y - shadowPoint.y) / shadowRay.y);
-      addShadowPoint(shadowView, shadowPoint);
-    }
-    shadowView.expandByScalar(SHADOW_MARGIN);
-  }
-  shadowView.getSize(shadowSize);
-  shadowView.getCenter(shadowCenter);
-  const bounds = [0, 0, 0, 0];
-  for (const axis of [0, 1]) {
-    const key = axis ? "y" : "x",
-      reference = villageShadow.max[key] - villageShadow.min[key],
-      low = worldShadow.min[key],
-      full = worldShadow.max[key] - low,
-      last = SHADOW_STEPS.length - 1,
-      // Less a hair, so first person's village-sized box takes the 1.0 step.
-      needed = Math.min(shadowSize[key], full) / reference - 1e-9;
-    // Grow at once; shrink only when the view fits well inside the smaller
-    // size. First person's box never changes size, so it takes its step at once.
-    let step = shadowStep[axis];
-    if (firstPerson || needed > SHADOW_STEPS[step]) {
-      step = SHADOW_STEPS.findIndex((s) => s >= needed);
-      if (step < 0) step = last;
-    } else while (step > 0 && needed < SHADOW_STEPS[step - 1] * 0.96) step--;
-    shadowStep[axis] = step;
-    const extent = Math.min(reference * SHADOW_STEPS[step], full),
-      texel = extent / sun.shadow.mapSize[key],
-      start = THREE.MathUtils.clamp(
-        shadowCenter[key] - extent / 2,
-        low,
-        low + full - extent,
-      );
-    bounds[axis * 2] = Math.floor(start / texel) * texel;
-    bounds[axis * 2 + 1] = bounds[axis * 2] + extent;
-  }
-  const [left, right, bottom, top] = bounds;
-  if (
-    left !== shadowCamera.left ||
-    right !== shadowCamera.right ||
-    bottom !== shadowCamera.bottom ||
-    top !== shadowCamera.top
-  ) {
-    Object.assign(shadowCamera, { left, right, bottom, top });
-    shadowCamera.updateProjectionMatrix();
-  }
-}
+const sunShadow = createSunShadow({ sun, overviewCamera, firstPersonCamera }),
+  shadowCamera = sunShadow.camera;
 const fill = new THREE.DirectionalLight("#dae9ec", 0.6);
 fill.position.set(15, 14, -20);
 scene.add(fill);
@@ -515,234 +159,53 @@ const fishing = createFishing(THREE, {
     water: world.water,
     body: "millpond",
     surface: MILLPOND.surface,
-  }),
-  rodTip = new THREE.Vector3();
+  });
 streamer.add({
   x: MILLPOND.jetty.x,
   z: MILLPOND.jetty.minZ,
   step: () => fishing.group,
 });
-function castLine() {
-  const p = life.player.position,
-    { jetty } = MILLPOND;
-  // Out over open water beyond the jetty's end.
-  const x = jetty.x + (Math.random() - 0.5) * 1.4,
-    z = jetty.minZ - 2.2 - Math.random() * 0.9;
-  life.player.rotation.y = Math.atan2(x - p.x, z - p.z);
-  fishing.cast(x, z);
-  fishingFrom.set(p.x, p.z);
-  toast("You cast a line. Watch the float, and press E when it dips.");
-}
-const fishingFrom = new THREE.Vector2();
-function fishingResult(result) {
-  if (!result) return;
-  if (result.kind === "early") {
-    toast("Too soon. The ripples fade, and the fish drift off.");
-    return;
-  }
-  if (result.kind === "miss") {
-    toast("Something nibbled, and slipped away.");
-    return;
-  }
-  const { fish } = result,
-    first = !state.fish[fish.id];
-  state.fish[fish.id] = (state.fish[fish.id] || 0) + 1;
-  if (first) state.coins += 5;
-  if (motion) effects.burst(fishing.float.x, MILLPOND.surface + 0.3, fishing.float.z);
-  updateUI();
-  save();
-  audio.chime();
-  toast(
-    `${fish.line} You let it slip back into the pond.${first ? " A new one for the journal. +5 petals" : ""}`,
-  );
-}
-// The orchard hill streams in later; its harvest controller arrives with it.
-// A shaken tree ripens again, and a hive refills, after a few minutes.
-let orchard = null;
-// What each region's builder hands back besides its jobs, by region id.
-const regionLoaded = {
-  orchard({ harvest }) {
-    orchard = harvest;
-    updateOrchard();
-  },
-};
-const FRUIT_REGROW_MS = 4 * 60 * 1000,
-  HONEY_REFILL_MS = 6 * 60 * 1000,
-  HARVEST_PRICE = { apple: 2, pear: 2, honey: 6 };
-const harvestReady = (id, wait) => Date.now() - (state.orchard[id] ?? 0) >= wait;
-function updateOrchard() {
-  if (!orchard) return;
-  for (const tree of FRUIT_TREES)
-    orchard.setPicked(tree.id, !harvestReady(tree.id, FRUIT_REGROW_MS));
-}
-function shakeTree({ tree, kind }) {
-  if (!orchard) return;
-  if (!harvestReady(tree, FRUIT_REGROW_MS)) {
-    toast(`Nothing more is ripe on this ${kind} tree yet. Give it a little while.`);
-    return;
-  }
-  const count = orchard.shake(tree, motion);
-  if (!count) return;
-  const first = !state.harvested[kind];
-  state.orchard[tree] = Date.now();
-  state.basket[kind] += count;
-  state.harvested[kind] += count;
-  if (first) state.coins += 5;
-  updateUI();
-  save();
-  audio.chime();
-  toast(
-    `You give the trunk a shove, and ${count} ripe ${kind}s tumble into the grass. Into the basket they go.${first ? " +5 petals" : ""}`,
-  );
-}
-function collectHoney({ hive }) {
-  if (!orchard) return;
-  orchard.disturbHive(hive);
-  if (!harvestReady(hive, HONEY_REFILL_MS)) {
-    toast("The bees are still filling the comb. Come back in a little while.");
-    return;
-  }
-  const first = !state.harvested.honey;
-  state.orchard[hive] = Date.now();
-  state.basket.honey++;
-  state.harvested.honey++;
-  if (first) state.coins += 5;
-  updateUI();
-  save();
-  audio.chime();
-  toast(
-    `You lift the roof gently and take a jar of wildflower honey. The bees hardly mind.${first ? " +5 petals" : ""}`,
-  );
-}
-const basketCount = () => state.basket.apple + state.basket.pear + state.basket.honey;
-// Finn buys the orchard's fruit and honey for the bakery.
-function sellBasket() {
-  const { apple, pear, honey } = state.basket,
-    petals =
-      apple * HARVEST_PRICE.apple + pear * HARVEST_PRICE.pear + honey * HARVEST_PRICE.honey,
-    goods = [
-      [apple, "apple"],
-      [pear, "pear"],
-      [honey, "jar of honey", "jars of honey"],
-    ]
-      .filter(([n]) => n)
-      .map(([n, one, many = `${one}s`]) => `${n} ${n === 1 ? one : many}`);
-  state.basket = { apple: 0, pear: 0, honey: 0 };
-  state.coins += petals;
-  updateUI();
-  save();
-  audio.chime();
-  toast(`Finn takes ${goods.join(" and ").replace(/ and (?=.* and )/, ", ")} for the bakery. +${petals} petals`);
-}
 const playerVisibility = createPlayerVisibility(
   scene,
   life.player,
   world.colliders,
   world.treeCanopies,
 );
-const STORAGE = "willowmere.save.v1";
-let state = {
-  flowers: 0,
-  seeds: 5,
-  coins: 120,
-  quests: { mabel: false, flower: false, plant: false },
-  // Catches from the millpond, by species.
-  fish: {},
-  // The orchard's fruit and honey: what is in the basket, what has been
-  // gathered all told, and when each tree was shaken and each hive opened.
-  basket: { apple: 0, pear: 0, honey: 0 },
-  harvested: { apple: 0, pear: 0, honey: 0 },
-  orchard: {},
-  gathered: [],
-  plants: [],
-  started: false,
-};
-try {
-  const saved = JSON.parse(localStorage.getItem(STORAGE));
-  if (saved && saved.quests && Array.isArray(saved.plants))
-    state = { ...state, ...saved };
-} catch {}
-// Planted flowers are keyed by id, so their meshes can be created in any order.
-// Saves from before ids get them in planting order.
-let nextPlantId =
-  Math.max(-1, ...state.plants.map((p) => (Number.isInteger(p.id) ? p.id : -1))) + 1;
-for (const plant of state.plants)
-  if (!Number.isInteger(plant.id)) plant.id = nextPlantId++;
-let savingWorks = true;
+// localStorage itself can throw where site data is blocked.
+const storage = () => localStorage;
+const { state, nextPlantId } = loadState(storage);
 function save() {
-  try {
-    localStorage.setItem(STORAGE, JSON.stringify(state));
-  } catch {
-    savingWorks = false;
+  if (!saveState(storage, state))
     $("#save-status").textContent = "This visit cannot be saved";
-  }
 }
-let toastTimeout;
-function toast(message) {
-  $("#toast").textContent = message;
-  $("#toast").classList.add("show");
-  clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => $("#toast").classList.remove("show"), 3600);
-}
-function updateUI() {
-  $("#game").classList.toggle(
-    "quest-complete",
-    Object.values(state.quests).every(Boolean),
-  );
-  for (const [key, done] of Object.entries(state.quests))
-    $(`[data-quest="${key}"]`).classList.toggle("done", done);
-  $("#quest-count").textContent =
-    `${Object.values(state.quests).filter(Boolean).length} / 3`;
-  $("#flower-count").textContent = `${Math.min(state.flowers, 3)}/3`;
-  $("#inventory-flower").textContent = state.flowers;
-  $("#inventory-seed").textContent = state.seeds;
-  $("#coin-count").textContent = state.coins;
-}
-function complete(quest) {
-  if (state.quests[quest]) return;
-  state.quests[quest] = true;
-  state.coins += 25;
-  audio.chime();
-  updateUI();
-  save();
-  if (Object.values(state.quests).every(Boolean))
-    setTimeout(
-      () => toast("A warm welcome, complete. You belong here. +25 petals"),
-      500,
-    );
-}
-const gatheringSpots = [
-    [-4, 7],
-    [-9, 2],
-    [-2, -3],
-    [5, 2],
-    [6, 7],
-    [-12, 7],
-    [0, 9],
-    [-10, -1],
-  ],
-  flowerGroups = new Map();
-const makeFlower = createFlowerFactory(scene);
-const flowerAt = (x, z, planted) => {
-  const group = makeFlower(x, z, planted);
-  group.position.y = world.terrainHeight(x, z);
-  return group;
-};
-gatheringSpots.forEach(([x, z], i) => {
-  if (!state.gathered.includes(i)) flowerGroups.set(i, flowerAt(x, z));
-});
-const plantedGroups = new Map();
-state.plants.forEach((p) => {
-  const g = flowerAt(p.x, p.z, true);
-  g.scale.setScalar(p.watered ? 1.35 : 0.7);
-  plantedGroups.set(p.id, g);
+const hud = createHud({
+    canvas,
+    state,
+    onCapture() {
+      releaseLook();
+      keys.clear();
+      clickPath.length = 0;
+    },
+  }),
+  { toast, updateUI } = hud;
+const activities = createActivities({
+  scene,
+  world,
+  player: life.player,
+  state,
+  nextPlantId,
+  hud,
+  save,
+  audio,
+  effects,
+  fishing,
+  blocked: (x, z, r) => blocked(x, z, r),
+  motion: () => motion,
 });
 let tool = "hand",
   started = state.started,
   photo = false,
   motion = !matchMedia("(prefers-reduced-motion: reduce)").matches,
-  dialogue = null,
-  nearest = null,
   day = "day";
 let interior = null,
   interiorLoading = false;
@@ -755,8 +218,7 @@ async function enterBakery() {
   keys.clear();
   velocity.set(0, 0);
   clickPath.length = 0;
-  dialogue = null;
-  $("#dialogue").hidden = true;
+  hud.dismissDialogue();
   try {
     if (!interior) {
       const { createInterior } = await import("./interior.js");
@@ -770,7 +232,7 @@ async function enterBakery() {
     // The scaler only measures the village, so the bakery uses the quality's
     // full ratio; the village resumes at its own ratio on the way out.
     resolution.outdoor = resolution.pixelRatio;
-    applyPixelRatio(resolution.ceiling);
+    scaler.apply(resolution.ceiling);
     interior.enter();
     const url = new URL(location.href);
     url.searchParams.set("interior", "bakery");
@@ -785,7 +247,7 @@ async function enterBakery() {
 }
 function leaveBakery() {
   interior?.exit();
-  applyPixelRatio(Math.min(resolution.outdoor, resolution.ceiling));
+  scaler.apply(Math.min(resolution.outdoor, resolution.ceiling));
   keys.clear();
   velocity.set(0, 0);
   const url = new URL(location.href);
@@ -797,7 +259,7 @@ function leaveBakery() {
 $("#visit-bakery").onclick = enterBakery;
 $("#motion").checked = motion;
 function begin() {
-  if (!started) setZoom(DEFAULT_VIEW_HEIGHT);
+  if (!started) overview.setZoom(DEFAULT_VIEW_HEIGHT);
   started = true;
   $("#game").classList.add("playing");
   state.started = true;
@@ -808,32 +270,9 @@ function begin() {
 if (started) {
   $("#intro").classList.add("dismissed");
   $("#game").classList.add("playing");
-  viewHeight = targetViewHeight = DEFAULT_VIEW_HEIGHT;
+  overview.zoomAt(DEFAULT_VIEW_HEIGHT);
 }
-updateZoomControls();
-$("#zoom-in").onclick = () => setZoom(targetViewHeight - ZOOM_STEP);
-$("#zoom-out").onclick = () => setZoom(targetViewHeight + ZOOM_STEP);
-$("#zoom-reset").onclick = () => setZoom(DEFAULT_VIEW_HEIGHT);
-// Small screens fold tilt, yaw and pan behind this button (see style.css).
-$("#camera-more").onclick = () => {
-  const open = $(".view-controls").classList.toggle("camera-open");
-  $("#camera-more").setAttribute("aria-expanded", String(open));
-  $("#camera-more").innerHTML = `<span aria-hidden="true">${open ? "×" : "⋯"}</span>`;
-};
-updateTiltControls();
-$("#tilt-up").onclick = () => setTilt(targetTilt + TILT_STEP);
-$("#tilt-down").onclick = () => setTilt(targetTilt - TILT_STEP);
-$("#tilt-reset").onclick = () => setTilt(DEFAULT_TILT);
-setYaw(0);
-$("#yaw-left").onclick = () => setYaw(targetYaw - YAW_STEP);
-$("#yaw-right").onclick = () => setYaw(targetYaw + YAW_STEP);
-$("#yaw-reset").onclick = () => setYaw(0);
-setPan(0, 0);
-$("#pan-left").onclick = () => setPan(targetPan.x - PAN_STEP, targetPan.y);
-$("#pan-right").onclick = () => setPan(targetPan.x + PAN_STEP, targetPan.y);
-$("#pan-up").onclick = () => setPan(targetPan.x, targetPan.y - PAN_STEP);
-$("#pan-down").onclick = () => setPan(targetPan.x, targetPan.y + PAN_STEP);
-$("#pan-reset").onclick = () => setPan(0, 0);
+overview.bindControls();
 $("#start").onclick = () => {
   begin();
   toast("Follow the paths. A little adventure is all you need.");
@@ -857,8 +296,36 @@ $$(".tool").forEach(
 const keys = new Set(),
   velocity = new THREE.Vector2(),
   clickPath = [];
-// A neighbor, flower or landmark the player tapped: walk over, then interact on arrival.
-let pendingInteraction = null;
+// What the HUD and interactions read of the visit's live settings.
+const session = {
+  get tool() {
+    return tool;
+  },
+  get started() {
+    return started;
+  },
+  get photo() {
+    return photo;
+  },
+  get firstPerson() {
+    return firstPerson;
+  },
+  get yaw() {
+    return yaw;
+  },
+};
+const interactions = createInteractions({
+  world,
+  life,
+  hud,
+  activities,
+  fishing,
+  session,
+  clickPath,
+  begin,
+  isIndoors: () => !!interior?.active || interiorLoading,
+  enterBakery,
+});
 function releaseLook() {
   if (dragging && canvas.hasPointerCapture(dragging.id))
     canvas.releasePointerCapture(dragging.id);
@@ -880,7 +347,7 @@ function updateViewUI() {
       ? "First-person village. WASD to walk, drag to look, arrow keys to turn, Page Up and Page Down to look up and down, E to interact, V to switch views."
       : "Interactive village. Move with WASD or arrow keys, interact with E. V for first person.",
   );
-  updateZoomControls();
+  overview.updateZoomControls();
 }
 function setFirstPerson(value) {
   releaseLook();
@@ -891,10 +358,10 @@ function setFirstPerson(value) {
     yaw = life.player.rotation.y + Math.PI;
     pitch = -0.08;
   }
-  pendingInteraction = null;
+  interactions.pending = null;
   firstPerson = value;
   Object.assign(scene.fog, firstPerson ? FOG.firstPerson : FOG.overview);
-  updateShadowMapSize();
+  sunShadow.setMapSize($("#quality").value, firstPerson);
   camera = firstPerson ? firstPersonCamera : overviewCamera;
   scenePass.camera = camera;
   life.player.visible = !firstPerson;
@@ -926,8 +393,8 @@ function canLook() {
     firstPerson &&
     !interior?.active &&
     !interiorLoading &&
-    !dialogue &&
-    !modalOpen()
+    !hud.inDialogue &&
+    !hud.modalOpen()
   );
 }
 function look(dx, dy) {
@@ -959,120 +426,12 @@ canvas.addEventListener("pointerup", stopLook);
 canvas.addEventListener("pointercancel", stopLook);
 canvas.addEventListener("lostpointercapture", stopLook);
 let lastStep = 0;
-function modalOpen() {
-  return !!document.querySelector("dialog[open]");
-}
-function openDialogue(name, lines, onFinish) {
-  releaseLook();
-  dialogue = { name, lines, index: 0, onFinish };
-  $("#speaker").textContent = name;
-  $("#dialogue-text").textContent = lines[0];
-  $("#dialogue-next").innerHTML =
-    lines.length > 1 ? "Continue <span>→</span>" : "Lovely <span>✓</span>";
-  $("#dialogue").hidden = false;
-  clickPath.length = 0;
-  keys.clear();
-  $("#dialogue-next").focus();
-}
-function nextDialogue() {
-  if (!dialogue) return;
-  dialogue.index++;
-  if (dialogue.index < dialogue.lines.length) {
-    $("#dialogue-text").textContent = dialogue.lines[dialogue.index];
-    $("#dialogue-next").innerHTML =
-      dialogue.index === dialogue.lines.length - 1
-        ? "Lovely <span>✓</span>"
-        : "Continue <span>→</span>";
-  } else {
-    const finish = dialogue.onFinish;
-    dialogue = null;
-    $("#dialogue").hidden = true;
-    finish?.();
-    canvas.focus();
-  }
-}
-$("#dialogue-next").onclick = nextDialogue;
-function refreshJournal() {
-  const rows = [
-    [
-      "Meet the neighbors",
-      state.quests.mabel
-        ? "Mabel saved you a place among the flowers."
-        : "Mabel tends the flowers just west of the fountain.",
-    ],
-    [
-      "A pocketful of sunshine",
-      `You’ve gathered ${state.flowers} wildflower${state.flowers === 1 ? "" : "s"}. Look for the pale rings around little bouquets.`,
-    ],
-    [
-      "Put down roots",
-      state.quests.plant
-        ? `${state.plants.length} new patch${state.plants.length === 1 ? "" : "es"} of flowers make the village a little more yours.`
-        : "Choose the seed pouch (3), find an open patch, and press E.",
-    ],
-  ];
-  const caught = FISH.filter((fish) => state.fish[fish.id]),
-    here = regionAt(life.player.position.x, life.player.position.z).id;
-  if (caught.length || here === "millpond")
-    rows.push([
-      "Quiet waters",
-      caught.length
-        ? `You’ve met ${caught.length} of ${FISH.length} millpond fish: ${caught.map((fish) => fish.name).join(", ")}.`
-        : "Cast a line from the millpond’s jetty, north of the village, and press E when the float dips.",
-    ]);
-  const { apple, pear, honey } = state.harvested,
-    plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-  if (apple || pear || honey || here === "orchard")
-    rows.push([
-      "The orchard hill",
-      apple || pear || honey
-        ? `You’ve gathered ${plural(apple, "apple")}, ${plural(pear, "pear")} and ${plural(honey, "jar", "jars")} of honey. ${basketCount() ? "Finn will buy what’s in your basket." : "Finn buys fruit and honey for his bakes."}`
-        : "Shake a ripe apple or pear tree on the hill north-west of the village, and look in on the beehives. Finn buys fruit and honey for his bakes.",
-    ]);
-  $("#journal-content").replaceChildren(
-    ...rows.map(([title, body]) => {
-      const d = document.createElement("div");
-      d.className = "journal-entry";
-      const b = document.createElement("b");
-      b.textContent = title;
-      const s = document.createElement("span");
-      s.textContent = body;
-      d.append(b, s);
-      return d;
-    }),
-  );
-}
-function openModal(id) {
-  releaseLook();
-  keys.clear();
-  clickPath.length = 0;
-  const d = $(id);
-  if (d.open) d.close();
-  else d.showModal();
-}
+hud.bindControls();
 $("#journal-button").onclick = () => {
-  refreshJournal();
-  openModal("#journal");
+  hud.refreshJournal(regionAt(life.player.position.x, life.player.position.z).id);
+  hud.openModal("#journal");
 };
-$("#settings").onclick = () => openModal("#settings-dialog");
-$$(".close-modal").forEach(
-  (b) => (b.onclick = () => b.closest("dialog").close()),
-);
-$$("dialog").forEach((d) => {
-  d.addEventListener("click", (e) => {
-    if (e.target === d) {
-      const r = d.getBoundingClientRect();
-      if (
-        e.clientX < r.left ||
-        e.clientX > r.right ||
-        e.clientY < r.top ||
-        e.clientY > r.bottom
-      )
-        d.close();
-    }
-  });
-  d.addEventListener("close", () => canvas.focus());
-});
+$("#settings").onclick = () => hud.openModal("#settings-dialog");
 function setPhoto(value) {
   photo = value;
   $("#game").classList.toggle("photo-mode", photo);
@@ -1107,8 +466,8 @@ $("#quality").onchange = (e) => {
   const q = e.target.value;
   world.water.setQuality(q);
   // The chosen quality is the scaler's ceiling.
-  resetResolution(q);
-  updateShadowMapSize();
+  scaler.reset(q);
+  sunShadow.setMapSize($("#quality").value, firstPerson);
   bloom.enabled = overrides.bloom ?? q !== "performance";
   resize();
 };
@@ -1128,222 +487,10 @@ $("#reset-position").onclick = () => {
   toast("Back home, on the village green.");
 };
 const colliders = world.colliders || [];
-const { walk } = WORLD;
-function blocked(x, z, r = 0.27) {
-  if (
-    x < walk.minX + r ||
-    x > walk.maxX - r ||
-    z < walk.minZ + r ||
-    z > walk.maxZ - r
-  )
-    return true;
-  for (const c of colliders) {
-    if (c.r !== undefined) {
-      if (Math.hypot(x - c.x, z - c.z) < r + c.r) return true;
-    } else if (c.w !== undefined) {
-      const dx = Math.max(Math.abs(x - c.x) - c.w / 2, 0),
-        dz = Math.max(Math.abs(z - c.z) - c.d / 2, 0);
-      if (dx * dx + dz * dz < r * r) return true;
-    } else if (
-      // A shaped collider, such as the millpond, tests itself within its box.
-      c.blocks &&
-      x > c.minX - r &&
-      x < c.maxX + r &&
-      z > c.minZ - r &&
-      z < c.maxZ + r &&
-      c.blocks(x, z, r)
-    )
-      return true;
-  }
-  return false;
-}
-function openGrass(x, z) {
-  return (
-    world.isPlantable(x, z) &&
-    !blocked(x, z, 0.55) &&
-    state.plants.every((p) => Math.hypot(x - p.x, z - p.z) > 0.75)
-  );
-}
-const oneOf = (list) => list[Math.floor(Math.random() * list.length)];
-function interact() {
-  if (interior?.active || interiorLoading) return;
-  if (dialogue) {
-    nextDialogue();
-    return;
-  }
-  if (modalOpen()) return;
-  begin();
-  const p = life.player.position;
-  if (fishing.active) {
-    fishingResult(fishing.press());
-    return;
-  }
-  if (tool === "seeds") {
-    if (state.seeds <= 0) {
-      toast("Your seed pouch is empty. Finn has a few to spare.");
-      return;
-    }
-    const facing = firstPerson ? yaw + Math.PI : life.player.rotation.y;
-    let fx = p.x + Math.sin(facing) * 0.8,
-      fz = p.z + Math.cos(facing) * 0.8;
-    if (!openGrass(fx, fz)) {
-      toast("Find a little more room for those roots.");
-      return;
-    }
-    const plant = { id: nextPlantId++, x: fx, z: fz, watered: false };
-    state.plants.push(plant);
-    if (motion) effects.burst(fx, world.terrainHeight(fx, fz) + 0.4, fz);
-    const g = flowerAt(fx, fz, true);
-    g.scale.setScalar(0.7);
-    plantedGroups.set(plant.id, g);
-    state.seeds--;
-    complete("plant");
-    updateUI();
-    save();
-    audio.chime();
-    toast("A small beginning. Your flowers are planted.");
-    return;
-  }
-  if (tool === "water") {
-    const plant = state.plants.find(
-      (q) => Math.hypot(q.x - p.x, q.z - p.z) < 2 && !q.watered,
-    );
-    if (!plant) {
-      toast("Plant some flowers first, then give them a drink.");
-      return;
-    }
-    plant.watered = true;
-    if (motion)
-      effects.burst(plant.x, world.terrainHeight(plant.x, plant.z) + 0.4, plant.z);
-    state.coins += 5;
-    save();
-    updateUI();
-    audio.chime();
-    toast("A little water, a little sunshine. +5 petals");
-    return;
-  }
-  if (!nearest) {
-    toast("Wander closer to a neighbor, a flower, or a village landmark.");
-    return;
-  }
-  if (nearest.kind === "flower") {
-    const id = nearest.id;
-    const fg = flowerGroups.get(id);
-    if (motion)
-      effects.burst(fg.position.x, fg.position.y + 0.4, fg.position.z);
-    scene.remove(fg);
-    flowerGroups.delete(id);
-    state.gathered.push(id);
-    state.flowers++;
-    if (state.flowers >= 3) complete("flower");
-    save();
-    updateUI();
-    audio.chime();
-    toast(`A wildflower for your pocket. ${state.flowers} gathered.`);
-    nearest = null;
-    return;
-  }
-  if (nearest.kind === "npc") {
-    const n = nearest.data;
-    const phrases = n.dialogue?.length
-      ? n.dialogue
-      : ["A lovely day to be here, isn’t it?"];
-    const names = {
-      mabel: "MABEL · THE FLORIST",
-      finn: "FINN · THE BAKER",
-      elio: "ELIO · THE GARDENER",
-    };
-    const selling = n.id === "finn" && basketCount() > 0;
-    const line = selling
-      ? oneOf([
-          "Fruit from the hill! That’s tomorrow’s tarts sorted. Let me take those off your hands.",
-          "Is that orchard honey? Nothing glazes a bun like it. Here, for your trouble.",
-          "You’ve been up the orchard hill, I can tell. I’ll bake these into something good.",
-        ])
-      : oneOf(phrases);
-    openDialogue(names[n.id] || n.name, [line], () => {
-      if (selling) sellBasket();
-      if (n.id === "mabel") complete("mabel");
-      if (n.id === "finn" && state.seeds < 3) {
-        state.seeds += 3;
-        updateUI();
-        save();
-        toast("Finn tucked three seeds into your pouch.");
-      }
-    });
-    return;
-  }
-  const id = nearest.data.id || nearest.data.type;
-  if (id === "bakery") {
-    enterBakery();
-    return;
-  }
-  if (id === "jetty") {
-    castLine();
-    return;
-  }
-  if (nearest.data.type === "fruit-tree") {
-    shakeTree(nearest.data);
-    return;
-  }
-  if (nearest.data.type === "hive") {
-    collectHoney(nearest.data);
-    return;
-  }
-  const dialogues = {
-    fountain: [
-      "Listen closely. Beneath the splashing water, the whole village seems to hum.",
-      "Someone has left a little wish on the rim: “May we always have enough to share.”",
-      "A copper coin glints at the bottom, worn smooth by years of hopeful thumbs.",
-      "A sparrow perches on the rim, takes a sip, and flies off as if it has somewhere wonderful to be.",
-      "The water catches the sky and hands it back a little brighter.",
-      "Chalked on the stone in a child’s hand: “I wish for a puppy. Or two.”",
-      "You make a small wish. The fountain keeps it, the way good friends keep secrets.",
-      "The spray drifts over your hands, cool as the first morning of autumn.",
-      "Ripples spread from the falling water and fold back into stillness. Your breathing slows to match.",
-      "Mabel says the fountain was here before the village. Everyone else simply gathered round it.",
-      "A pressed daisy and a sun-warmed penny sit side by side on the ledge, both left for luck.",
-      "If you listen long enough, the splashing starts to sound like distant laughter.",
-      "Carved faintly into the basin: “Wish small, wish often.”",
-      "A dragonfly skims the surface, writes something on the water, and erases it again.",
-      "Moss has grown soft around the basin, as if the stones wanted somewhere comfortable to sit.",
-    ],
-    bakery: [
-      "Warm bread, wild honey, and a hint of cinnamon drift through the open window.",
-      "Finn is just outside. He’s always happy to share a story — and a few seeds.",
-    ],
-    home: [
-      "Your little cottage. The kettle is warm, and the afternoon can wait.",
-      "There’s nowhere you need to be. You’re home.",
-    ],
-    mill: [
-      "The old wheel turns with the river, as it has for a hundred quiet summers.",
-    ],
-    garden: [
-      "Good things grow slowly. Choose your seeds, find a little space, and begin.",
-    ],
-    windmill: [
-      "The sails creak round, slow and patient. Somewhere inside, a millstone hums.",
-      "A chalk mark by the door counts the summers: more than anyone can read.",
-      "From the doorstep you can see every chimney in the village, and the millpond shining.",
-      "The stones are warm from the afternoon. Bees drift past on their way to the clover.",
-    ],
-    "hilltop-bench": [
-      "You sit a while. The village looks like a quilt from here, stitched together by paths.",
-      "Smoke curls from the bakery’s chimney. Finn must be baking again.",
-      "Someone has carved two initials into the armrest, and a small heart between them.",
-      "The wind brings the smell of apples and warm grass. There is nowhere else to be.",
-    ],
-  };
-  // Like a neighbor, a landmark answers each interaction with a single line.
-  openDialogue(nearest.data.name.toUpperCase(), [
-    oneOf(
-      dialogues[id] || [
-        "Some places ask you to slow down. This is one of them.",
-      ],
-    ),
-  ]);
-}
+const { blocked, findPath, sampleRows: sampleRouteRows } = createNavigation({
+  walk: WORLD.walk,
+  colliders,
+});
 window.addEventListener("keydown", (e) => {
   if (interior?.active) {
     interior.key(e);
@@ -1359,18 +506,15 @@ window.addEventListener("keydown", (e) => {
   if (k === "escape") {
     releaseLook();
     if (photo) setPhoto(false);
-    if (dialogue) {
-      dialogue = null;
-      $("#dialogue").hidden = true;
-    }
+    if (hud.inDialogue) hud.dismissDialogue();
     return;
   }
-  if (modalOpen()) return;
+  if (hud.modalOpen()) return;
   if (k === "e" || k === " ") {
-    interact();
+    interactions.interact();
     return;
   }
-  if (dialogue) return;
+  if (hud.inDialogue) return;
   if (k === "v") {
     begin();
     setFirstPerson(!firstPerson);
@@ -1402,7 +546,7 @@ window.addEventListener("keydown", (e) => {
   ) {
     begin();
     clickPath.length = 0;
-    pendingInteraction = null;
+    interactions.pending = null;
   }
 });
 window.addEventListener("keyup", (e) => {
@@ -1429,7 +573,7 @@ $$("[data-key]").forEach((b) => {
     b.setPointerCapture(e.pointerId);
     keys.add(b.dataset.key.toLowerCase());
     clickPath.length = 0;
-    pendingInteraction = null;
+    interactions.pending = null;
     begin();
   });
   const release = () => keys.delete(b.dataset.key.toLowerCase());
@@ -1437,7 +581,7 @@ $$("[data-key]").forEach((b) => {
   b.addEventListener("pointercancel", release);
   b.addEventListener("lostpointercapture", release);
 });
-$("#interaction").onclick = interact;
+$("#interaction").onclick = interactions.interact;
 // On phones the quest card folds down to its title row; a tap opens the list.
 const phoneLayout = matchMedia("(max-width: 760px), (max-height: 500px)");
 function updateQuestToggle() {
@@ -1454,142 +598,12 @@ $(".quest-toggle").onclick = () => {
 phoneLayout.addEventListener("change", updateQuestToggle);
 updateQuestToggle();
 // A grid search gives point-and-click movement a route around cottages and across the bridge.
-// Colliders never move, so each cell's walkability is sampled once, on the first click.
-const ROUTE_STEP = 0.65,
-  ROUTE = {
-    step: ROUTE_STEP,
-    minX: walk.minX,
-    minZ: walk.minZ,
-    cols: Math.floor((walk.maxX - walk.minX) / ROUTE_STEP + 1e-6) + 1,
-    rows: Math.floor((walk.maxZ - walk.minZ) / ROUTE_STEP + 1e-6) + 1,
-    radius: 0.34,
-  };
-const routeWalkable = new Uint8Array(ROUTE.cols * ROUTE.rows);
-let routeRows = 0;
-// Samples rows until the deadline, or all of them; true once the grid is done.
-function sampleRouteRows(deadline = Infinity) {
-  const { step, minX, minZ, cols, rows, radius } = ROUTE;
-  while (routeRows < rows) {
-    const z = routeRows++;
-    for (let x = 0; x < cols; x++)
-      if (!blocked(minX + x * step, minZ + z * step, radius))
-        routeWalkable[z * cols + x] = 1;
-    if (performance.now() > deadline) break;
-  }
-  return routeRows === rows;
-}
 // The grid streams in with the open country; a click before then finishes it.
 streamer.add({
   x: 0,
   z: 0,
   step: (deadline) => (sampleRouteRows(deadline) ? [] : null),
 });
-function walkableCells() {
-  sampleRouteRows();
-  return routeWalkable;
-}
-const ROUTE_MOVES = [
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1],
-  [1, 1],
-  [1, -1],
-  [-1, 1],
-  [-1, -1],
-];
-function findPath(start, end) {
-  if (blocked(end.x, end.z, 0.3)) return [];
-  const { step, minX, minZ, cols, rows } = ROUTE,
-    walkable = walkableCells(),
-    toCell = (v, min, count) =>
-      THREE.MathUtils.clamp(Math.round((v - min) / step), 0, count - 1),
-    toWorld = (i) => ({
-      x: minX + (i % cols) * step,
-      z: minZ + Math.floor(i / cols) * step,
-    }),
-    sx = toCell(start.x, minX, cols),
-    sz = toCell(start.z, minZ, rows),
-    ex = toCell(end.x, minX, cols),
-    ez = toCell(end.z, minZ, rows),
-    startCell = sz * cols + sx,
-    cost = new Float32Array(cols * rows).fill(Infinity),
-    came = new Int32Array(cols * rows).fill(-1),
-    closed = new Uint8Array(cols * rows),
-    // Binary min-heap of cells keyed by estimated total cost; stale entries are skipped.
-    heapCell = [],
-    heapF = [];
-  const push = (cell, f) => {
-    let i = heapCell.length;
-    heapCell.push(cell);
-    heapF.push(f);
-    while (i > 0) {
-      const parent = (i - 1) >> 1;
-      if (heapF[parent] <= f) break;
-      heapCell[i] = heapCell[parent];
-      heapF[i] = heapF[parent];
-      i = parent;
-    }
-    heapCell[i] = cell;
-    heapF[i] = f;
-  };
-  const pop = () => {
-    const top = heapCell[0],
-      lastCell = heapCell.pop(),
-      lastF = heapF.pop(),
-      n = heapCell.length;
-    if (n) {
-      let i = 0;
-      for (;;) {
-        let child = 2 * i + 1;
-        if (child >= n) break;
-        if (child + 1 < n && heapF[child + 1] < heapF[child]) child++;
-        if (heapF[child] >= lastF) break;
-        heapCell[i] = heapCell[child];
-        heapF[i] = heapF[child];
-        i = child;
-      }
-      heapCell[i] = lastCell;
-      heapF[i] = lastF;
-    }
-    return top;
-  };
-  cost[startCell] = 0;
-  push(startCell, 0);
-  let found = -1;
-  while (heapCell.length) {
-    const cell = pop();
-    if (closed[cell]) continue;
-    const cx = cell % cols,
-      cz = (cell - cx) / cols;
-    if (Math.abs(cx - ex) + Math.abs(cz - ez) <= 1) {
-      found = cell;
-      break;
-    }
-    closed[cell] = 1;
-    for (const [dx, dz] of ROUTE_MOVES) {
-      const nx = cx + dx,
-        nz = cz + dz,
-        next = nz * cols + nx;
-      if (nx < 0 || nx >= cols || nz < 0 || nz >= rows || closed[next])
-        continue;
-      if (!walkable[next]) continue;
-      if (dx && dz && !(walkable[cz * cols + nx] && walkable[nz * cols + cx]))
-        continue;
-      const g = cost[cell] + Math.hypot(dx, dz);
-      if (g < cost[next]) {
-        cost[next] = g;
-        came[next] = cell;
-        push(next, g + Math.hypot(nx - ex, nz - ez));
-      }
-    }
-  }
-  if (found < 0) return [];
-  const result = [end];
-  for (let cell = found; cell !== startCell && cell >= 0; cell = came[cell])
-    result.push(toWorld(cell));
-  return result.reverse();
-}
 const raycaster = new THREE.Raycaster(),
   mouse = new THREE.Vector2(),
   groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
@@ -1620,36 +634,9 @@ const destination = new THREE.Mesh(
 destination.rotation.x = -Math.PI / 2;
 destination.visible = false;
 scene.add(destination);
-// Taps are generous on touch screens: anything drawn within reach of the finger counts.
-const pickPoint = new THREE.Vector3();
-function pickInteractable(x, y, rect, touch) {
-  const targets = [];
-  for (const n of life.npcs) {
-    const at = n.group?.position ?? n;
-    targets.push({ kind: "npc", key: n, x: at.x, z: at.z, lift: 0.8, reach: 44 });
-  }
-  for (const [id, g] of flowerGroups)
-    targets.push({ kind: "flower", key: id, x: g.position.x, z: g.position.z, lift: 0.2, reach: 34 });
-  for (const i of world.interactables || [])
-    targets.push({ kind: "world", key: i, x: i.x, z: i.z, lift: 1, reach: 48 });
-  let best = null,
-    bestScore = 1;
-  for (const t of targets) {
-    pickPoint.set(t.x, world.terrainHeight(t.x, t.z) + t.lift, t.z).project(camera);
-    if (Math.abs(pickPoint.z) > 1) continue;
-    const sx = ((pickPoint.x + 1) / 2) * rect.width,
-      sy = ((1 - pickPoint.y) / 2) * rect.height,
-      score = Math.hypot(sx - x, sy - y) / (touch ? t.reach : t.reach * 0.55);
-    if (score < bestScore) {
-      bestScore = score;
-      best = t;
-    }
-  }
-  return best;
-}
 canvas.addEventListener("pointerdown", (e) => {
   if (interior?.active || interiorLoading) return;
-  if (e.button !== 0 || dialogue || modalOpen()) return;
+  if (e.button !== 0 || hud.inDialogue || hud.modalOpen()) return;
   // Touch screens have no P or Escape key, so a tap ends photo mode.
   if (photo && e.pointerType !== "mouse") {
     setPhoto(false);
@@ -1657,7 +644,7 @@ canvas.addEventListener("pointerdown", (e) => {
   }
   begin();
   if (firstPerson) {
-    if (document.pointerLockElement === canvas) interact();
+    if (document.pointerLockElement === canvas) interactions.interact();
     else if (!dragging) {
       dragging = { id: e.pointerId, x: e.clientX, y: e.clientY };
       canvas.setPointerCapture(e.pointerId);
@@ -1670,12 +657,13 @@ canvas.addEventListener("pointerdown", (e) => {
     (-(e.clientY - r.top) / r.height) * 2 + 1,
   );
   raycaster.setFromCamera(mouse, camera);
-  pendingInteraction =
+  const target =
     tool === "seeds" || tool === "water"
       ? null
-      : pickInteractable(e.clientX - r.left, e.clientY - r.top, r, e.pointerType !== "mouse");
-  if (pendingInteraction) {
-    const { x, z } = pendingInteraction,
+      : interactions.pick(e.clientX - r.left, e.clientY - r.top, r, e.pointerType !== "mouse", camera);
+  interactions.pending = target;
+  if (target) {
+    const { x, z } = target,
       p = life.player.position;
     // Someone standing behind a counter is reached from the nearest open side.
     const sides = Array.from({ length: 8 }, (_, i) => ({
@@ -1688,7 +676,7 @@ canvas.addEventListener("pointerdown", (e) => {
     for (const goal of [{ x, z }, ...sides]) if ((route = findPath(p, goal)).length) break;
     clickPath.splice(0, clickPath.length, ...route);
     destination.position.set(x, world.terrainHeight(x, z) + 0.03, z);
-    scanNearby();
+    interactions.scan();
     return;
   }
   if (pickGround(raycaster.ray, hit)) {
@@ -1705,7 +693,7 @@ canvas.addEventListener(
   (e) => {
     if (interior?.active || interiorLoading || firstPerson) return;
     e.preventDefault();
-    setZoom(targetViewHeight + e.deltaY * 0.012);
+    overview.setZoom(overview.targetViewHeight + e.deltaY * 0.012);
   },
   { passive: false },
 );
@@ -1713,12 +701,7 @@ function updateFrustum() {
   const w = innerWidth,
     h = innerHeight;
   const aspect = w / h;
-  const height = aspect < 0.9 ? viewHeight * 1.35 : viewHeight;
-  overviewCamera.left = (-height * aspect) / 2;
-  overviewCamera.right = (height * aspect) / 2;
-  overviewCamera.top = height / 2;
-  overviewCamera.bottom = -height / 2;
-  overviewCamera.updateProjectionMatrix();
+  overview.fit(aspect);
   firstPersonCamera.aspect = aspect;
   firstPersonCamera.fov = aspect < 0.8 ? 78 : 66;
   firstPersonCamera.updateProjectionMatrix();
@@ -1733,88 +716,17 @@ window.addEventListener("resize", () => {
   // Moving to a screen with another density changes the quality's ceiling.
   const q = $("#quality").value;
   if (Math.min(devicePixelRatio, QUALITY_PIXEL_RATIO[q]) !== resolution.ceiling)
-    resetResolution(q);
+    scaler.reset(q);
   resize();
 });
 $("#quality").value = startQuality;
 $("#quality").dispatchEvent(new Event("change"));
-function scanNearby() {
-  if (dialogue || photo || modalOpen()) {
-    $("#interaction").hidden = true;
-    return;
-  }
-  const p = life.player.position;
-  let candidates = [];
-  for (const n of life.npcs) {
-    const x = n.group?.position.x ?? n.x,
-      z = n.group?.position.z ?? n.z,
-      d = Math.hypot(p.x - x, p.z - z);
-    if (d < 2.25)
-      candidates.push({
-        kind: "npc",
-        data: n,
-        d,
-        label: `Say hello to ${n.name.split(" ")[0]}`,
-      });
-  }
-  for (const [id, g] of flowerGroups) {
-    const d = Math.hypot(p.x - g.position.x, p.z - g.position.z);
-    if (d < 1.65)
-      candidates.push({ kind: "flower", id, d, label: "Gather wildflowers" });
-  }
-  for (const i of world.interactables || []) {
-    const d = Math.hypot(p.x - i.x, p.z - i.z);
-    if (d < (i.radius || 2.4))
-      candidates.push({
-        kind: "world",
-        data: i,
-        d: d + 0.4,
-        label: i.id === "bakery" ? "Enter The Daily Loaf" : i.name,
-      });
-  }
-  candidates.sort((a, b) => a.d - b.d);
-  if (pendingInteraction) {
-    const target = pendingInteraction,
-      reached = candidates.find(
-        (c) => c.kind === target.kind && (c.kind === "flower" ? c.id : c.data) === target.key,
-      );
-    if (reached) {
-      pendingInteraction = null;
-      clickPath.length = 0;
-      nearest = reached;
-      interact();
-      return;
-    }
-    if (!clickPath.length) pendingInteraction = null;
-  }
-  nearest = candidates[0] || null;
-  const label = fishing.active
-    ? fishing.phase === "bite"
-      ? "Reel in!"
-      : "Wait for a bite…"
-    : tool === "seeds"
-      ? "Plant a little happiness"
-      : tool === "water"
-        ? "Water your flowers"
-        : nearest?.label === "Fishing jetty"
-          ? "Cast a line"
-          : nearest?.label;
-  $("#interaction").hidden = !label || !started;
-  if (label) $("#interaction span").textContent = label;
-  $("#location-name").textContent = regionAt(p.x, p.z).name;
-}
-let snapView = false;
 let elapsed = 0,
   last = performance.now(),
   frame = 0,
   duskMix = 0,
   skyTime = 0;
-const screenRight = new THREE.Vector2(
-    cameraOffset.z,
-    -cameraOffset.x,
-  ).normalize(),
-  screenDown = new THREE.Vector2(cameraOffset.x, cameraOffset.z).normalize(),
-  input = new THREE.Vector2(),
+const input = new THREE.Vector2(),
   duskHemi = new THREE.Color("#8dacef"),
   duskSun = new THREE.Color("#ffa572"),
   duskSky = new THREE.Color("#566782"),
@@ -1834,18 +746,11 @@ function animate(now) {
     interior.update(dt, elapsed, motion);
     return;
   }
-  updateResolution(now, interval);
-  // Take the shortest arc, including when rotation crosses the 0°/360° seam.
-  const yawDelta = THREE.MathUtils.euclideanModulo(targetYaw - overviewYaw + 180, 360) - 180;
-  overviewYaw = motion
-    ? THREE.MathUtils.euclideanModulo(overviewYaw + yawDelta * (1 - Math.exp(-dt * 8)), 360)
-    : targetYaw;
-  const heading = cameraHeading + THREE.MathUtils.degToRad(overviewYaw);
-  screenRight.set(Math.cos(heading), -Math.sin(heading));
-  screenDown.set(Math.sin(heading), Math.cos(heading));
+  scaler.update(now, interval);
+  overview.turn(dt, motion);
   const p = life.player.position;
   input.set(0, 0);
-  if (!dialogue && !modalOpen()) {
+  if (!hud.inDialogue && !hud.modalOpen()) {
     if (firstPerson) {
       yaw +=
         ((keys.has("arrowleft") ? 1 : 0) - (keys.has("arrowright") ? 1 : 0)) *
@@ -1871,9 +776,9 @@ function animate(now) {
       );
     else
       input
-        .copy(screenRight)
+        .copy(overview.screenRight)
         .multiplyScalar(horiz)
-        .addScaledVector(screenDown, vert);
+        .addScaledVector(overview.screenDown, vert);
     if (input.lengthSq() > 0) input.normalize();
     else if (clickPath.length) {
       let dest = clickPath[0];
@@ -1900,63 +805,12 @@ function animate(now) {
   const moving = velocity.length() > 0.08;
   life.setPlayerMotion(velocity.x, velocity.y);
   life.update(dt, elapsed, moving, motion);
-  if (fishing.active) {
-    // Walking away reels the line in.
-    if (Math.hypot(p.x - fishingFrom.x, p.z - fishingFrom.y) > 0.8) fishing.cancel();
-    rodTip
-      .set(Math.sin(life.player.rotation.y) * 0.45, 1.25, Math.cos(life.player.rotation.y) * 0.45)
-      .add(p);
-    const result = fishing.update(dt, elapsed, rodTip);
-    if (result) fishingResult(result);
-  }
+  activities.updateFishing(dt, elapsed);
   if (moving && elapsed - lastStep > 0.33) {
     audio.step();
     lastStep = elapsed;
   }
-  // The view stays composed around the village, then gently accompanies longer
-  // walks, up to the map's edge.
-  const follow = started ? 0.85 : 0.48,
-    bounds = WORLD.camera;
-  // On the hill it rises with the ground under the player, who stays framed.
-  target.set(
-    THREE.MathUtils.clamp(p.x * follow, bounds.minX, bounds.maxX),
-    terrainHeight(p.x, p.z),
-    THREE.MathUtils.clamp(1.5 + (p.z - 5) * follow, bounds.minZ, bounds.maxZ),
-  );
-  if (Math.abs(viewHeight - targetViewHeight) > 0.01) {
-    viewHeight = THREE.MathUtils.lerp(
-      viewHeight,
-      targetViewHeight,
-      1 - Math.exp(-dt * 2.4),
-    );
-    updateFrustum();
-  }
-  // A jump (moveTo) takes the view straight there.
-  if (snapView) cameraTarget.copy(target);
-  else cameraTarget.lerp(target, 1 - Math.exp(-dt * 1.8));
-  snapView = false;
-  tilt = motion
-    ? THREE.MathUtils.lerp(tilt, targetTilt, 1 - Math.exp(-dt * 8))
-    : targetTilt;
-  // Pitch around the view's horizontal axis, preserving heading and distance.
-  const overviewPitch = THREE.MathUtils.degToRad(tilt),
-    groundDistance = cameraDistance * Math.cos(overviewPitch);
-  cameraOffset.set(
-    groundDistance * Math.sin(heading),
-    cameraDistance * Math.sin(overviewPitch),
-    groundDistance * Math.cos(heading),
-  );
-  if (motion) pan.lerp(targetPan, 1 - Math.exp(-dt * 8));
-  else pan.copy(targetPan);
-  // Keep pan directions aligned with the screen on the village's ground plane.
-  panOffset.set(
-    screenRight.x * pan.x + screenDown.x * pan.y,
-    0,
-    screenRight.y * pan.x + screenDown.y * pan.y,
-  );
-  viewTarget.copy(cameraTarget).add(panOffset);
-  overviewCamera.position.copy(viewTarget).add(cameraOffset);
-  overviewCamera.lookAt(viewTarget);
+  overview.follow(dt, motion, p, started);
   firstPersonCamera.position.copy(p).y += 1.65;
   firstPersonCamera.rotation.set(pitch, yaw, 0, "YXZ");
   // Chunks animate while the view or the sun's shadow can see them.
@@ -1979,14 +833,7 @@ function animate(now) {
     destination.scale.setScalar(1 + Math.sin(elapsed * 4) * 0.12);
     destination.material.opacity = 0.5 + Math.sin(elapsed * 3) * 0.2;
   }
-  for (const plant of state.plants) {
-    const g = plantedGroups.get(plant.id);
-    if (!g) continue;
-    const targetScale = plant.watered ? 1.35 : 0.7;
-    g.scale.setScalar(
-      THREE.MathUtils.lerp(g.scale.x, targetScale, 1 - Math.exp(-dt * 1.5)),
-    );
-  }
+  activities.grow(dt);
   duskMix = THREE.MathUtils.lerp(
     duskMix,
     day === "dusk" ? 1 : 0,
@@ -2001,15 +848,15 @@ function animate(now) {
   if (motion) skyTime += dt;
   sky.update(duskMix, skyTime, scene.fog.color);
   world.placeLanterns?.(
-    firstPerson ? p.x : viewTarget.x,
-    firstPerson ? p.z : viewTarget.z,
+    firstPerson ? p.x : overview.viewTarget.x,
+    firstPerson ? p.z : overview.viewTarget.z,
   );
   for (const light of world.lanterns || [])
     light.intensity = THREE.MathUtils.lerp(0.1, 18.0, duskMix);
   renderer.toneMappingExposure = THREE.MathUtils.lerp(1.05, 0.95, duskMix);
   effects.update(dt, motion);
-  if (frame % 8 === 0) scanNearby();
-  if (frame % 120 === 0) updateOrchard();
+  if (frame % 8 === 0) interactions.scan();
+  if (frame % 120 === 0) activities.updateOrchard();
   for (const material of glowMaterials)
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
   playerVisibility.update(camera, !photo && !firstPerson);
@@ -2017,7 +864,7 @@ function animate(now) {
   if (firstPerson) world.setDetailFocus(p.x, p.z);
   else world.setDetailFocus();
   streamer.update(p.x, p.z, camera);
-  fitShadow();
+  sunShadow.fit({ firstPerson, yaw, targetYaw: overview.targetYaw });
   scene.updateMatrixWorld();
   renderer.info.reset();
   // RenderPass draws into readBuffer; water resolves refraction from that pass.
@@ -2036,194 +883,61 @@ function animate(now) {
     openCountryRequested = true;
     for (const region of regions)
       region.stream?.(THREE, world).then(({ jobs, ...loaded }) => {
-        regionLoaded[region.id]?.(loaded);
+        activities.regionLoaded[region.id]?.(loaded);
         streamer.add(...jobs);
       });
   }
 }
 updateUI();
 requestAnimationFrame(animate);
-// Applies the benchmark overrides, or the defaults for anything not overridden.
-function applyTune() {
-  const q = $("#quality").value;
-  const shadowUpdate = overrides.shadowUpdate ?? true;
-  if (!shadowUpdate && sun.shadow.autoUpdate) sun.shadow.needsUpdate = true;
-  sun.shadow.autoUpdate = shadowUpdate;
-  bloom.enabled = overrides.bloom ?? q !== "performance";
-  const samples = overrides.samples ?? 4;
-  for (const target of [composer.renderTarget1, composer.renderTarget2])
-    if (target.samples !== samples) {
-      target.samples = samples;
-      target.dispose();
-    }
-  const foliage = overrides.foliage ?? true;
-  world.trees.setFoliageShown(foliage);
-  world.bushes.group.visible = foliage;
-  world.showFields(overrides.fields ?? true);
-  world.trees.setDetail(leafDetail());
-  showSky();
-  // The scaler stands aside while the ratio is forced; clearing it resumes
-  // from the quality's cap.
-  if (!interior?.active) resetResolution(q);
-  resize();
-}
-window.__willowmere = {
-  tune(settings) {
-    for (const [key, value] of Object.entries(settings))
-      if (value == null) delete overrides[key];
-      else overrides[key] = value;
-    applyTune();
-    return this.getDiagnostics().render;
-  },
-  getState: () => structuredClone(state),
-  getPlayer: () => ({ x: life.player.position.x, z: life.player.position.z }),
-  // Places the player (for benchmarks and tests that need a far viewpoint),
-  // optionally turned to a heading (radians, 0 faces +z).
-  moveTo(x, z, heading) {
-    life.player.position.set(x, world.getGroundHeight(x, z), z);
-    if (heading !== undefined) {
-      life.player.rotation.y = heading;
-      yaw = heading + Math.PI;
-    }
-    velocity.set(0, 0);
-    clickPath.length = 0;
-    snapView = true;
-  },
-  getFishing: () => ({ phase: fishing.phase, fish: { ...state.fish } }),
-  getTrees: () =>
-    world.trees.levels().map((tree) => ({
-      ...tree,
-      distance: firstPersonCamera.position.distanceTo(new THREE.Vector3(...tree.center)),
-    })),
-  getOrchard: () => ({
-    ready: !!orchard,
-    basket: { ...state.basket },
-    harvested: { ...state.harvested },
-    shaken: Object.keys(state.orchard),
-  }),
-  getView: () => ({
-    mode: firstPerson ? "first-person" : "overview",
-    camera: camera.type,
-    position: camera.position.toArray(),
-    yaw,
-    pitch,
-    playerVisible: life.player.visible,
-    pointerLocked: document.pointerLockElement === canvas,
-  }),
-  getInterior: () => interior?.diagnostics() ?? { active: false },
-  tuneInterior: (settings) => interior?.tune(settings),
-  getWater: () => world.water.diagnostics(),
-  getChunks: () => {
-    const animating = new Set(world.animatedChunks()),
-      sphere = new THREE.Sphere();
-    return [...world.chunks.values()].map((chunk) => ({
-      key: chunk.key,
-      bounds: [chunk.bounds.min.toArray(), chunk.bounds.max.toArray()],
-      animations: chunk.animations.length,
-      animating: animating.has(chunk.key),
-      glow: chunk.glow.size,
-      meshes: chunk.meshes.map((mesh) => {
-        sphere
-          .copy(mesh.isInstancedMesh ? mesh.boundingSphere : mesh.geometry.boundingSphere)
-          .applyMatrix4(mesh.matrixWorld);
-        return {
-          name: mesh.name,
-          visible: mesh.visible,
-          instances: mesh.isInstancedMesh ? mesh.count : 0,
-          center: sphere.center.toArray(),
-          radius: sphere.radius,
-        };
-      }),
-    }));
-  },
-  getGlowMaterials: () => glowMaterials.size,
-  getStreaming: () => ({
-    pending: streamer.pending,
-    finished: streamer.finished,
-  }),
-  getDiagnostics: () => ({
-    objects: scene.children.length,
-    drawCalls: renderer.info.render.calls,
-    triangles: renderer.info.render.triangles,
-    geometries: renderer.info.memory.geometries,
-    textures: renderer.info.memory.textures,
-    colliders: colliders.length,
-    flowers: flowerGroups.size,
-    programs: renderer.info.programs.length,
-    lanterns: {
-      pool: world.lanterns.length,
-      lamps: world.lamps.length,
-      pointLights: scene.children.filter((o) => o.isPointLight).length,
-      lit: world.lanterns.map((light) => light.position.toArray()),
-      lampPositions: world.lamps.map((lamp) => lamp.toArray()),
-    },
-    resolution: {
-      adaptive: resolution.adaptive,
-      pixelRatio: renderer.getPixelRatio(),
-      ceiling: resolution.ceiling,
-      floor: resolution.floor,
-      p95: resolution.p95,
-      mean: resolution.mean,
-      upWindows: resolution.upWindows,
-      drawingBuffer: [canvas.width, canvas.height],
-    },
-    shadow: {
-      mapSize: sun.shadow.mapSize.x,
-      // The village's light-space extent, which shadow sizes are fractions of.
-      reference: villageShadow.getSize(new THREE.Vector2()).toArray(),
-      bounds: [
-        shadowCamera.left,
-        shadowCamera.right,
-        shadowCamera.bottom,
-        shadowCamera.top,
-      ],
-    },
-    fog: [scene.fog.near, scene.fog.far],
-    far: camera.far,
-    render: {
-      pixelRatio: renderer.getPixelRatio(),
-      width: composer.renderTarget1.width,
-      height: composer.renderTarget1.height,
-      samples: composer.renderTarget1.samples,
-      bloom: bloom.enabled,
-      shadowUpdate: sun.shadow.autoUpdate,
-      water: overrides.water ?? true,
-      foliage: world.bushes.group.visible,
-      fields: overrides.fields ?? true,
-      sky: sky.mesh.visible,
-      leafDetail: overrides.leafDetail ?? "auto",
-      leaves: world.trees.foliage.reduce((n, mesh) => n + mesh.count, 0),
-      overrides: { ...overrides },
-    },
-    position: life.player.position.toArray(),
-    camera: {
-      tilt,
-      targetTilt,
-      yaw: overviewYaw,
-      targetYaw,
-      viewHeight,
-      targetViewHeight,
-      offset: cameraOffset.toArray(),
-      pan: pan.toArray(),
-      targetPan: targetPan.toArray(),
-    },
-  }),
-  setAdaptiveResolution: (on) => {
-    resolution.adaptive = on;
-    resetResolution($("#quality").value);
-    resize();
-  },
+window.__willowmere = createDebugApi({
+  scene,
+  renderer,
+  composer,
+  bloom,
+  sun,
+  sky,
+  world,
+  life,
+  streamer,
+  fishing,
+  activities,
+  overview,
+  sunShadow,
+  scaler,
+  overrides,
+  state,
+  colliders,
+  glowMaterials,
+  firstPersonCamera,
+  canvas,
   blocked,
   findPath,
-  // The pixel where a click lands on (x, z): clicks meet bridge decks and water.
-  project: (x, z) => {
-    const y = world.surfaceHeight(x, z),
-      v = new THREE.Vector3(x, y, z).project(camera);
-    return {
-      x: (v.x * 0.5 + 0.5) * innerWidth,
-      y: (-v.y * 0.5 + 0.5) * innerHeight,
-    };
+  leafDetail,
+  showSky,
+  resize,
+  quality: () => $("#quality").value,
+  get camera() {
+    return camera;
   },
-};
+  get firstPerson() {
+    return firstPerson;
+  },
+  get yaw() {
+    return yaw;
+  },
+  get pitch() {
+    return pitch;
+  },
+  get interior() {
+    return interior;
+  },
+  stopAfterJump(heading) {
+    if (heading !== undefined) yaw = heading + Math.PI;
+    velocity.set(0, 0);
+    clickPath.length = 0;
+    overview.snap();
+  },
+});
 if (new URLSearchParams(location.search).get("interior") === "bakery")
   enterBakery();

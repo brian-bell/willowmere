@@ -10,7 +10,7 @@ function recordErrors(page) {
   return errors;
 }
 
-test("channel boundaries, obstacles and basin walls constrain the fluid", () => {
+test("channel boundaries, obstacles and basin walls constrain the fluid", { tag: "@logic" }, () => {
   const river = {
     size: [4.2, 42],
     depth: 0.82,

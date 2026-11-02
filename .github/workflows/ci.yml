@@ -1,0 +1,23 @@
+name: CI
+
+# Cloudflare deploys every push to main on its own; this check reports whether
+# that revision builds and passes the fast tests and the browser smoke test.
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:logic
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --grep @smoke

@@ -23,13 +23,14 @@
 //                 the soil's deepest layer runs under it.
 //   deck(x, z)    walking height on its bridges and jetties, else null.
 //   water(x, z)   its water's surface, where clicks land, else null.
-//   colliders()   colliders in the shapes main.js's blocked() understands.
+//   colliders()   colliders in the shapes collides() (src/game/navigation.js) understands.
 //   grass(x, z)   false where meadow grass may not grow (water, paths,
 //                 footings). Called anywhere: true outside the region.
 //   planting(x, z) where flowers may be planted; `grass` when missing.
 //   stream(T, world)  loads the builder with import() once the village is on
 //                 screen and resolves to { jobs, ...api } for the streamer;
-//                 main.js hands the rest to the region's game logic.
+//                 main.js hands the rest to the region's game logic
+//                 (activities.regionLoaded).
 import { millpondRegion } from "./millpond-layout.js";
 import { orchardRegion } from "./orchard-layout.js";
 

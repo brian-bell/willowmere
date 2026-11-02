@@ -141,7 +141,7 @@ export const FRUIT_TREES = [
 
 /**
  * Colliders for the hill's trees, hives, windmill and bench, in the shapes
- * main.js's blocked() understands.
+ * collides() (src/game/navigation.js) understands.
  */
 export function orchardColliders() {
   const { windmill: w, bench: b } = O;

@@ -11,7 +11,7 @@ import {
 } from "../src/world-layout.js";
 import { regions } from "../src/regions/index.js";
 
-test("the map is four times the village, with the village in the middle", () => {
+test("the map is four times the village, with the village in the middle", { tag: "@logic" }, () => {
   expect(WORLD.village).toEqual({ minX: -24, maxX: 24, minZ: -21, maxZ: 21 });
   expect(WORLD.ground).toEqual({ minX: -48, maxX: 48, minZ: -42, maxZ: 42 });
   const area = (b) => (b.maxX - b.minX) * (b.maxZ - b.minZ);
@@ -38,7 +38,7 @@ test("the map is four times the village, with the village in the middle", () => 
   expect(inVillage(24.1, 0)).toBe(false);
 });
 
-test("regions name the same village places as always, and the fields beyond", () => {
+test("regions name the same village places as always, and the fields beyond", { tag: "@logic" }, () => {
   const legacy = (x, z) =>
     x > 10
       ? "The willow brook"
@@ -62,7 +62,7 @@ test("regions name the same village places as always, and the fields beyond", ()
     expect(regionAt(x, z).name).toBe("The open fields");
 });
 
-test("chunk seeds are independent of build order", () => {
+test("chunk seeds are independent of build order", { tag: "@logic" }, () => {
   const sample = (cx, cz) => {
     const rand = chunkRandom(cx, cz);
     return [rand(), rand(), rand()];
@@ -79,7 +79,7 @@ test("chunk seeds are independent of build order", () => {
   }
 });
 
-test("terrain is flat in the village and rises only at the millpond and orchard hill", () => {
+test("terrain is flat in the village and rises only at the millpond and orchard hill", { tag: "@logic" }, () => {
   for (const [x, z] of [
     [0, 0],
     [-24, -21],
@@ -108,7 +108,7 @@ test("terrain is flat in the village and rises only at the millpond and orchard 
   expect(regionAt(12, -20.5).name).toBe("The willow brook");
 });
 
-test("the region registry's ground boxes fit the open country's cut-outs", () => {
+test("the region registry's ground boxes fit the open country's cut-outs", { tag: "@logic" }, () => {
   expect(new Set(regions.map((r) => r.id)).size).toBe(regions.length);
   // The open fields come last and catch everything else.
   expect(regions.at(-1)).toMatchObject({ id: "fields", area: {} });

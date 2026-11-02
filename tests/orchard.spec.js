@@ -10,18 +10,9 @@ import {
   pathDistance,
 } from "../src/regions/orchard-layout.js";
 import { WORLD, inVillage, terrainHeight } from "../src/world-layout.js";
+import { collides as blockedBy } from "../src/game/navigation.js";
 
-// The same test main.js's blocked() makes for circles and boxes.
-function blockedBy(colliders, x, z, r = 0.27) {
-  return colliders.some((c) => {
-    if (c.r !== undefined) return Math.hypot(x - c.x, z - c.z) < r + c.r;
-    const dx = Math.max(Math.abs(x - c.x) - c.w / 2, 0),
-      dz = Math.max(Math.abs(z - c.z) - c.d / 2, 0);
-    return dx * dx + dz * dz < r * r;
-  });
-}
-
-test("the hill rises from the lawn and falls back to it before the village and the rim", () => {
+test("the hill rises from the lawn and falls back to it before the village and the rim", { tag: "@logic" }, () => {
   const { ground, summit, height, lawn } = ORCHARD;
   // Around the hill's ground mesh the slope has reached the lawn, so it meets
   // the fields' flat grass and the village without a step.
@@ -49,7 +40,7 @@ test("the hill rises from the lawn and falls back to it before the village and t
   expect(summit.z).toBeGreaterThan(WORLD.walk.minZ + 4);
 });
 
-test("the path climbs from the village to the windmill, clear of trees and footings", () => {
+test("the path climbs from the village to the windmill, clear of trees and footings", { tag: "@logic" }, () => {
   const colliders = orchardColliders();
   // It starts at the village's edge and ends at the windmill's door.
   expect(inVillage(PATH[0][0], PATH[0][1])).toBe(true);
