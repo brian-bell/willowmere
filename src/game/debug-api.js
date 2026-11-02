@@ -74,6 +74,13 @@ export function createDebugApi(g) {
       pipHat: g.life.player.parent?.getObjectByName("Pip's straw hat")?.visible ?? false,
       lantern: !!g.scene.getObjectByName("Cottage lantern"),
     }),
+    getMarsh: () => ({
+      birds: { ...g.state.birds },
+      watched: g.state.watched,
+      coins: g.state.coins,
+      wren: g.life.npcs.some((n) => n.id === "wren"),
+      heron: !!g.scene.getObjectByName("Marsh heron"),
+    }),
     getView: () => ({
       mode: g.firstPerson ? "first-person" : "overview",
       camera: g.camera.type,

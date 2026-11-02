@@ -29,6 +29,24 @@ function seedTexture() {
 // Curved ribbons and rounded seed heads share a breeze, including their shadows.
 // Short stretches of each bank are batched separately for reflection culling.
 export function createReeds(placements, bedHeight) {
+  const reeds = createReedBuilder(bedHeight);
+  for (const placement of placements) reeds.add(placement);
+  reeds.merge();
+  return { group: reeds.group, update: reeds.update };
+}
+
+/**
+ * Reeds built a plant at a time, for a builder that streams them in slices:
+ * `add(placement)` grows one plant, `merge(deadline)` batches what was added
+ * into the group's meshes, a batch at a time until performance.now() passes
+ * `deadline`, and returns true once every batch is merged. `detail` sets the
+ * segments along each blade, around and along each stem, and round each
+ * seed head: the village's reeds, seen close, keep the defaults.
+ */
+export function createReedBuilder(
+  bedHeight,
+  { blade = 16, stem = [9, 6], head = 10 } = {},
+) {
   const group = new T.Group();
   group.name = "Riverbank reeds";
   group.userData.dynamic = true;
@@ -77,7 +95,7 @@ export function createReeds(placements, bedHeight) {
     rootColor = new T.Color("#625b35"),
     up = new T.Vector3(0, 1, 0);
 
-  for (const { x, z, height } of placements) {
+  function add({ x, z, height }) {
     const rand = random(
         (Math.round((x + 30) * 7381) ^ Math.round((z + 30) * 19391)) >>> 0,
       ),
@@ -109,12 +127,12 @@ export function createReeds(placements, bedHeight) {
       parts[head ? 1 : 0].push(geometry);
     }
 
-    const stem = new T.QuadraticBezierCurve3(
+    const stalk = new T.QuadraticBezierCurve3(
       root,
       root.clone().add(new T.Vector3(0, length * 0.57, 0)),
       new T.Vector3(x + Math.cos(angle) * lean, crown, z + Math.sin(angle) * lean),
     );
-    const stemGeometry = new T.TubeGeometry(stem, 9, 0.014, 6, false);
+    const stemGeometry = new T.TubeGeometry(stalk, stem[0], 0.014, stem[1], false);
     finish(stemGeometry, (i, h) =>
       rootColor.clone().lerp(leafColor, Math.min(1, h * 2)),
     );
@@ -135,7 +153,7 @@ export function createReeds(placements, bedHeight) {
         uvs = [],
         indices = [],
         flutter = [],
-        segments = 16;
+        segments = blade;
       for (let segment = 0; segment <= segments; segment++) {
         const t = segment / segments,
           spread = reach * Math.pow(t, 1.7),
@@ -179,11 +197,11 @@ export function createReeds(placements, bedHeight) {
     }
 
     // Young shoots break up the rhythm of the mature velvet-brown cattails.
-    if (rand() < 0.2) continue;
+    if (rand() < 0.2) return;
     const headLength = range(0.22, 0.34),
       radius = range(0.044, 0.06),
-      headBase = stem.getPoint(1),
-      tangent = stem.getTangent(1),
+      headBase = stalk.getPoint(1),
+      tangent = stalk.getTangent(1),
       rotation = new T.Quaternion().setFromUnitVectors(up, tangent),
       profile = [
         [0, 0],
@@ -195,10 +213,10 @@ export function createReeds(placements, bedHeight) {
         [0.52, 0.985],
         [0, 1],
       ].map(([r, y]) => new T.Vector2(r * radius, y * headLength)),
-      head = new T.LatheGeometry(profile, 10);
-    head.applyQuaternion(rotation).translate(...headBase.toArray());
+      seedHead = new T.LatheGeometry(profile, head);
+    seedHead.applyQuaternion(rotation).translate(...headBase.toArray());
     const headColor = new T.Color(rand() < 0.3 ? "#88623d" : "#6e4b30");
-    finish(head, (i) => headColor.clone().multiplyScalar(range(0.9, 1.13)), true);
+    finish(seedHead, (i) => headColor.clone().multiplyScalar(range(0.9, 1.13)), true);
 
     const tipLength = range(0.055, 0.11),
       tip = new T.ConeGeometry(0.009, tipLength, 5);
@@ -207,7 +225,17 @@ export function createReeds(placements, bedHeight) {
     finish(tip, () => straw);
   }
 
-  for (const [key, parts] of batches) {
+  const merged = new Set();
+  function merge(deadline = Infinity) {
+    for (const [key, parts] of batches) {
+      if (merged.has(key)) continue;
+      if (performance.now() > deadline) return false;
+      merged.add(key);
+      mergeBatch(key, parts);
+    }
+    return true;
+  }
+  function mergeBatch(key, parts) {
     for (let i = 0; i < parts.length; i++) {
       if (!parts[i].length) continue;
       const geometry = mergeGeometries(parts[i]);
@@ -228,6 +256,8 @@ export function createReeds(placements, bedHeight) {
 
   return {
     group,
+    add,
+    merge,
     update(elapsed) {
       time.value = elapsed;
     },

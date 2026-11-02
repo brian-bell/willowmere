@@ -1,6 +1,6 @@
 # Willowmere water
 
-Every outdoor pool is registered with `createWaterSystem` in `src/water.js`: the river through the village, the lower wishing-fountain basin, its upper basin, and, once the millpond streams in north of the village (`src/regions/millpond.js`), the millpond and the short stretch of brook between its weir and the village (`brook-north`). They share one solver and optical shader, with separate dimensions, depth, absorption, current, wave amplitude, and boundaries. Fountain jets are owned by the same system and inject impacts into the basin they land in.
+Every outdoor pool is registered with `createWaterSystem` in `src/water.js`: the river through the village, the lower wishing-fountain basin, its upper basin, and, once the millpond streams in north of the village (`src/regions/millpond.js`), the millpond and the short stretch of brook between its weir and the village (`brook-north`), and, once the marsh streams in south of the village (`src/regions/marsh.js`), one body for the brook's stretch below the village and the reedy mere it opens into (`marsh`). They share one solver and optical shader, with separate dimensions, depth, absorption, current, wave amplitude, and boundaries. Fountain jets are owned by the same system and inject impacts into the basin they land in.
 
 Open `/water-study.html` for a close view of the actual village water. Choose the river, fountain, millrace, bank, or village view; orbit and zoom; compare afternoon and blue hour; pause; and click the water to inject ripples. This page is included in the production build.
 
@@ -25,13 +25,13 @@ The river has a recessed bed, sloping banks, submerged pebbles, and partially su
 
 ## Quality and lifecycle
 
-| Setting     | River grid | Each basin grid | Millpond grid | Brook above the village | Reflection cap | Capture refraction scale | Reflection interval |
-| ----------- | ---------- | --------------- | ------------- | ----------------------- | -------------- | ------------------------ | ------------------- |
-| High        | 64 × 640   | 96 × 96         | 112 × 78      | 64 × 48                 | 768²           | 100%                     | at least 1/24 s     |
-| Balanced    | 48 × 480   | 64 × 64         | 84 × 59       | 48 × 36                 | 512²           | 75%                      | at least 1/15 s     |
-| Performance | 24 × 240   | 32 × 32         | 42 × 29       | 24 × 18                 | 256²           | 50%                      | at least 1/8 s      |
+| Setting     | River grid | Each basin grid | Millpond grid | Brook above the village | Marsh grid | Reflection cap | Capture refraction scale | Reflection interval |
+| ----------- | ---------- | --------------- | ------------- | ----------------------- | ---------- | -------------- | ------------------------ | ------------------- |
+| High        | 64 × 640   | 96 × 96         | 112 × 78      | 64 × 48                 | 120 × 90   | 768²           | 100%                     | at least 1/24 s     |
+| Balanced    | 48 × 480   | 64 × 64         | 84 × 59       | 48 × 36                 | 90 × 68    | 512²           | 75%                      | at least 1/15 s     |
+| Performance | 24 × 240   | 32 × 32         | 42 × 29       | 24 × 18                 | 45 × 34    | 256²           | 50%                      | at least 1/8 s      |
 
-The millpond's reflection interval is three times the table's.
+The millpond's reflection interval is three times the table's, the marsh's twice. The marsh's body is one water from the village's south edge to the mere's far shore: it meets the village's brook under the marsh footbridge at the same level and shoreline, with a gentler current (0.16 m/s against the brook's 0.44), since the mere drains slowly into the reeds.
 
 The refraction scale applies only to the separate scene capture used by the study. Refraction resolved from the village's main pass always matches that pass's resolution, because a multisample resolve cannot scale; its cost is a copy, not a render.
 

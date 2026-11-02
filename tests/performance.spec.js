@@ -240,3 +240,69 @@ test("the market lane keeps the same budget as the millpond", async ({ page }) =
   expect(Math.max(...far.map((s) => s.triangles))).toBeLessThan(2.5e6);
   expect(errors).toEqual([]);
 });
+
+test("the willow marsh keeps the same budget as the millpond", async ({ page }) => {
+  test.setTimeout(900000);
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "willowmere.save.v1",
+      JSON.stringify({
+        started: true,
+        quests: { mabel: false, flower: false, plant: false },
+        plants: [],
+      }),
+    );
+  });
+  await page.goto("/?resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
+  // The benchmark's viewpoint: the boardwalk at the default height, with the
+  // mere, its reeds, the willows and the hide in view, then zoomed out to the
+  // cap, where the village's south side joins it. Standing there first
+  // streams the marsh in before the rest of the map.
+  await page.evaluate(() => window.__willowmere.moveTo(7.8, 31.2, 1.2));
+  await page.waitForFunction(
+    () => {
+      const names = new Set(
+        window.__willowmere.getChunks().flatMap((chunk) => chunk.meshes.map((mesh) => mesh.name)),
+      );
+      return [
+        "Marsh ground, banks and bed",
+        "Marsh footbridge and boardwalk",
+        "Marsh hide and bench",
+        "Willows (west): leaves",
+        "Willows (east): leaves",
+        "Marsh lily pads",
+        "Marsh heron",
+        "Marsh fireflies",
+      ].every((name) => names.has(name));
+    },
+    null,
+    { timeout: 600000, polling: 2000 },
+  );
+  const sample = () =>
+    page.evaluate(async () => {
+      const values = [];
+      for (let i = 0; i < 4; i++) await new Promise(requestAnimationFrame);
+      for (let i = 0; i < 6; i++) {
+        await new Promise(requestAnimationFrame);
+        values.push(window.__willowmere.getDiagnostics());
+      }
+      return values;
+    });
+  const samples = await sample();
+  expect(Math.max(...samples.map((s) => s.drawCalls))).toBeLessThan(1000);
+  expect(Math.max(...samples.map((s) => s.triangles))).toBeLessThan(2.5e6);
+  await page.evaluate(() => {
+    for (let i = 0; i < 4; i++) document.querySelector("#zoom-out").click();
+  });
+  const far = await sample();
+  expect(Math.max(...far.map((s) => s.drawCalls))).toBeLessThan(1000);
+  expect(Math.max(...far.map((s) => s.triangles))).toBeLessThan(2.5e6);
+  expect(errors).toEqual([]);
+});

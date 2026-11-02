@@ -17,6 +17,7 @@ import {
 } from "./regions/index.js";
 import { MILLPOND } from "./regions/millpond-layout.js";
 import { MARKET } from "./regions/market-layout.js";
+import { MARSH } from "./regions/marsh-layout.js";
 
 /**
  * Boxes that tile `outer` outside every box in `holes`: one column between
@@ -228,8 +229,8 @@ export function createWorld(T, scene) {
   // Ground slabs, roads and the riverbed only receive shadows. As casters they would
   // fill the whole shadow map without darkening anything the camera can see.
   // The village keeps its original island slabs; the open country around it
-  // adds the same layers out to the map's rim. The brook's channel stops at
-  // the village's edge until its upstream and downstream reaches arrive.
+  // adds the same layers out to the map's rim. The brook's channel runs on
+  // past the village's edges into the millpond's ground and the marsh's.
   const { ground, village } = WORLD,
     groundDepth = village.maxZ - village.minZ,
     groundZ = (village.minZ + village.maxZ) / 2;
@@ -296,11 +297,11 @@ export function createWorld(T, scene) {
   for (const { minX, maxX, minZ, maxZ } of deepBeds)
     fieldSoil.push(slab(minX, maxX, minZ, maxZ, -1.18, 0.34));
   // The grass is one surface with the village and each region's ground cut
-  // out, so no seams cross it. It meets the village's grass at its inset edge,
-  // and the brook's channel at the village's true south edge, where the water
-  // and bed end (north, the brook runs on into the millpond's ground). Below
-  // it, thin grass walls show at the map's rim, behind a 0.2 m soil lip, and
-  // at the channel's south end.
+  // out, so no seams cross it. It meets the village's grass at its inset edge;
+  // the brook runs on into the millpond's ground north and the marsh's south
+  // (without the marsh, the grass meets its channel at the village's true
+  // south edge, where a thin wall closes it). Below it, thin grass walls show
+  // at the map's rim, behind a 0.2 m soil lip.
   const lip = 0.2,
     outerGrass = inset(ground, lip),
     villageGrass = inset(village, lip),
@@ -314,14 +315,18 @@ export function createWorld(T, scene) {
     { minX, maxX, minZ, maxZ } = villageGrass;
   // The village's hole runs round its grass edge, with a notch for each
   // region's ground that meets an edge (the orchard hill's and the
-  // millpond's, north) and for the brook's channel, south. A region's ground
+  // millpond's, north; the marsh's, south). A region's ground
   // apart from the village is a hole of its own.
   const meets = (a, b) => Math.abs(a - b) < 1e-6,
     north = regionGrounds.filter((g) => meets(g.maxZ, minZ)).sort((a, b) => a.minX - b.minX),
     east = regionGrounds.filter((g) => meets(g.minX, maxX)).sort((a, b) => a.minZ - b.minZ),
+    southGrounds = regionGrounds.filter((g) => meets(g.minZ, maxZ)),
+    // The brook's channel, unless a region's ground (the marsh's) carries
+    // the brook on south of the village.
+    channelOpen = !southGrounds.some((g) => g.minX <= 9.7 && g.maxX >= 14.3),
     south = [
-      ...regionGrounds.filter((g) => meets(g.minZ, maxZ)),
-      { minX: 9.7, maxX: 14.3, maxZ: village.maxZ },
+      ...southGrounds,
+      ...(channelOpen ? [{ minX: 9.7, maxX: 14.3, maxZ: village.maxZ }] : []),
     ].sort((a, b) => b.maxX - a.maxX),
     west = regionGrounds.filter((g) => meets(g.maxX, minX)).sort((a, b) => b.maxZ - a.maxZ),
     notched = new Set([...north, ...east, ...south, ...west]);
@@ -379,7 +384,7 @@ export function createWorld(T, scene) {
   wall(g.minX, g.maxX, g.maxZ - t, g.maxZ);
   wall(g.minX, g.minX + t, g.minZ + t, g.maxZ - t);
   wall(g.maxX - t, g.maxX, g.minZ + t, g.maxZ - t);
-  wall(9.7, 14.3, village.maxZ, village.maxZ + t);
+  if (channelOpen) wall(9.7, 14.3, village.maxZ, village.maxZ + t);
   const fieldGround = [
     [fieldGrass, grass, "Open country grass"],
     [fieldSoil, soil, "Open country soil"],
@@ -590,24 +595,30 @@ export function createWorld(T, scene) {
   // the gaps between its pieces: the village's bridge, and south of it the
   // market lane's footbridge, whose rails are the market's own colliders.
   // North, it runs on under the millpond's footbridge, whose rail starts the
-  // millpond's own colliders.
+  // millpond's own colliders; south, under the marsh's footbridge, likewise.
   const footbridgeSouth = MILLPOND.footbridge.maxZ,
     { minZ: crossingNorth, maxZ: crossingSouth } = MARKET.bridge,
     brookPiece = (north, south) => ({ x: 12, z: (north + south) / 2, w: 4.3, d: south - north });
-  const crossing = [brookPiece(4.75, crossingNorth), brookPiece(crossingSouth, 21.25)],
+  const crossing = [
+      brookPiece(4.75, crossingNorth),
+      brookPiece(crossingSouth, MARSH.footbridge.minZ),
+    ],
     lane = regions.find((r) => r.id === "market").colliders(),
-    laneSet = new Set([...crossing, ...lane]);
+    marsh = regions.find((r) => r.id === "marsh").colliders(),
+    laterSet = new Set([...crossing, ...lane, ...marsh]);
   colliders.push(
     brookPiece(footbridgeSouth, 1.25),
     ...crossing,
-    ...regions.flatMap((r) => (r.id === "market" ? lane : (r.colliders?.() ?? []))),
+    ...regions.flatMap((r) =>
+      r.id === "market" ? lane : r.id === "marsh" ? marsh : (r.colliders?.() ?? []),
+    ),
   );
   // The village's grass scatter draws its random stream against the colliders
-  // it always had: the brook in one piece south of the bridge and no market
-  // lane, so every blade, and everything placed after them, stays where it
-  // was. The lane's footings clear their grass after the scatter instead.
+  // it always had: the brook in one piece south of the bridge, and no market
+  // lane or marsh, so every blade, and everything placed after them, stays
+  // where it was. Their footings clear their grass after the scatter instead.
   const scatterColliders = () => [
-    ...colliders.filter((c) => !laneSet.has(c)),
+    ...colliders.filter((c) => !laterSet.has(c)),
     brookPiece(4.75, 21.25),
   ];
   // Timber bridge with graceful hump, cap rails and peg details.

@@ -1,4 +1,5 @@
 import { FISH } from "../fishing.js";
+import { BIRDS } from "../game/marsh.js";
 
 // The welcome quests, in the order the quest card lists them.
 export const QUESTS = ["mabel", "flower", "plant"];
@@ -7,8 +8,8 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * The journal's entries as [title, text] rows, for a save's `state` and the
- * region id the player stands in. The millpond, orchard and market lane
- * entries appear once the player has been there or done something there.
+ * region id the player stands in. The millpond, orchard, market lane and
+ * marsh entries appear once the player has been there or done something there.
  */
 export function journalEntries(state, here) {
   const rows = [
@@ -59,5 +60,13 @@ export function journalEntries(state, here) {
           : "Finn sends bread to the market lane, east of the mill. The stalls there trade in the golden afternoon: seeds, lanterns, and a hat for Pip.",
     ]);
   }
+  const spotted = BIRDS.filter((bird) => state.birds[bird.id]);
+  if (spotted.length || here === "marsh")
+    rows.push([
+      "The willow marsh",
+      spotted.length
+        ? `You’ve spotted ${spotted.length} of ${BIRDS.length} marsh birds from the hide: ${spotted.map((bird) => bird.name.toLowerCase()).join(", ")}.${spotted.length < BIRDS.length ? " Some only come out at blue hour." : ""}`
+        : "Sit in the bird hide across the willow marsh, south of the village, and watch the reeds. Some birds only come out at blue hour.",
+    ]);
   return rows;
 }

@@ -51,7 +51,9 @@ export function createInteractions({
             : n.id === "lily" && activities.pipHat
               ? oneOf(LILY_HAT)
               : oneOf(phrases);
-    hud.openDialogue(NEIGHBOR_TITLES[n.id] || n.name, [line], () => {
+    // Wren follows her greeting with a tip for a bird still to spot.
+    const lines = n.id === "wren" ? [line, activities.wrenLine(session.dusk)] : [line];
+    hud.openDialogue(NEIGHBOR_TITLES[n.id] || n.name, lines, () => {
       if (selling) activities.sellBasket();
       if (delivery === "give") activities.deliveryGiven();
       if (receiving) activities.deliver(n.id);
@@ -109,6 +111,10 @@ export function createInteractions({
     }
     if (nearest.data.type === "hive") {
       activities.collectHoney(nearest.data);
+      return;
+    }
+    if (id === "bird-hide") {
+      hud.openDialogue("THE BIRD HIDE", activities.watchBirds(session.dusk));
       return;
     }
     if (nearest.data.type === "stall") {
@@ -190,7 +196,9 @@ export function createInteractions({
           ? "Water your flowers"
           : nearest?.label === "Fishing jetty"
             ? "Cast a line"
-            : nearest?.label;
+            : nearest?.data?.id === "bird-hide"
+              ? "Watch for birds"
+              : nearest?.label;
     $("#interaction").hidden = !label || !session.started;
     if (label) $("#interaction span").textContent = label;
     $("#location-name").textContent = regionAt(p.x, p.z).name;

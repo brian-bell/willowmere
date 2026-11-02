@@ -2,6 +2,7 @@
 // the defaults; saves from before planted flowers had ids get them here.
 
 import { marketDefaults } from "./market.js";
+import { marshDefaults } from "./marsh.js";
 
 export const STORAGE = "willowmere.save.v1";
 
@@ -20,6 +21,8 @@ export function defaultState() {
     orchard: {},
     // Finn's bread deliveries and what the market stalls sold.
     ...marketDefaults(),
+    // Birds spotted from the marsh's hide, and when the last watch was.
+    ...marshDefaults(),
     gathered: [],
     plants: [],
     started: false,

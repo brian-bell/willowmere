@@ -31,15 +31,18 @@
 //                 is on screen and resolves to { jobs, ...api } for the
 //                 streamer; main.js hands the rest to the region's game logic
 //                 (activities.regionLoaded). `game` carries what a builder may
-//                 add to beyond the world: `life`, for its residents.
+//                 add to beyond the world: `life`, for its residents, and
+//                 `dusk()`, how far into blue hour the day is (0 to 1).
 import { millpondRegion } from "./millpond-layout.js";
 import { orchardRegion } from "./orchard-layout.js";
 import { marketRegion } from "./market-layout.js";
+import { marshRegion } from "./marsh-layout.js";
 
 export const regions = [
   millpondRegion,
   orchardRegion,
   marketRegion,
+  marshRegion,
   // The open country: the label everywhere else, and its grass.
   {
     id: "fields",
