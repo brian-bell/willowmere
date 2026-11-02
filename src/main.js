@@ -15,6 +15,7 @@ import { createStreamer } from "./streaming.js";
 import { createFishing } from "./fishing.js";
 import { createNavigation } from "./game/navigation.js";
 import { createActivities } from "./game/activities.js";
+import { createDebugApi } from "./game/debug-api.js";
 import { createHud } from "./game/hud.js";
 import { createInteractions } from "./game/interactions.js";
 import { loadState, saveState } from "./game/save.js";
@@ -889,167 +890,54 @@ function animate(now) {
 }
 updateUI();
 requestAnimationFrame(animate);
-// Applies the benchmark overrides, or the defaults for anything not overridden.
-function applyTune() {
-  const q = $("#quality").value;
-  const shadowUpdate = overrides.shadowUpdate ?? true;
-  if (!shadowUpdate && sun.shadow.autoUpdate) sun.shadow.needsUpdate = true;
-  sun.shadow.autoUpdate = shadowUpdate;
-  bloom.enabled = overrides.bloom ?? q !== "performance";
-  const samples = overrides.samples ?? 4;
-  for (const target of [composer.renderTarget1, composer.renderTarget2])
-    if (target.samples !== samples) {
-      target.samples = samples;
-      target.dispose();
-    }
-  const foliage = overrides.foliage ?? true;
-  world.trees.setFoliageShown(foliage);
-  world.bushes.group.visible = foliage;
-  world.showFields(overrides.fields ?? true);
-  world.trees.setDetail(leafDetail());
-  showSky();
-  // The scaler stands aside while the ratio is forced; clearing it resumes
-  // from the quality's cap.
-  if (!interior?.active) scaler.reset(q);
-  resize();
-}
-window.__willowmere = {
-  tune(settings) {
-    for (const [key, value] of Object.entries(settings))
-      if (value == null) delete overrides[key];
-      else overrides[key] = value;
-    applyTune();
-    return this.getDiagnostics().render;
+window.__willowmere = createDebugApi({
+  scene,
+  renderer,
+  composer,
+  bloom,
+  sun,
+  sky,
+  world,
+  life,
+  streamer,
+  fishing,
+  activities,
+  overview,
+  sunShadow,
+  scaler,
+  overrides,
+  state,
+  colliders,
+  glowMaterials,
+  firstPersonCamera,
+  canvas,
+  blocked,
+  findPath,
+  leafDetail,
+  showSky,
+  resize,
+  quality: () => $("#quality").value,
+  get camera() {
+    return camera;
   },
-  getState: () => structuredClone(state),
-  getPlayer: () => ({ x: life.player.position.x, z: life.player.position.z }),
-  // Places the player (for benchmarks and tests that need a far viewpoint),
-  // optionally turned to a heading (radians, 0 faces +z).
-  moveTo(x, z, heading) {
-    life.player.position.set(x, world.getGroundHeight(x, z), z);
-    if (heading !== undefined) {
-      life.player.rotation.y = heading;
-      yaw = heading + Math.PI;
-    }
+  get firstPerson() {
+    return firstPerson;
+  },
+  get yaw() {
+    return yaw;
+  },
+  get pitch() {
+    return pitch;
+  },
+  get interior() {
+    return interior;
+  },
+  stopAfterJump(heading) {
+    if (heading !== undefined) yaw = heading + Math.PI;
     velocity.set(0, 0);
     clickPath.length = 0;
     overview.snap();
   },
-  getFishing: () => ({ phase: fishing.phase, fish: { ...state.fish } }),
-  getTrees: () =>
-    world.trees.levels().map((tree) => ({
-      ...tree,
-      distance: firstPersonCamera.position.distanceTo(new THREE.Vector3(...tree.center)),
-    })),
-  getOrchard: () => ({
-    ready: activities.orchardReady,
-    basket: { ...state.basket },
-    harvested: { ...state.harvested },
-    shaken: Object.keys(state.orchard),
-  }),
-  getView: () => ({
-    mode: firstPerson ? "first-person" : "overview",
-    camera: camera.type,
-    position: camera.position.toArray(),
-    yaw,
-    pitch,
-    playerVisible: life.player.visible,
-    pointerLocked: document.pointerLockElement === canvas,
-  }),
-  getInterior: () => interior?.diagnostics() ?? { active: false },
-  tuneInterior: (settings) => interior?.tune(settings),
-  getWater: () => world.water.diagnostics(),
-  getChunks: () => {
-    const animating = new Set(world.animatedChunks()),
-      sphere = new THREE.Sphere();
-    return [...world.chunks.values()].map((chunk) => ({
-      key: chunk.key,
-      bounds: [chunk.bounds.min.toArray(), chunk.bounds.max.toArray()],
-      animations: chunk.animations.length,
-      animating: animating.has(chunk.key),
-      glow: chunk.glow.size,
-      meshes: chunk.meshes.map((mesh) => {
-        sphere
-          .copy(mesh.isInstancedMesh ? mesh.boundingSphere : mesh.geometry.boundingSphere)
-          .applyMatrix4(mesh.matrixWorld);
-        return {
-          name: mesh.name,
-          visible: mesh.visible,
-          instances: mesh.isInstancedMesh ? mesh.count : 0,
-          center: sphere.center.toArray(),
-          radius: sphere.radius,
-        };
-      }),
-    }));
-  },
-  getGlowMaterials: () => glowMaterials.size,
-  getStreaming: () => ({
-    pending: streamer.pending,
-    finished: streamer.finished,
-  }),
-  getDiagnostics: () => ({
-    objects: scene.children.length,
-    drawCalls: renderer.info.render.calls,
-    triangles: renderer.info.render.triangles,
-    geometries: renderer.info.memory.geometries,
-    textures: renderer.info.memory.textures,
-    colliders: colliders.length,
-    flowers: activities.flowerGroups.size,
-    programs: renderer.info.programs.length,
-    lanterns: {
-      pool: world.lanterns.length,
-      lamps: world.lamps.length,
-      pointLights: scene.children.filter((o) => o.isPointLight).length,
-      lit: world.lanterns.map((light) => light.position.toArray()),
-      lampPositions: world.lamps.map((lamp) => lamp.toArray()),
-    },
-    resolution: {
-      adaptive: resolution.adaptive,
-      pixelRatio: renderer.getPixelRatio(),
-      ceiling: resolution.ceiling,
-      floor: resolution.floor,
-      p95: resolution.p95,
-      mean: resolution.mean,
-      upWindows: resolution.upWindows,
-      drawingBuffer: [canvas.width, canvas.height],
-    },
-    shadow: sunShadow.diagnostics(),
-    fog: [scene.fog.near, scene.fog.far],
-    far: camera.far,
-    render: {
-      pixelRatio: renderer.getPixelRatio(),
-      width: composer.renderTarget1.width,
-      height: composer.renderTarget1.height,
-      samples: composer.renderTarget1.samples,
-      bloom: bloom.enabled,
-      shadowUpdate: sun.shadow.autoUpdate,
-      water: overrides.water ?? true,
-      foliage: world.bushes.group.visible,
-      fields: overrides.fields ?? true,
-      sky: sky.mesh.visible,
-      leafDetail: overrides.leafDetail ?? "auto",
-      leaves: world.trees.foliage.reduce((n, mesh) => n + mesh.count, 0),
-      overrides: { ...overrides },
-    },
-    position: life.player.position.toArray(),
-    camera: overview.diagnostics(),
-  }),
-  setAdaptiveResolution: (on) => {
-    resolution.adaptive = on;
-    scaler.reset($("#quality").value);
-    resize();
-  },
-  blocked,
-  findPath,
-  // The pixel where a click lands on (x, z): clicks meet bridge decks and water.
-  project: (x, z) => {
-    const y = world.surfaceHeight(x, z),
-      v = new THREE.Vector3(x, y, z).project(camera);
-    return {
-      x: (v.x * 0.5 + 0.5) * innerWidth,
-      y: (-v.y * 0.5 + 0.5) * innerHeight,
-    };
-  },
-};
+});
 if (new URLSearchParams(location.search).get("interior") === "bakery")
   enterBakery();
