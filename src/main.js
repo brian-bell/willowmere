@@ -14,17 +14,16 @@ import { createPlayerVisibility } from "./visibility.js";
 import { createSky } from "./sky.js";
 import { createStreamer } from "./streaming.js";
 import { createFishing, FISH } from "./fishing.js";
+import { SHADOW_MAP_SIZES, createSunShadow } from "./game/shadows.js";
+import {
+  DEFAULT_VIEW_HEIGHT,
+  createOverviewCamera,
+} from "./game/overview-camera.js";
 import { QUALITY_PIXEL_RATIO, createResolutionScaler, startingQuality } from "./game/resolution.js";
 import { MILLPOND } from "./regions/millpond-layout.js";
 import { FRUIT_TREES } from "./regions/orchard-layout.js";
 import { regions } from "./regions/index.js";
-import {
-  WORLD,
-  regionAt,
-  terrainField,
-  terrainHeight,
-  terrainMaxIn,
-} from "./world-layout.js";
+import { WORLD, regionAt } from "./world-layout.js";
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
 const canvas = $("#scene"),
@@ -85,58 +84,6 @@ let camera = overviewCamera,
   yaw = 0,
   pitch = 0,
   dragging = null;
-const cameraOffset = new THREE.Vector3(27, 36, 44);
-const cameraDistance = cameraOffset.length(),
-  cameraHeading = Math.atan2(cameraOffset.x, cameraOffset.z),
-  DEFAULT_TILT = THREE.MathUtils.radToDeg(
-    Math.asin(cameraOffset.y / cameraDistance),
-  ),
-  MIN_TILT = 20,
-  MAX_TILT = 75,
-  TILT_STEP = 5;
-let tilt = DEFAULT_TILT,
-  targetTilt = DEFAULT_TILT;
-const YAW_STEP = 15;
-let overviewYaw = 0,
-  targetYaw = 0;
-function setYaw(angle) {
-  targetYaw = THREE.MathUtils.euclideanModulo(angle, 360);
-  $("#yaw-angle").textContent = `${Math.round(targetYaw)}°`;
-  $("#yaw-reset").disabled = targetYaw === 0;
-}
-const PAN_STEP = 3,
-  PAN_LIMIT = 18,
-  pan = new THREE.Vector2(),
-  targetPan = new THREE.Vector2(),
-  panOffset = new THREE.Vector3(),
-  viewTarget = new THREE.Vector3();
-function setPan(x, y) {
-  targetPan.set(
-    THREE.MathUtils.clamp(x, -PAN_LIMIT, PAN_LIMIT),
-    THREE.MathUtils.clamp(y, -PAN_LIMIT, PAN_LIMIT),
-  );
-  $("#pan-left").disabled = targetPan.x <= -PAN_LIMIT;
-  $("#pan-right").disabled = targetPan.x >= PAN_LIMIT;
-  $("#pan-up").disabled = targetPan.y <= -PAN_LIMIT;
-  $("#pan-down").disabled = targetPan.y >= PAN_LIMIT;
-  $("#pan-reset").disabled = targetPan.lengthSq() === 0;
-}
-function setTilt(angle) {
-  targetTilt = THREE.MathUtils.clamp(angle, MIN_TILT, MAX_TILT);
-  updateTiltControls();
-}
-function updateTiltControls() {
-  $("#tilt-up").disabled = targetTilt >= MAX_TILT;
-  $("#tilt-down").disabled = targetTilt <= MIN_TILT;
-  $("#tilt-angle").textContent = `${Math.round(targetTilt)}°`;
-  $("#tilt-reset").disabled = targetTilt === DEFAULT_TILT;
-}
-const DEFAULT_VIEW_HEIGHT = 18,
-  MIN_VIEW_HEIGHT = 10,
-  // At 39 the overview held about twice the village's content, which culling
-  // cannot reduce; the cap lifts once zoom-based detail reduction exists.
-  MAX_VIEW_HEIGHT = 30,
-  ZOOM_STEP = 3;
 // Beyond these, single leaves cover only a few pixels and trees draw coarser
 // foliage; in first person, trees further off than CROWN_DISTANCE, deep in
 // the fog, draw their crown shells instead of leaves.
@@ -151,37 +98,18 @@ const leafDetail = () =>
   overrides.leafDetail ??
   (firstPerson
     ? leafDetailFromEye
-    : viewHeight > COARSE_LEAVES_VIEW_HEIGHT
+    : overview.viewHeight > COARSE_LEAVES_VIEW_HEIGHT
       ? 1
       : 0);
-let viewHeight = 29,
-  targetViewHeight = 29;
-function updateZoomControls() {
-  $("#zoom-in").disabled = firstPerson || targetViewHeight <= MIN_VIEW_HEIGHT;
-  $("#zoom-out").disabled = firstPerson || targetViewHeight >= MAX_VIEW_HEIGHT;
-  $("#zoom-reset").disabled =
-    firstPerson || targetViewHeight === DEFAULT_VIEW_HEIGHT;
-}
-function setZoom(height) {
-  targetViewHeight = THREE.MathUtils.clamp(
-    height,
-    MIN_VIEW_HEIGHT,
-    MAX_VIEW_HEIGHT,
-  );
-  updateZoomControls();
-}
-const target = new THREE.Vector3(0, 0, 1.5),
-  cameraTarget = target.clone();
+const overview = createOverviewCamera({
+  camera: overviewCamera,
+  isFirstPerson: () => firstPerson,
+  onZoom: () => updateFrustum(),
+});
 const hemi = new THREE.HemisphereLight("#eaf2df", "#607b66", 1.5);
 scene.add(hemi);
 const ambient = new THREE.AmbientLight("#ccdabb", 0.22);
 scene.add(ambient);
-// Eye-level views resolve finer shadow texels than the village overview.
-const SHADOW_MAP_SIZES = {
-  high: { overview: 2048, firstPerson: 4096 },
-  balanced: { overview: 1536, firstPerson: 2048 },
-  performance: { overview: 1024, firstPerson: 1024 },
-};
 const sun = new THREE.DirectionalLight("#fff0d6", 2.4);
 sun.position.set(-16, 32, 15);
 sun.castShadow = true;
@@ -193,205 +121,8 @@ scene.add(sun.target);
 const sky = createSky(THREE, sun);
 scene.add(sky.mesh);
 const showSky = () => (sky.mesh.visible = firstPerson && (overrides.sky ?? true));
-// The sun never moves. Its shadow camera rolls with each yaw step so the overview's
-// footprint lines up with the map, and its bounds follow the receivers in view in
-// fixed sizes and whole-texel steps, so shadow edges hold still while the view
-// follows or pans and change only in small steps while it zooms.
-const shadowCamera = sun.shadow.camera;
-// The soil rim's base and the tallest canopy on the highest ground bound every
-// receiver vertically. A view's own ceiling counts only the ground under it,
-// and the village's receivers, which shadow sizes are fractions of, stand on
-// flat ground.
-const SHADOW_FLOOR = -1.4,
-  SHADOW_CEILING = terrainField.max + WORLD.canopy,
-  SHADOW_REFERENCE_CEILING = WORLD.canopy,
-  SHADOW_MARGIN = 1,
-  // Depth bias in metres; the shadow map stores depth across near..far.
-  SHADOW_BIAS = 0.0126,
-  // Fractions of the village's light-space extent, about 12% apart, so a
-  // texel's size never depends on the map's. The largest steps cover views
-  // wider than the village; any larger view takes the whole map.
-  SHADOW_STEPS = Array.from({ length: 17 }, (_, i) =>
-    i < 10 ? 0.32 * 1.12 ** i : 1.12 ** (i - 10),
-  ),
-  // First person fits the shadow to a village-sized box of ground around the
-  // eye, reaching this far ahead of it, so eye-level detail keeps the
-  // 4096 map's density on a map of any size, and turning only shifts it.
-  FIRST_PERSON_SHADOW_AHEAD = 10;
-const shadowLight = sun.position.clone().sub(sun.target.position).normalize(),
-  shadowPoint = new THREE.Vector3(),
-  shadowRay = new THREE.Vector3(),
-  shadowSize = new THREE.Vector2(),
-  shadowCenter = new THREE.Vector2(),
-  shadowView = new THREE.Box2(),
-  // The overview's ground footprint, where its tallest ground is looked up.
-  shadowFootprint = new THREE.Box2(),
-  // Light-space bounds of the village's receivers (the size reference) and of
-  // the whole map's (where the shadow box may go).
-  villageShadow = new THREE.Box2(),
-  worldShadow = new THREE.Box2(),
-  shadowStep = [10, 10];
-let shadowYaw = null;
-// The depth range spans the world's receivers along the light, with a metre spare.
-{
-  let near = Infinity,
-    far = -Infinity;
-  const { shadow } = WORLD;
-  for (let i = 0; i < 8; i++) {
-    shadowPoint.set(
-      i & 1 ? shadow.maxX : shadow.minX,
-      i & 2 ? SHADOW_CEILING : SHADOW_FLOOR,
-      i & 4 ? shadow.maxZ : shadow.minZ,
-    );
-    const depth = sun.position.clone().sub(shadowPoint).dot(shadowLight);
-    near = Math.min(near, depth);
-    far = Math.max(far, depth);
-  }
-  shadowCamera.near = Math.max(0.1, near - 1);
-  shadowCamera.far = far + 1;
-  sun.shadow.bias = -SHADOW_BIAS / (shadowCamera.far - shadowCamera.near);
-}
-function addShadowPoint(box, point) {
-  point.applyMatrix4(shadowCamera.matrixWorldInverse);
-  box.expandByPoint(shadowCenter.set(point.x, point.y));
-}
-// Adds a ground box's receivers, from floor to ceiling, offset by (dx, dz),
-// to a light-space box.
-function addShadowBox(box, bounds, dx, dz, floor, ceiling) {
-  for (let i = 0; i < 8; i++)
-    addShadowPoint(
-      box,
-      shadowPoint.set(
-        (i & 1 ? bounds.maxX : bounds.minX) + dx,
-        i & 2 ? ceiling : floor,
-        (i & 4 ? bounds.maxZ : bounds.minZ) + dz,
-      ),
-    );
-  return box;
-}
-function rollShadow(yaw) {
-  // Point light-space x along the screen's right edge, projected across the sunlight.
-  const heading = cameraHeading + THREE.MathUtils.degToRad(yaw);
-  shadowPoint.set(Math.cos(heading), 0, -Math.sin(heading));
-  shadowPoint
-    .addScaledVector(shadowLight, -shadowPoint.dot(shadowLight))
-    .normalize();
-  shadowCamera.up.crossVectors(shadowLight, shadowPoint);
-  shadowCamera.position.copy(sun.position);
-  shadowCamera.lookAt(sun.target.position);
-  shadowCamera.updateMatrixWorld();
-  addShadowBox(
-    villageShadow.makeEmpty(),
-    WORLD.shadowReference,
-    0,
-    0,
-    SHADOW_FLOOR,
-    SHADOW_REFERENCE_CEILING,
-  );
-  addShadowBox(worldShadow.makeEmpty(), WORLD.shadow, 0, 0, SHADOW_FLOOR, SHADOW_CEILING);
-  shadowYaw = yaw;
-}
-function updateShadowMapSize() {
-  const size =
-    SHADOW_MAP_SIZES[$("#quality").value][
-      firstPerson ? "firstPerson" : "overview"
-    ];
-  if (sun.shadow.mapSize.x === size) return;
-  sun.shadow.mapSize.setScalar(size);
-  sun.shadow.map?.dispose();
-  sun.shadow.map = null;
-  if (!sun.shadow.autoUpdate) sun.shadow.needsUpdate = true;
-}
-function fitShadow() {
-  if (shadowYaw !== targetYaw) rollShadow(targetYaw);
-  if (firstPerson) {
-    // A village-sized box centred a little ahead of the eye, raised to the
-    // ground the eye stands on.
-    const { shadowReference: v } = WORLD,
-      ahead = FIRST_PERSON_SHADOW_AHEAD,
-      x = firstPersonCamera.position.x - Math.sin(yaw) * ahead,
-      z = firstPersonCamera.position.z - Math.cos(yaw) * ahead,
-      lift = terrainHeight(firstPersonCamera.position.x, firstPersonCamera.position.z);
-    addShadowBox(
-      shadowView.makeEmpty(),
-      v,
-      x - (v.minX + v.maxX) / 2,
-      z - (v.minZ + v.maxZ) / 2,
-      SHADOW_FLOOR + lift,
-      SHADOW_REFERENCE_CEILING + lift,
-    );
-  } else {
-    // Trace the overview's corner rays through every receiver height, up to
-    // the canopy above the highest ground the view's footprint can reach.
-    overviewCamera.updateMatrixWorld();
-    overviewCamera.getWorldDirection(shadowRay);
-    shadowFootprint.makeEmpty();
-    for (let i = 0; i < 8; i++) {
-      shadowPoint
-        .set(i & 1 ? 1 : -1, i & 2 ? 1 : -1, -1)
-        .unproject(overviewCamera);
-      const y = i & 4 ? SHADOW_CEILING : SHADOW_FLOOR;
-      shadowPoint.addScaledVector(shadowRay, (y - shadowPoint.y) / shadowRay.y);
-      shadowFootprint.expandByPoint(shadowCenter.set(shadowPoint.x, shadowPoint.z));
-    }
-    const ceiling =
-      terrainMaxIn(
-        shadowFootprint.min.x,
-        shadowFootprint.max.x,
-        shadowFootprint.min.y,
-        shadowFootprint.max.y,
-      ) + WORLD.canopy;
-    shadowView.makeEmpty();
-    for (let i = 0; i < 8; i++) {
-      shadowPoint
-        .set(i & 1 ? 1 : -1, i & 2 ? 1 : -1, -1)
-        .unproject(overviewCamera);
-      const y = i & 4 ? ceiling : SHADOW_FLOOR;
-      shadowPoint.addScaledVector(shadowRay, (y - shadowPoint.y) / shadowRay.y);
-      addShadowPoint(shadowView, shadowPoint);
-    }
-    shadowView.expandByScalar(SHADOW_MARGIN);
-  }
-  shadowView.getSize(shadowSize);
-  shadowView.getCenter(shadowCenter);
-  const bounds = [0, 0, 0, 0];
-  for (const axis of [0, 1]) {
-    const key = axis ? "y" : "x",
-      reference = villageShadow.max[key] - villageShadow.min[key],
-      low = worldShadow.min[key],
-      full = worldShadow.max[key] - low,
-      last = SHADOW_STEPS.length - 1,
-      // Less a hair, so first person's village-sized box takes the 1.0 step.
-      needed = Math.min(shadowSize[key], full) / reference - 1e-9;
-    // Grow at once; shrink only when the view fits well inside the smaller
-    // size. First person's box never changes size, so it takes its step at once.
-    let step = shadowStep[axis];
-    if (firstPerson || needed > SHADOW_STEPS[step]) {
-      step = SHADOW_STEPS.findIndex((s) => s >= needed);
-      if (step < 0) step = last;
-    } else while (step > 0 && needed < SHADOW_STEPS[step - 1] * 0.96) step--;
-    shadowStep[axis] = step;
-    const extent = Math.min(reference * SHADOW_STEPS[step], full),
-      texel = extent / sun.shadow.mapSize[key],
-      start = THREE.MathUtils.clamp(
-        shadowCenter[key] - extent / 2,
-        low,
-        low + full - extent,
-      );
-    bounds[axis * 2] = Math.floor(start / texel) * texel;
-    bounds[axis * 2 + 1] = bounds[axis * 2] + extent;
-  }
-  const [left, right, bottom, top] = bounds;
-  if (
-    left !== shadowCamera.left ||
-    right !== shadowCamera.right ||
-    bottom !== shadowCamera.bottom ||
-    top !== shadowCamera.top
-  ) {
-    Object.assign(shadowCamera, { left, right, bottom, top });
-    shadowCamera.updateProjectionMatrix();
-  }
-}
+const sunShadow = createSunShadow({ sun, overviewCamera, firstPersonCamera }),
+  shadowCamera = sunShadow.camera;
 const fill = new THREE.DirectionalLight("#dae9ec", 0.6);
 fill.position.set(15, 14, -20);
 scene.add(fill);
@@ -706,7 +437,7 @@ function leaveBakery() {
 $("#visit-bakery").onclick = enterBakery;
 $("#motion").checked = motion;
 function begin() {
-  if (!started) setZoom(DEFAULT_VIEW_HEIGHT);
+  if (!started) overview.setZoom(DEFAULT_VIEW_HEIGHT);
   started = true;
   $("#game").classList.add("playing");
   state.started = true;
@@ -717,32 +448,9 @@ function begin() {
 if (started) {
   $("#intro").classList.add("dismissed");
   $("#game").classList.add("playing");
-  viewHeight = targetViewHeight = DEFAULT_VIEW_HEIGHT;
+  overview.zoomAt(DEFAULT_VIEW_HEIGHT);
 }
-updateZoomControls();
-$("#zoom-in").onclick = () => setZoom(targetViewHeight - ZOOM_STEP);
-$("#zoom-out").onclick = () => setZoom(targetViewHeight + ZOOM_STEP);
-$("#zoom-reset").onclick = () => setZoom(DEFAULT_VIEW_HEIGHT);
-// Small screens fold tilt, yaw and pan behind this button (see style.css).
-$("#camera-more").onclick = () => {
-  const open = $(".view-controls").classList.toggle("camera-open");
-  $("#camera-more").setAttribute("aria-expanded", String(open));
-  $("#camera-more").innerHTML = `<span aria-hidden="true">${open ? "×" : "⋯"}</span>`;
-};
-updateTiltControls();
-$("#tilt-up").onclick = () => setTilt(targetTilt + TILT_STEP);
-$("#tilt-down").onclick = () => setTilt(targetTilt - TILT_STEP);
-$("#tilt-reset").onclick = () => setTilt(DEFAULT_TILT);
-setYaw(0);
-$("#yaw-left").onclick = () => setYaw(targetYaw - YAW_STEP);
-$("#yaw-right").onclick = () => setYaw(targetYaw + YAW_STEP);
-$("#yaw-reset").onclick = () => setYaw(0);
-setPan(0, 0);
-$("#pan-left").onclick = () => setPan(targetPan.x - PAN_STEP, targetPan.y);
-$("#pan-right").onclick = () => setPan(targetPan.x + PAN_STEP, targetPan.y);
-$("#pan-up").onclick = () => setPan(targetPan.x, targetPan.y - PAN_STEP);
-$("#pan-down").onclick = () => setPan(targetPan.x, targetPan.y + PAN_STEP);
-$("#pan-reset").onclick = () => setPan(0, 0);
+overview.bindControls();
 $("#start").onclick = () => {
   begin();
   toast("Follow the paths. A little adventure is all you need.");
@@ -789,7 +497,7 @@ function updateViewUI() {
       ? "First-person village. WASD to walk, drag to look, arrow keys to turn, Page Up and Page Down to look up and down, E to interact, V to switch views."
       : "Interactive village. Move with WASD or arrow keys, interact with E. V for first person.",
   );
-  updateZoomControls();
+  overview.updateZoomControls();
 }
 function setFirstPerson(value) {
   releaseLook();
@@ -803,7 +511,7 @@ function setFirstPerson(value) {
   pendingInteraction = null;
   firstPerson = value;
   Object.assign(scene.fog, firstPerson ? FOG.firstPerson : FOG.overview);
-  updateShadowMapSize();
+  sunShadow.setMapSize($("#quality").value, firstPerson);
   camera = firstPerson ? firstPersonCamera : overviewCamera;
   scenePass.camera = camera;
   life.player.visible = !firstPerson;
@@ -1017,7 +725,7 @@ $("#quality").onchange = (e) => {
   world.water.setQuality(q);
   // The chosen quality is the scaler's ceiling.
   scaler.reset(q);
-  updateShadowMapSize();
+  sunShadow.setMapSize($("#quality").value, firstPerson);
   bloom.enabled = overrides.bloom ?? q !== "performance";
   resize();
 };
@@ -1614,7 +1322,7 @@ canvas.addEventListener(
   (e) => {
     if (interior?.active || interiorLoading || firstPerson) return;
     e.preventDefault();
-    setZoom(targetViewHeight + e.deltaY * 0.012);
+    overview.setZoom(overview.targetViewHeight + e.deltaY * 0.012);
   },
   { passive: false },
 );
@@ -1622,12 +1330,7 @@ function updateFrustum() {
   const w = innerWidth,
     h = innerHeight;
   const aspect = w / h;
-  const height = aspect < 0.9 ? viewHeight * 1.35 : viewHeight;
-  overviewCamera.left = (-height * aspect) / 2;
-  overviewCamera.right = (height * aspect) / 2;
-  overviewCamera.top = height / 2;
-  overviewCamera.bottom = -height / 2;
-  overviewCamera.updateProjectionMatrix();
+  overview.fit(aspect);
   firstPersonCamera.aspect = aspect;
   firstPersonCamera.fov = aspect < 0.8 ? 78 : 66;
   firstPersonCamera.updateProjectionMatrix();
@@ -1712,18 +1415,12 @@ function scanNearby() {
   if (label) $("#interaction span").textContent = label;
   $("#location-name").textContent = regionAt(p.x, p.z).name;
 }
-let snapView = false;
 let elapsed = 0,
   last = performance.now(),
   frame = 0,
   duskMix = 0,
   skyTime = 0;
-const screenRight = new THREE.Vector2(
-    cameraOffset.z,
-    -cameraOffset.x,
-  ).normalize(),
-  screenDown = new THREE.Vector2(cameraOffset.x, cameraOffset.z).normalize(),
-  input = new THREE.Vector2(),
+const input = new THREE.Vector2(),
   duskHemi = new THREE.Color("#8dacef"),
   duskSun = new THREE.Color("#ffa572"),
   duskSky = new THREE.Color("#566782"),
@@ -1744,14 +1441,7 @@ function animate(now) {
     return;
   }
   scaler.update(now, interval);
-  // Take the shortest arc, including when rotation crosses the 0°/360° seam.
-  const yawDelta = THREE.MathUtils.euclideanModulo(targetYaw - overviewYaw + 180, 360) - 180;
-  overviewYaw = motion
-    ? THREE.MathUtils.euclideanModulo(overviewYaw + yawDelta * (1 - Math.exp(-dt * 8)), 360)
-    : targetYaw;
-  const heading = cameraHeading + THREE.MathUtils.degToRad(overviewYaw);
-  screenRight.set(Math.cos(heading), -Math.sin(heading));
-  screenDown.set(Math.sin(heading), Math.cos(heading));
+  overview.turn(dt, motion);
   const p = life.player.position;
   input.set(0, 0);
   if (!dialogue && !modalOpen()) {
@@ -1780,9 +1470,9 @@ function animate(now) {
       );
     else
       input
-        .copy(screenRight)
+        .copy(overview.screenRight)
         .multiplyScalar(horiz)
-        .addScaledVector(screenDown, vert);
+        .addScaledVector(overview.screenDown, vert);
     if (input.lengthSq() > 0) input.normalize();
     else if (clickPath.length) {
       let dest = clickPath[0];
@@ -1822,50 +1512,7 @@ function animate(now) {
     audio.step();
     lastStep = elapsed;
   }
-  // The view stays composed around the village, then gently accompanies longer
-  // walks, up to the map's edge.
-  const follow = started ? 0.85 : 0.48,
-    bounds = WORLD.camera;
-  // On the hill it rises with the ground under the player, who stays framed.
-  target.set(
-    THREE.MathUtils.clamp(p.x * follow, bounds.minX, bounds.maxX),
-    terrainHeight(p.x, p.z),
-    THREE.MathUtils.clamp(1.5 + (p.z - 5) * follow, bounds.minZ, bounds.maxZ),
-  );
-  if (Math.abs(viewHeight - targetViewHeight) > 0.01) {
-    viewHeight = THREE.MathUtils.lerp(
-      viewHeight,
-      targetViewHeight,
-      1 - Math.exp(-dt * 2.4),
-    );
-    updateFrustum();
-  }
-  // A jump (moveTo) takes the view straight there.
-  if (snapView) cameraTarget.copy(target);
-  else cameraTarget.lerp(target, 1 - Math.exp(-dt * 1.8));
-  snapView = false;
-  tilt = motion
-    ? THREE.MathUtils.lerp(tilt, targetTilt, 1 - Math.exp(-dt * 8))
-    : targetTilt;
-  // Pitch around the view's horizontal axis, preserving heading and distance.
-  const overviewPitch = THREE.MathUtils.degToRad(tilt),
-    groundDistance = cameraDistance * Math.cos(overviewPitch);
-  cameraOffset.set(
-    groundDistance * Math.sin(heading),
-    cameraDistance * Math.sin(overviewPitch),
-    groundDistance * Math.cos(heading),
-  );
-  if (motion) pan.lerp(targetPan, 1 - Math.exp(-dt * 8));
-  else pan.copy(targetPan);
-  // Keep pan directions aligned with the screen on the village's ground plane.
-  panOffset.set(
-    screenRight.x * pan.x + screenDown.x * pan.y,
-    0,
-    screenRight.y * pan.x + screenDown.y * pan.y,
-  );
-  viewTarget.copy(cameraTarget).add(panOffset);
-  overviewCamera.position.copy(viewTarget).add(cameraOffset);
-  overviewCamera.lookAt(viewTarget);
+  overview.follow(dt, motion, p, started);
   firstPersonCamera.position.copy(p).y += 1.65;
   firstPersonCamera.rotation.set(pitch, yaw, 0, "YXZ");
   // Chunks animate while the view or the sun's shadow can see them.
@@ -1910,8 +1557,8 @@ function animate(now) {
   if (motion) skyTime += dt;
   sky.update(duskMix, skyTime, scene.fog.color);
   world.placeLanterns?.(
-    firstPerson ? p.x : viewTarget.x,
-    firstPerson ? p.z : viewTarget.z,
+    firstPerson ? p.x : overview.viewTarget.x,
+    firstPerson ? p.z : overview.viewTarget.z,
   );
   for (const light of world.lanterns || [])
     light.intensity = THREE.MathUtils.lerp(0.1, 18.0, duskMix);
@@ -1926,7 +1573,7 @@ function animate(now) {
   if (firstPerson) world.setDetailFocus(p.x, p.z);
   else world.setDetailFocus();
   streamer.update(p.x, p.z, camera);
-  fitShadow();
+  sunShadow.fit({ firstPerson, yaw, targetYaw: overview.targetYaw });
   scene.updateMatrixWorld();
   renderer.info.reset();
   // RenderPass draws into readBuffer; water resolves refraction from that pass.
@@ -1996,7 +1643,7 @@ window.__willowmere = {
     }
     velocity.set(0, 0);
     clickPath.length = 0;
-    snapView = true;
+    overview.snap();
   },
   getFishing: () => ({ phase: fishing.phase, fish: { ...state.fish } }),
   getTrees: () =>
@@ -2076,17 +1723,7 @@ window.__willowmere = {
       upWindows: resolution.upWindows,
       drawingBuffer: [canvas.width, canvas.height],
     },
-    shadow: {
-      mapSize: sun.shadow.mapSize.x,
-      // The village's light-space extent, which shadow sizes are fractions of.
-      reference: villageShadow.getSize(new THREE.Vector2()).toArray(),
-      bounds: [
-        shadowCamera.left,
-        shadowCamera.right,
-        shadowCamera.bottom,
-        shadowCamera.top,
-      ],
-    },
+    shadow: sunShadow.diagnostics(),
     fog: [scene.fog.near, scene.fog.far],
     far: camera.far,
     render: {
@@ -2105,17 +1742,7 @@ window.__willowmere = {
       overrides: { ...overrides },
     },
     position: life.player.position.toArray(),
-    camera: {
-      tilt,
-      targetTilt,
-      yaw: overviewYaw,
-      targetYaw,
-      viewHeight,
-      targetViewHeight,
-      offset: cameraOffset.toArray(),
-      pan: pan.toArray(),
-      targetPan: targetPan.toArray(),
-    },
+    camera: overview.diagnostics(),
   }),
   setAdaptiveResolution: (on) => {
     resolution.adaptive = on;
