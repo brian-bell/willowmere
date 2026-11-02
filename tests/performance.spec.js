@@ -217,7 +217,7 @@ test("the market lane keeps the same budget as the millpond", async ({ page }) =
   });
   // The benchmark's viewpoint: the market square at the default height, with
   // the stalls, the tea room, the post office and the mill in view, then
-  // zoomed out to the cap, where the village's east side joins it.
+  // zoomed out to height 30, where the village's east side joins it.
   await page.evaluate(() => window.__willowmere.moveTo(36.5, 3.2, -1.75));
   const sample = () =>
     page.evaluate(async () => {
@@ -375,10 +375,11 @@ test("zoomed out to the cap, the overview drops small detail and keeps the villa
   expect(far.small).toBeGreaterThan(30);
   expect(far.smallShown).toBe(0);
   // The village zoomed out as far as it went before the map grew counted
-  // up to 1,104 draws and 2.41M triangles in the same container.
+  // up to 1,104 draws and 2.41M triangles; without zoom detail this view
+  // counted 2.55M.
   expect(far.drawCalls).toBeLessThan(1000);
-  expect(far.triangles).toBeLessThan(2.2e6);
-  // Back at the old cap of 30, every blade and pebble is back.
+  expect(far.triangles).toBeLessThan(2.3e6);
+  // Back at the old cap of 30, every pebble and fallen leaf is back.
   await page.evaluate(() => {
     for (let i = 0; i < 3; i++) document.querySelector("#zoom-in").click();
   });

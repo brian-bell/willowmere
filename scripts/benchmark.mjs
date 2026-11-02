@@ -69,8 +69,9 @@ if (ablate) {
       tune: {},
       view,
     });
-  // Height 30 on every revision (the zoom cap since the map grew; four zoom
-  // steps from the default), with and without the open country.
+  // Height 30 on every revision (the zoom cap from the map's growth until
+  // zoom detail lifted it to 39; four zoom steps from the default), with and
+  // without the open country. "zoomed out" is whatever the cap is.
   configs.push(
     { name: "high, millpond, height 30", quality: "high", tune: {}, view: "millpond-30" },
     { name: "high, millpond, water skipped", quality: "high", tune: { water: false }, view: "millpond" },
