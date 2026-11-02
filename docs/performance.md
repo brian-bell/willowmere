@@ -255,7 +255,7 @@ Per-change measurements, each against the previous `main` (`1a2624c`) at the tim
 Phase 6 of the map expansion: the overview's zoom cap returns from 30 to 39. The plan feared that at height 39 the larger map would put about twice the village's content on screen; measured, it does not, because the regions around the village are sparse and the overview's camera clamp keeps the village in the frame. The current map at 39 counted 998 draws and 2.55M triangles at spawn, against 856–1,104 draws and 2.11–2.41M triangles for the village at 39 before the map grew. Three levels of detail, chosen in `src/game/detail.js`, bring it below that:
 
 - **Coarse shrub leaves** above height 24, with the trees' coarse leaves (see [Work reduction](#work-reduction-in-the-current-build)): about −240,000 triangles at 39, and at every view from 24 to 30 that was already allowed.
-- **Far detail** above height 30: the brook's pebbles, its banks' shingle and grass tufts, and the fallen leaves, moss and hollows at every tree's foot hide (about −200,000 triangles and −70 draws at 39), and the people and animals stop casting shadows, keeping their soft contact shadows (about −90 shadow-pass draws). Views up to the old cap of 30 are unchanged by this. Hiding the meadow's grass blades and blossoms as well was tried and dropped: at 39 the lawn lost its speckle and looked flat, for about 190,000 triangles.
+- **Far detail** above height 30: the brook's pebbles, its banks' shingle and grass tufts, and the fallen leaves, moss and hollows at every tree's foot hide (about −270,000 triangles and −80 draws at 39), and the people and animals stop casting shadows, keeping their soft contact shadows (about −140 shadow-pass draws). Views up to the old cap of 30 are unchanged by this. Hiding the meadow's grass blades and blossoms as well was tried and dropped: at 39 the lawn lost its speckle and looked flat, for about 190,000 triangles.
 - **Nothing new to compile.** Each level hides meshes or swaps to a geometry the shrubs share, so zooming compiles no program.
 
 Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high quality, `?resolution=fixed`, frame-locked, against `main` (`db3b858`) with the cap lifted for the comparison. Counts include a water reflection on the frames that render one.
@@ -264,12 +264,12 @@ Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high
 | --- | --- | --- |
 | Spawn, height 18 | 897 / 2.81M | 897 / 2.81M (identical pixels) |
 | Spawn, height 30 | 1,187 / 2.88M | 1,187 / 2.64M |
-| Spawn, height 39 | 998 / 2.55M | 920 / 2.12M |
-| Village centre (0, −4), height 39 | 1,026 / 2.62M | 947 / 2.18M |
-| Millpond bank, height 39 | 975 / 2.49M | 907 / 2.07M |
-| Orchard bench, height 39 | 726 / 2.29M | 670 / 1.90M |
-| Market square, height 39 | 828 / 2.15M | 772 / 1.79M |
-| Fields (−36, 30), height 39 | 682 / 2.00M | 616 / 1.69M |
+| Spawn, height 39 | 998 / 2.55M | 778 / 2.05M |
+| Village centre (0, −4), height 39 | 1,026 / 2.62M | 805 / 2.11M |
+| Millpond bank, height 39 | 975 / 2.49M | 765 / 2.00M |
+| Orchard bench, height 39 | 726 / 2.29M | 528 / 1.83M |
+| Market square, height 39 | 828 / 2.15M | 630 / 1.72M |
+| Fields (−36, 30), height 39 | 682 / 2.00M | 515 / 1.63M |
 
 In `tests/performance.spec.js`'s own run at 1600 × 1000 (the most over six frames, reflection frames included), the village at 39 counts 1,003 draws and 2.37M triangles, against 1,253 and 2.95M for `main` with the cap lifted and 856–1,104 and 2.11–2.41M for the village at 39 before the map grew. The test zooms the village out to the cap and checks that the far detail is hidden, that the view stays under 1,100 draws and 2.45M triangles, and that zooming back to 30 brings every pebble and fallen leaf back; `tests/detail.spec.js` (`@logic`) checks that zooming out only ever coarsens the view, that nothing up to the old cap loses ground detail, and that the coarse shrub leaf keeps every leaf and its outline at a third of the triangles.
 
