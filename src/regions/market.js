@@ -9,8 +9,8 @@
 // Each piece is one vertex-coloured mesh, plus the village's glass for its
 // windows and lamps (which glow at blue hour) and a painted sign or two, so
 // the lane adds a handful of draws and no new shader programs.
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { chunkRandom } from "../world-layout.js";
+import { createKit } from "./kit.js";
 import {
   LANE,
   MARKET as M,
@@ -38,6 +38,7 @@ export function marketJobs(T, world, { life } = {}) {
   const finish = (name, kit, signs = []) => {
     const meshes = [kit.mesh(name, material)];
     const glassGeometry = kit.glass();
+    kit.dispose();
     if (glassGeometry) {
       const pane = new T.Mesh(glassGeometry, glass);
       pane.name = `${name} glass`;
@@ -148,127 +149,6 @@ export function marketJobs(T, world, { life } = {}) {
     }),
   ];
   return { jobs };
-}
-
-// --- Geometry kit -------------------------------------------------------------
-
-// Parts are posed unit shapes painted one colour each, merged into one mesh
-// for the structure and one for its glass.
-function kit(T) {
-  const parts = [],
-    glassParts = [],
-    color = new T.Color(),
-    matrix = new T.Matrix4(),
-    rotation = new T.Euler(),
-    quaternion = new T.Quaternion(),
-    position = new T.Vector3(),
-    scale = new T.Vector3();
-  const unit = {
-    box: new T.BoxGeometry(1, 1, 1),
-    cylinder: new T.CylinderGeometry(1, 1, 1, 12),
-    sphere: new T.IcosahedronGeometry(1, 1),
-    cone: new T.ConeGeometry(1, 1, 4),
-  };
-  let into = parts;
-  function paint(geometry, hex) {
-    color.set(hex);
-    const count = geometry.attributes.position.count,
-      colors = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) color.toArray(colors, i * 3);
-    geometry.setAttribute("color", new T.BufferAttribute(colors, 3));
-  }
-  function add(base, hex, x, y, z, sx, sy, sz, rx = 0, ry = 0, rz = 0) {
-    const geometry = base.clone();
-    matrix.compose(
-      position.set(x, y, z),
-      quaternion.setFromEuler(rotation.set(rx, ry, rz, "YXZ")),
-      scale.set(sx, sy, sz),
-    );
-    geometry.applyMatrix4(matrix);
-    if (into === parts) paint(geometry, hex);
-    else geometry.deleteAttribute("color");
-    into.push(geometry);
-    return geometry;
-  }
-  const k = {
-    box: (hex, x, y, z, w, h, d, ry = 0, rx = 0, rz = 0) =>
-      add(unit.box, hex, x, y, z, w, h, d, rx, ry, rz),
-    cyl: (hex, x, y, z, r, h, rx = 0, rz = 0) => add(unit.cylinder, hex, x, y, z, r, h, r, rx, 0, rz),
-    ball: (hex, x, y, z, sx, sy = sx, sz = sx) => add(unit.sphere, hex, x, y, z, sx, sy, sz),
-    pyramid: (hex, x, y, z, r, h, ry = Math.PI / 4) => add(unit.cone, hex, x, y, z, r, h, r, 0, ry),
-    /** A round bar from a to b ([x, y, z] each). */
-    beam(hex, a, b, r) {
-      const dx = b[0] - a[0],
-        dy = b[1] - a[1],
-        dz = b[2] - a[2],
-        length = Math.hypot(dx, dy, dz),
-        geometry = unit.cylinder.clone();
-      geometry.applyMatrix4(matrix.makeScale(r, length, r));
-      quaternion.setFromUnitVectors(
-        new T.Vector3(0, 1, 0),
-        new T.Vector3(dx / length, dy / length, dz / length),
-      );
-      geometry.applyMatrix4(matrix.makeRotationFromQuaternion(quaternion));
-      geometry.translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
-      if (into === parts) paint(geometry, hex);
-      into.push(geometry);
-      return geometry;
-    },
-    /** A flat-sided solid from an outline in a vertical plane, `depth` thick along x. */
-    gable(hex, x, y, z, outline, depth) {
-      const shape = new T.Shape(outline.map(([u, v]) => new T.Vector2(u, v))),
-        geometry = new T.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
-      geometry.rotateY(Math.PI / 2);
-      geometry.translate(x, y, z);
-      if (into === parts) paint(geometry, hex);
-      else geometry.deleteAttribute("color");
-      into.push(geometry);
-      return geometry;
-    },
-    /** Parts added inside `build` go to the glass mesh. */
-    glazed(build) {
-      const before = into;
-      into = glassParts;
-      build();
-      into = before;
-    },
-    /** Builds parts in a local frame, then moves them to (x, y, z) turned by ry. */
-    placed(x, y, z, ry, build) {
-      const before = into,
-        mark = into.length,
-        glassMark = glassParts.length;
-      build();
-      const frame = new T.Matrix4().compose(
-        new T.Vector3(x, y, z),
-        new T.Quaternion().setFromEuler(new T.Euler(0, ry, 0)),
-        new T.Vector3(1, 1, 1),
-      );
-      for (let i = mark; i < parts.length; i++) parts[i].applyMatrix4(frame);
-      for (let i = glassMark; i < glassParts.length; i++) glassParts[i].applyMatrix4(frame);
-      into = before;
-    },
-    mesh(name, material) {
-      const mesh = new T.Mesh(merge(parts), material);
-      mesh.name = name;
-      mesh.castShadow = mesh.receiveShadow = true;
-      mesh.matrixAutoUpdate = false;
-      for (const geometry of Object.values(unit)) geometry.dispose();
-      return mesh;
-    },
-    glass: () => (glassParts.length ? merge(glassParts) : null),
-  };
-  function merge(list) {
-    const flat = list.map((part) => {
-      for (const name of Object.keys(part.attributes))
-        if (!["position", "normal", "color"].includes(name)) part.deleteAttribute(name);
-      return part.index ? part.toNonIndexed() : part;
-    });
-    const geometry = mergeGeometries(flat, false);
-    for (const part of list) part.dispose();
-    geometry.computeBoundingSphere();
-    return geometry;
-  }
-  return k;
 }
 
 // A painted sign board: cream with dark lettering, like the village's.
@@ -403,7 +283,7 @@ function gravel(T, material) {
 // A plank footbridge with a gentle hump, its rails on squared posts, resting
 // on stone footings on either bank.
 function footbridge(T) {
-  const k = kit(T),
+  const k = createKit(T),
     b = M.bridge,
     planks = ["#8a6a4a", "#7f6145", "#93724f", "#866547"],
     rail = "#6b543f",
@@ -424,7 +304,7 @@ function footbridge(T) {
     for (let i = 0; i < 8; i++) {
       const x0 = b.minX + (i / 8) * span,
         x1 = b.minX + ((i + 1) / 8) * span;
-      k.beam(rail, [x0, bridgeDeck(x0, zc) - 0.14, z], [x1, bridgeDeck(x1, zc) - 0.14, z], 0.06);
+      k.rod(rail, [x0, bridgeDeck(x0, zc) - 0.14, z], [x1, bridgeDeck(x1, zc) - 0.14, z], 0.06);
     }
   // Posts and a top rail on each side.
   for (const z of [b.minZ + 0.04, b.maxZ - 0.04]) {
@@ -436,7 +316,7 @@ function footbridge(T) {
       k.box(rail, x, deck + 0.42, z, 0.09, 0.9, 0.09);
       k.box("#e3d6b5", x, deck + 0.89, z, 0.12, 0.05, 0.12);
       const top = [x, deck + 0.84, z];
-      if (previous) k.beam(rail, previous, top, 0.035);
+      if (previous) k.rod(rail, previous, top, 0.035);
       previous = top;
     }
   }
@@ -517,7 +397,7 @@ const teaSignAt = () => ({
 // The Copper Kettle: a cream cottage with a sage roof, a striped awning over
 // its bay window, and a terrace of tables on the lane.
 function teaRoom(T, range) {
-  const k = kit(T),
+  const k = createKit(T),
     t = M.teaRoom,
     front = t.d / 2,
     timber = "#6a5442";
@@ -598,7 +478,7 @@ const postSignAt = () => ({
 // The post office: red brick under a slate roof, a green door, a bench for
 // waiting, parcels stacked by the wall, and a pillar box at the lane.
 function postOffice(T) {
-  const k = kit(T),
+  const k = createKit(T),
     p = M.postOffice,
     front = p.d / 2,
     trim = "#e6dcc4";
@@ -722,7 +602,7 @@ function stall(k, kind, range) {
     for (let i = 0; i < 5; i++) {
       const x = -0.9 + i * 0.45,
         hang = 1.55 - (i % 2) * 0.12;
-      k.beam("#3d3a36", [x, tip[1] - 0.18, d / 2 + 0.2], [x, hang + 0.14, d / 2 + 0.2], 0.008);
+      k.rod("#3d3a36", [x, tip[1] - 0.18, d / 2 + 0.2], [x, hang + 0.14, d / 2 + 0.2], 0.008);
       k.glazed(() => k.ball("#ffcf73", x, hang, d / 2 + 0.2, 0.13, 0.16, 0.13));
       k.cyl("#3d3a36", x, hang + 0.15, d / 2 + 0.2, 0.06, 0.03);
     }
@@ -785,7 +665,7 @@ function lamp(k, x, z) {
 }
 
 function stalls(T, range) {
-  const k = kit(T);
+  const k = createKit(T);
   for (const s of M.stalls) k.placed(s.x, 0, s.z, s.facing, () => stall(k, s.id, range));
   // Bunting: two strings crossing the square from pole to pole, sagging in
   // the middle, with pennants of every awning's colour.
@@ -810,7 +690,7 @@ function stalls(T, range) {
         from.z + (to.z - from.z) * t,
       ],
       heading = Math.atan2(to.x - from.x, to.z - from.z);
-    for (let i = 0; i < 12; i++) k.beam("#e8dcbb", at(i / 12), at((i + 1) / 12), 0.01);
+    for (let i = 0; i < 12; i++) k.rod("#e8dcbb", at(i / 12), at((i + 1) / 12), 0.01);
     for (let i = 1; i < flags; i++) {
       const [x, y, z] = at(i / flags);
       k.placed(x, y, z, heading, () =>
@@ -853,7 +733,7 @@ function stalls(T, range) {
 // A fingerpost pointing home and out to the coast, and a farm cart left by
 // the lane with sacks and a crate aboard.
 function lanesEnd(T) {
-  const k = kit(T),
+  const k = createKit(T),
     s = M.signpost;
   k.box("#6a5442", s.x, 1.15, s.z, 0.12, 2.3, 0.12);
   k.pyramid("#5a4636", s.x, 2.4, s.z, 0.1, 0.16);
@@ -888,7 +768,7 @@ function lanesEnd(T) {
       k.cyl("#5a4636", x, 0.5, 0.15, 0.48, 0.06, 0, Math.PI / 2);
       k.cyl("#8a6a4a", x, 0.5, 0.15, 0.4, 0.07, 0, Math.PI / 2);
       k.cyl("#5a4636", x, 0.5, 0.15, 0.09, 0.12, 0, Math.PI / 2);
-      k.beam("#6a5442", [sx * 0.4, 0.62, -(c.d - 0.4) / 2], [sx * 0.35, 0.08, -(c.d + 0.9) / 2 - 0.4], 0.035);
+      k.rod("#6a5442", [sx * 0.4, 0.62, -(c.d - 0.4) / 2], [sx * 0.35, 0.08, -(c.d + 0.9) / 2 - 0.4], 0.035);
     }
     k.cyl("#5a4636", 0, 0.5, 0.15, 0.04, c.w + 0.1, 0, Math.PI / 2);
     for (const [x, z] of [

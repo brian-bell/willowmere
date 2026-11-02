@@ -109,6 +109,17 @@ export function createDebugApi(g) {
         }),
       }));
     },
+    /**
+     * One line per object in the scene, in traversal order: its transform,
+     * geometry, material and instance data hashed. Refactors that must not
+     * change the world compare these before and after.
+     */
+    getSceneFingerprint: () => {
+      const lines = [];
+      g.scene.updateMatrixWorld(true);
+      g.scene.traverse((o) => lines.push(fingerprint(o)));
+      return lines;
+    },
     getGlowMaterials: () => g.glowMaterials.size,
     getStreaming: () => ({
       pending: g.streamer.pending,
@@ -182,4 +193,80 @@ export function createDebugApi(g) {
       };
     },
   };
+}
+
+// FNV-1a over the bytes of typed arrays (or plain number lists).
+function hash(...arrays) {
+  let h = 0x811c9dc5;
+  for (const a of arrays) {
+    if (!a) {
+      h = Math.imul(h ^ 0xff, 0x01000193);
+      continue;
+    }
+    const bytes = ArrayBuffer.isView(a)
+      ? new Uint8Array(a.buffer, a.byteOffset, a.byteLength)
+      : new Uint8Array(Float64Array.from(a).buffer);
+    for (let i = 0; i < bytes.length; i++) h = Math.imul(h ^ bytes[i], 0x01000193);
+  }
+  return (h >>> 0).toString(16);
+}
+
+function geometryPrint(geometry) {
+  if (!geometry) return "-";
+  const names = Object.keys(geometry.attributes).sort();
+  return [
+    names.map((name) => `${name}=${hash(geometry.attributes[name].array)}`).join(","),
+    hash(geometry.index?.array),
+    geometry.drawRange.start,
+    geometry.drawRange.count,
+    geometry.groups.length,
+  ].join(":");
+}
+
+function materialPrint(material) {
+  if (!material) return "-";
+  if (Array.isArray(material)) return material.map(materialPrint).join("+");
+  return [
+    material.id,
+    material.type,
+    material.name,
+    material.color?.getHexString(),
+    material.emissive?.getHexString(),
+    material.emissiveIntensity,
+    material.roughness,
+    material.metalness,
+    material.opacity,
+    material.transparent,
+    material.vertexColors,
+    material.side,
+    material.depthWrite,
+    material.map?.id,
+    material.customProgramCacheKey?.(),
+  ].join(":");
+}
+
+function fingerprint(o) {
+  const instances = o.isInstancedMesh
+    ? hash(
+        o.instanceMatrix.array.subarray(0, o.count * 16),
+        o.instanceColor?.array.subarray(0, o.count * 3),
+      )
+    : "-";
+  return [
+    o.id,
+    o.type,
+    o.name,
+    o.visible,
+    o.castShadow,
+    o.receiveShadow,
+    o.frustumCulled,
+    o.renderOrder,
+    o.matrixAutoUpdate,
+    o.children.length,
+    hash(o.matrixWorld.elements),
+    geometryPrint(o.geometry),
+    materialPrint(o.material),
+    o.isInstancedMesh ? o.count : "",
+    instances,
+  ].join("|");
 }

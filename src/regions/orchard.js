@@ -11,6 +11,7 @@
 // holds on the hill, and a shaken tree's leaves tremble.
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { chunkRandom } from "../world-layout.js";
+import { createKit } from "./kit.js";
 import { crownShells } from "../trees.js";
 import {
   FRUIT_TREES,
@@ -708,51 +709,14 @@ function createHarvest(T, world) {
 // Every structure shares one vertex-coloured material: one draw per pass.
 // The windmill's sails are a second mesh that turns.
 function structures(T, range) {
-  const parts = [],
-    sailParts = [],
+  const k = createKit(T, { segments: 10 }),
+    { add, box, post, placed } = k,
+    unitCylinder = k.unit.cylinder,
+    sailLayer = k.layer(),
     color = new T.Color(),
     matrix = new T.Matrix4(),
-    rotation = new T.Euler(),
     quaternion = new T.Quaternion(),
-    position = new T.Vector3(),
     scale = new T.Vector3();
-  const unitBox = new T.BoxGeometry(1, 1, 1),
-    unitCylinder = new T.CylinderGeometry(1, 1, 1, 10);
-  let into = parts;
-  function add(base, hex, x, y, z, sx, sy, sz, rx = 0, ry = 0, rz = 0) {
-    const geometry = base.clone();
-    matrix.compose(
-      position.set(x, y, z),
-      quaternion.setFromEuler(rotation.set(rx, ry, rz, "YXZ")),
-      scale.set(sx, sy, sz),
-    );
-    geometry.applyMatrix4(matrix);
-    paint(geometry, hex);
-    into.push(geometry);
-    return geometry;
-  }
-  function paint(geometry, hex) {
-    color.set(hex);
-    const count = geometry.attributes.position.count,
-      colors = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) color.toArray(colors, i * 3);
-    geometry.setAttribute("color", new T.BufferAttribute(colors, 3));
-  }
-  const box = (hex, x, y, z, w, h, d, ry = 0, rx = 0, rz = 0) =>
-    add(unitBox, hex, x, y, z, w, h, d, rx, ry, rz);
-  const post = (hex, x, z, bottom, top, r = 0.06) =>
-    add(unitCylinder, hex, x, (bottom + top) / 2, z, r, top - bottom, r);
-  // Builds parts in a local frame, then moves them to (x, y, z) turned by ry.
-  function placed(x, y, z, ry, build) {
-    const before = into.length;
-    build();
-    const frame = new T.Matrix4().compose(
-      new T.Vector3(x, y, z),
-      new T.Quaternion().setFromEuler(new T.Euler(0, ry, 0)),
-      new T.Vector3(1, 1, 1),
-    );
-    for (let i = before; i < into.length; i++) into[i].applyMatrix4(frame);
-  }
   const wood = ["#8a6a4a", "#7f6145", "#93724f"],
     darkWood = "#5f4c3a",
     pick = (list) => list[Math.floor(range(0, list.length))];
@@ -787,9 +751,7 @@ function structures(T, range) {
       color.toArray(colors, i * 3);
     }
     tower.setAttribute("color", new T.BufferAttribute(colors, 3));
-    tower.deleteAttribute("uv");
-    tower.setAttribute("uv", new T.BufferAttribute(new Float32Array(p.count * 2), 2));
-    parts.push(tower);
+    k.piece(tower);
   }
   const radiusAt = (y) => w.radius - 0.5 * (y / towerHeight);
   // A string course under the cap.
@@ -802,10 +764,7 @@ function structures(T, range) {
   }
   const cap = new T.LatheGeometry(capProfile, 20);
   cap.translate(w.x, capBase, w.z);
-  paint(cap, "#5b4a3c");
-  cap.deleteAttribute("uv");
-  cap.setAttribute("uv", new T.BufferAttribute(new Float32Array(cap.attributes.position.count * 2), 2));
-  parts.push(cap);
+  k.piece(cap, "#5b4a3c");
   add(unitCylinder, darkWood, w.x, capBase + 1.45, w.z, 0.05, 0.3, 0.05);
   // Door and windows face the path's end; the sails face the village.
   const doorAngle = Math.atan2(0.72, 0.69),
@@ -842,29 +801,26 @@ function structures(T, range) {
         scale.set(0.13, 0.13, length),
       ),
     );
-    paint(geometry, darkWood);
-    parts.push(geometry);
+    k.piece(geometry, darkWood);
   }
   // The sails, built in the hub's frame (the shaft along +z), each a stock
   // with a lattice and a sailcloth on its leading side.
-  into = sailParts;
-  add(unitCylinder.clone().rotateX(Math.PI / 2), "#4e3f33", 0, 0, 0.12, 0.22, 0.22, 0.32);
-  for (let k = 0; k < 4; k++) {
-    const before = sailParts.length,
-      length = 3.7,
-      width = 0.86;
-    box("#6b5644", 0, length / 2, 0.2, 0.11, length + 0.2, 0.11);
-    for (const x of [0.12, width])
-      box("#7b6450", x, length / 2 + 0.55, 0.22, 0.05, length - 0.9, 0.05);
-    for (let i = 0; i < 9; i++) {
-      const y = 0.9 + (i / 8) * (length - 1.05);
-      box("#7b6450", width / 2 + 0.06, y, 0.22, width - 0.04, 0.04, 0.04);
-    }
-    box("#ece3cc", width / 2 + 0.07, length / 2 + 0.55, 0.25, width - 0.12, length - 1.0, 0.015);
-    const spin = new T.Matrix4().makeRotationZ((k * Math.PI) / 2);
-    for (let i = before; i < sailParts.length; i++) sailParts[i].applyMatrix4(spin);
-  }
-  into = parts;
+  k.into(sailLayer, () => {
+    add(unitCylinder.clone().rotateX(Math.PI / 2), "#4e3f33", 0, 0, 0.12, 0.22, 0.22, 0.32);
+    for (let n = 0; n < 4; n++)
+      k.transformed(new T.Matrix4().makeRotationZ((n * Math.PI) / 2), () => {
+        const length = 3.7,
+          width = 0.86;
+        box("#6b5644", 0, length / 2, 0.2, 0.11, length + 0.2, 0.11);
+        for (const x of [0.12, width])
+          box("#7b6450", x, length / 2 + 0.55, 0.22, 0.05, length - 0.9, 0.05);
+        for (let i = 0; i < 9; i++) {
+          const y = 0.9 + (i / 8) * (length - 1.05);
+          box("#7b6450", width / 2 + 0.06, y, 0.22, width - 0.04, 0.04, 0.04);
+        }
+        box("#ece3cc", width / 2 + 0.07, length / 2 + 0.55, 0.25, width - 0.12, length - 1.0, 0.015);
+      });
+  });
 
   // The beehives: white lifts under a pitched roof, on a little stand, their
   // entrances facing south.
@@ -925,26 +881,10 @@ function structures(T, range) {
     }
   }
 
-  const merge = (list) => {
-    const geometry = mergeGeometries(
-      list.map((part) => (part.index ? part.toNonIndexed() : part)),
-      false,
-    );
-    for (const part of list) part.dispose();
-    geometry.computeBoundingSphere();
-    return geometry;
-  };
   const material = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 });
-  const mesh = new T.Mesh(merge(parts), material);
-  mesh.name = "Orchard windmill, hives and bench";
-  const sails = new T.Mesh(merge(sailParts), material);
-  sails.name = "Windmill sails";
-  unitBox.dispose();
-  unitCylinder.dispose();
-  for (const m of [mesh, sails]) {
-    m.castShadow = m.receiveShadow = true;
-    m.matrixAutoUpdate = false;
-  }
+  const mesh = k.mesh("Orchard windmill, hives and bench", material),
+    sails = k.mesh("Windmill sails", material, sailLayer);
+  k.dispose();
   // The sails turn slowly about the shaft.
   const facingShaft = new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 0, 1), shaft),
     spin = new T.Quaternion(),
