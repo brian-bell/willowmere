@@ -3,26 +3,26 @@ import * as THREE from "three";
 import { createBushes } from "../src/bushes.js";
 import {
   FAR_DETAIL_VIEW_HEIGHT,
-  overviewGroundDetail,
+  overviewFineDetail,
   overviewLeafLevel,
 } from "../src/game/detail.js";
 import { DEFAULT_VIEW_HEIGHT, MAX_VIEW_HEIGHT } from "../src/game/overview-camera.js";
 
-test("zooming out only ever coarsens the overview, and only past the old cap drops ground detail", { tag: "@logic" }, () => {
+test("zooming out only ever coarsens the overview, and only past the old cap drops its finest detail", { tag: "@logic" }, () => {
   let leaves = 0,
-    ground = true;
+    fine = true;
   for (let height = 10; height <= MAX_VIEW_HEIGHT; height += 0.5) {
     expect(overviewLeafLevel(height)).toBeGreaterThanOrEqual(leaves);
-    if (!ground) expect(overviewGroundDetail(height)).toBe(false);
+    if (!fine) expect(overviewFineDetail(height)).toBe(false);
     leaves = overviewLeafLevel(height);
-    ground = overviewGroundDetail(height);
+    fine = overviewFineDetail(height);
   }
-  // The default view keeps every leaf and blade; the views the old cap of 30
-  // allowed keep their grass, so only the newly opened zoom range drops it.
+  // The default view keeps every leaf and pebble; the views the old cap of 30
+  // allowed keep their fine detail, so only the newly opened zoom range drops it.
   expect(overviewLeafLevel(DEFAULT_VIEW_HEIGHT)).toBe(0);
-  expect(overviewGroundDetail(DEFAULT_VIEW_HEIGHT)).toBe(true);
+  expect(overviewFineDetail(DEFAULT_VIEW_HEIGHT)).toBe(true);
   expect(FAR_DETAIL_VIEW_HEIGHT).toBeGreaterThanOrEqual(30);
-  expect(overviewGroundDetail(MAX_VIEW_HEIGHT)).toBe(false);
+  expect(overviewFineDetail(MAX_VIEW_HEIGHT)).toBe(false);
 });
 
 test("coarse shrub leaves keep every leaf and its outline at a third of the triangles", { tag: "@logic" }, () => {

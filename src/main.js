@@ -18,7 +18,7 @@ import { createActivities } from "./game/activities.js";
 import { createDebugApi } from "./game/debug-api.js";
 import { createHud } from "./game/hud.js";
 import { createInteractions } from "./game/interactions.js";
-import { leafLevelAtDistance, overviewGroundDetail, overviewLeafLevel } from "./game/detail.js";
+import { leafLevelAtDistance, overviewFineDetail, overviewLeafLevel } from "./game/detail.js";
 import { loadState, saveState } from "./game/save.js";
 import { SHADOW_MAP_SIZES, createSunShadow } from "./game/shadows.js";
 import {
@@ -853,10 +853,11 @@ function animate(now) {
   playerVisibility.update(camera, !photo && !firstPerson);
   world.trees.setDetail(leafDetail());
   world.bushes.setDetail(leafDetail());
-  const groundDetail = firstPerson || overviewGroundDetail(overview.viewHeight);
+  const fineDetail = firstPerson || overviewFineDetail(overview.viewHeight);
   if (firstPerson) world.setDetailFocus(p.x, p.z);
-  else world.setOverviewDetail(groundDetail);
-  world.trees.setGroundDetail(groundDetail);
+  else world.setOverviewDetail(fineDetail);
+  world.trees.setGroundDetail(fineDetail);
+  life.setCastShadows(fineDetail);
   streamer.update(p.x, p.z, camera);
   sunShadow.fit({ firstPerson, yaw, targetYaw: overview.targetYaw });
   scene.updateMatrixWorld();

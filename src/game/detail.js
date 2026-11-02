@@ -10,8 +10,9 @@ export const COARSE_LEAVES_VIEW_HEIGHT = 24,
   CROWN_DISTANCE = 40,
   // Zoomed out past this, a pebble, a tuft or a fallen leaf is a pixel or
   // less: the overview hides the brook's pebbles and bank tufts and the
-  // litter and moss at the trees' feet. Grass and blossoms stay; their
-  // speckle is the meadow's texture from above.
+  // litter and moss at the trees' feet, and the people and animals stop
+  // casting shadows (their soft contact shadows stay). Grass and blossoms
+  // stay; their speckle is the meadow's texture from above.
   FAR_DETAIL_VIEW_HEIGHT = 30;
 
 /** First person: a canopy's leaf level from its distance to the eye. */
@@ -22,5 +23,5 @@ export const leafLevelAtDistance = (distance) =>
 export const overviewLeafLevel = (viewHeight) =>
   viewHeight > COARSE_LEAVES_VIEW_HEIGHT ? 1 : 0;
 
-/** Whether the overview at a view height shows small ground detail. */
-export const overviewGroundDetail = (viewHeight) => viewHeight <= FAR_DETAIL_VIEW_HEIGHT;
+/** Whether the overview at a view height keeps its finest detail. */
+export const overviewFineDetail = (viewHeight) => viewHeight <= FAR_DETAIL_VIEW_HEIGHT;
