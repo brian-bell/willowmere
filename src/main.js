@@ -884,7 +884,7 @@ function animate(now) {
   if (frame >= 3 && !openCountryRequested) {
     openCountryRequested = true;
     for (const region of regions)
-      region.stream?.(THREE, world, { life }).then(({ jobs, ...loaded }) => {
+      region.stream?.(THREE, world, { life, dusk: () => duskMix }).then(({ jobs, ...loaded }) => {
         activities.regionLoaded[region.id]?.(loaded);
         streamer.add(...jobs);
       });

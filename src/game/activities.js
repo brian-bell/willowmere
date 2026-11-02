@@ -4,10 +4,13 @@ import { MILLPOND } from "../regions/millpond-layout.js";
 import { FRUIT_TREES } from "../regions/orchard-layout.js";
 import { DELIVERY_THANKS, STALL_LINES, STALL_PROMPTS } from "../content/market.js";
 import { STALLS, buyFromStall, deliverLoaf, finnDelivery, stallOffer } from "./market.js";
+import { BIRD_LINES, HIDE_QUIET, HIDE_SETTLE, WREN_DONE, WREN_TIPS } from "../content/marsh.js";
+import { birdToSeek, watchBirds as watchFromHide } from "./marsh.js";
 
 // What the player does and earns: the welcome quests, gathering and planting
 // flowers, fishing from the millpond's jetty, the orchard's fruit and honey,
-// which Finn buys, and the market lane's bread deliveries and stalls. Each
+// which Finn buys, the market lane's bread deliveries and stalls, and
+// birdwatching from the marsh's hide. Each
 // changes the save, then updates the HUD, saves and chimes.
 
 // Wildflower bouquets to gather, by index into the save's `gathered` list.
@@ -325,6 +328,24 @@ export function createActivities({
     return STALL_LINES.bought[id];
   }
 
+  // Birdwatching from the marsh's hide.
+  const oneOf = (list) => list[Math.floor(Math.random() * list.length)];
+  /** A watch from the hide: returns the hide's lines, the sighting saved and paid. */
+  function watchBirds(dusk) {
+    const result = watchFromHide(state, { dusk, now: Date.now(), roll: Math.random });
+    if (result.kind === "quiet") return [oneOf(HIDE_QUIET)];
+    const line = `${BIRD_LINES[result.bird.id]}${result.first ? ` A new one for the journal. +${result.petals} petals` : ""}`;
+    updateUI();
+    save();
+    if (result.first) audio.chime();
+    return [oneOf(HIDE_SETTLE), line];
+  }
+  /** What Wren says: a tip for a bird still to see, at this time of day if she can. */
+  function wrenLine(dusk) {
+    const bird = birdToSeek(state, dusk);
+    return bird ? WREN_TIPS[bird.id] : oneOf(WREN_DONE);
+  }
+
   return {
     complete,
     flowerGroups,
@@ -348,6 +369,8 @@ export function createActivities({
     thanks,
     stallLabel,
     shop,
+    watchBirds,
+    wrenLine,
     get orchardReady() {
       return !!orchard;
     },

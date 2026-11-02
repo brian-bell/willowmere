@@ -62,6 +62,15 @@ export const LANDMARK_LINES = {
     "The lane runs on past the sign, between hedges, towards somewhere you haven’t been yet.",
     "Someone has carved a tiny boat into the post, just under the arrow for the coast.",
   ],
+  "marsh-bench": [
+    "You sit a while. Dragonflies stitch back and forth across the mere.",
+    "The willows trail their fingers in the water. Somewhere in the reeds, a warbler is gossiping.",
+    "A plaque on the backrest: “For Arthur, who loved this view and never said so.”",
+  ],
+  "marsh-footbridge": [
+    "The brook slips out from under the village and spreads into the marsh, slow and golden.",
+    "Downstream, the reeds grow taller than you. Somewhere out there, a heron is waiting.",
+  ],
 };
 
 // Any landmark without lines of its own.

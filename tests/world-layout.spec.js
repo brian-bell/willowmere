@@ -57,10 +57,19 @@ test("regions name the same village places as always, and the fields beyond", { 
     [36, 25],
     [36, -25],
     [0, -30],
-    [12, 30],
+    [-12, 30],
+    [30, 30],
     [-47, 41],
   ])
     expect(regionAt(x, z).name).toBe("The open fields");
+  // South of the village, the brook runs on into the willow marsh.
+  for (const [x, z] of [
+    [12, 21.5],
+    [12, 30],
+    [3, 40],
+    [26, 26],
+  ])
+    expect(regionAt(x, z).name).toBe("The willow marsh");
   // East of the village, between the millpond's latitude and the southern
   // fields, runs the market lane.
   for (const [x, z] of [
@@ -90,6 +99,8 @@ test("chunk seeds are independent of build order", { tag: "@logic" }, () => {
 });
 
 test("terrain is flat in the village and rises only at the millpond and orchard hill", { tag: "@logic" }, () => {
+  // The marsh dips a little below the lawn (its brook and mere), and rises
+  // only a few centimetres along its banks.
   for (const [x, z] of [
     [0, 0],
     [-24, -21],
@@ -116,6 +127,9 @@ test("terrain is flat in the village and rises only at the millpond and orchard 
   expect(regionAt(-2, -22).name).toBe("The orchard hill");
   expect(regionAt(7, -28).name).toBe("The millpond");
   expect(regionAt(12, -20.5).name).toBe("The willow brook");
+  expect(terrainHeight(13, 30)).toBeLessThan(-0.3);
+  for (let x = 0; x <= 27; x += 1)
+    for (let z = 21; z <= 40; z += 1) expect(terrainHeight(x, z)).toBeLessThan(0.12);
 });
 
 test("the region registry's ground boxes fit the open country's cut-outs", { tag: "@logic" }, () => {

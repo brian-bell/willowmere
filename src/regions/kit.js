@@ -180,3 +180,52 @@ export function createKit(T, { segments = 12, sphereDetail = 1 } = {}) {
   };
   return k;
 }
+
+const TAU = Math.PI * 2;
+
+// A tapered tube along a curve, with the village trees' bark colouring. Each
+// call pushes one non-indexed geometry to `out`.
+export function limb(T, curve, radius, tip, segments, radial, out) {
+  const frames = curve.computeFrenetFrames(segments, false),
+    vertices = [],
+    normals = [],
+    uvs = [],
+    colors = [],
+    indices = [],
+    length = curve.getLength(),
+    wood = new T.Color("#b49c7c"),
+    color = new T.Color(),
+    normal = new T.Vector3(),
+    point = new T.Vector3();
+  for (let j = 0; j <= segments; j++) {
+    const t = j / segments,
+      center = curve.getPointAt(t),
+      r = radius + (tip - radius) * Math.pow(t, 0.8);
+    for (let k = 0; k <= radial; k++) {
+      const a = (k / radial) * TAU;
+      normal
+        .copy(frames.normals[j])
+        .multiplyScalar(Math.cos(a))
+        .addScaledVector(frames.binormals[j], Math.sin(a));
+      point.copy(center).addScaledVector(normal, r);
+      vertices.push(point.x, point.y, point.z);
+      normals.push(normal.x, normal.y, normal.z);
+      uvs.push(k / radial, t * length * 0.85);
+      color.copy(wood).multiplyScalar(0.8 + 0.1 * Math.sin(a * 3 + t * 4));
+      colors.push(color.r, color.g, color.b);
+      if (j < segments && k < radial) {
+        const p = j * (radial + 1) + k,
+          q = p + radial + 1;
+        indices.push(p, p + 1, q, p + 1, q + 1, q);
+      }
+    }
+  }
+  const geometry = new T.BufferGeometry();
+  geometry.setAttribute("position", new T.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute("normal", new T.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute("uv", new T.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute("color", new T.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  out.push(geometry.toNonIndexed());
+  geometry.dispose();
+}
