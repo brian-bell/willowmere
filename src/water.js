@@ -142,7 +142,8 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
   quad.frustumCulled = false;
   simScene.add(quad);
   const frustum = new T.Frustum(),
-    projectionView = new T.Matrix4();
+    projectionView = new T.Matrix4(),
+    visibleBox = new T.Box3();
   const clipPlane = new T.Plane(new T.Vector3(0, 1, 0), 0);
   const savedViewport = new T.Vector4(),
     savedScissor = new T.Vector4();
@@ -679,8 +680,14 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       camera.matrixWorldInverse,
     );
     frustum.setFromProjectionMatrix(projectionView);
+    // The surface's flat box, not its bounding sphere: a long pool's sphere
+    // reaches far past its banks and would keep it capturing out of view.
     const visible = bodies.filter(
-      (body) => body.mesh.visible && frustum.intersectsObject(body.mesh),
+      (body) =>
+        body.mesh.visible &&
+        frustum.intersectsBox(
+          visibleBox.copy(body.mesh.geometry.boundingBox).applyMatrix4(body.mesh.matrixWorld),
+        ),
     );
     lastCaptureCount = 0;
     for (const body of bodies)
