@@ -263,10 +263,10 @@ Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high
 | View | `main` draws / triangles | Zoom detail draws / triangles |
 | --- | --- | --- |
 | Spawn, height 18 | 766 / 2.83M | 766 / 2.83M (identical pixels) |
-| Spawn, height 30 | 1,021 / 2.85M | 738 / 2.09M |
+| Spawn, height 30 | 996 / 2.80M | 738 / 2.09M |
 | Spawn, height 39 | 1,079 / 3.00M | 790 / 2.27M |
 | Village centre (0, −4), height 39 | 1,062 / 2.94M | 776 / 2.21M |
-| Marsh boardwalk (7.8, 31.2), height 30 | 826 / 2.35M | 609 / 1.75M |
+| Marsh boardwalk (7.8, 31.2), height 30 | 840 / 2.39M | 609 / 1.75M |
 | Marsh boardwalk, height 39 | 1,241 / 3.07M | 947 / 2.32M |
 | Millpond bank, height 39 | 1,254 / 3.07M | 957 / 2.30M |
 | Orchard bench, height 39 | 766 / 2.51M | 523 / 1.83M |
