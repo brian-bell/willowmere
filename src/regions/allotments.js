@@ -647,15 +647,18 @@ function createBeds(T, material) {
       mesh = meshes.get(id),
       { stage, growth } = wanted.get(id) ?? { stage: "free", growth: 0 };
     if (!mesh) return;
-    // Hidden crops draw no instances; visibility belongs to the zoom detail.
+    // Hidden crops draw no instances and sit in no camera's layer, so no pass
+    // draws or uploads them; visibility belongs to the zoom detail.
     const showing = stage === "growing" || stage === "ripe";
     mesh.count = showing ? shapes[plot.crop].slots(plot).length : 0;
+    mesh.layers.mask = showing ? 1 : 0;
     const size = stage === "ripe" ? 1 : Math.round(growth * 40) / 40;
     if (showing && mesh.userData.growth !== size) place(mesh, plot, size);
     // The boards stand in the beds still to let.
     const free = plots.filter((p) => (wanted.get(p.id)?.stage ?? "free") === "free");
     free.forEach((p, i) => boards.setMatrixAt(i, boardAt(p, i)));
     boards.count = free.length;
+    boards.layers.mask = free.length ? 1 : 0;
     boards.instanceMatrix.needsUpdate = true;
   }
   return {

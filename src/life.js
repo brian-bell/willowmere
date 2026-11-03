@@ -45,6 +45,10 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     depthWrite: false,
   });
   const shadowGeo = new THREE.CircleGeometry(1, 24);
+  // Every person shares these few fixed shapes rather than building their own.
+  const coatGeo = new THREE.CylinderGeometry(0.19, 0.255, 0.54, 14),
+    smileGeo = new THREE.TorusGeometry(0.026, 0.005, 4, 8, Math.PI),
+    hatCrownGeo = new THREE.CylinderGeometry(0.153, 0.193, 0.19, 18);
   const shadow = (parent, sx, sz) => {
     const s = new THREE.Mesh(shadowGeo, shadowMat);
     s.rotation.x = -Math.PI / 2;
@@ -84,7 +88,6 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       m(leg, "box", 0x382f28, 0, -0.491, 0.045, 0.17, 0.032, 0.265);
       legs.push(leg);
     }
-    const coatGeo = new THREE.CylinderGeometry(0.19, 0.255, 0.54, 14);
     const torso = new THREE.Mesh(coatGeo, mat(coat));
     torso.position.y = 0.87;
     torso.castShadow = true;
@@ -148,19 +151,13 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       sphere(body, hair, side * 0.15, 1.427, 0.058, 0.062, 0.105, 0.091);
     }
     sphere(body, skin, 0, 1.313, 0.18, 0.027, 0.03, 0.031);
-    const smile = new THREE.Mesh(
-      new THREE.TorusGeometry(0.026, 0.005, 4, 8, Math.PI),
-      mat(0x9e6553),
-    );
+    const smile = new THREE.Mesh(smileGeo, mat(0x9e6553));
     smile.rotation.z = Math.PI;
     smile.position.set(0, 1.28, 0.164);
     body.add(smile);
     if (hat) {
       m(body, "cylinder", 0xf1dfab, 0, 1.51, -0.015, 0.313, 0.043, 0.255);
-      const crown = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.153, 0.193, 0.19, 18),
-        mat(0xe7d29b),
-      );
+      const crown = new THREE.Mesh(hatCrownGeo, mat(0xe7d29b));
       crown.position.set(0, 1.616, -0.02);
       crown.castShadow = true;
       body.add(crown);
