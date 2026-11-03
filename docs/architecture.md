@@ -4,7 +4,7 @@ Where Willowmere's code lives, how the world beyond the village plugs in, and ho
 
 ## Entry points
 
-- `index.html` loads `src/main.js`, the game. `/?interior=bakery` starts inside the bakery.
+- `index.html` loads `src/main.js`, the game. `/?interior=bakery` starts inside the bakery, `/?interior=rosewood` inside Rosewood, your cottage.
 - `water-study.html` loads `src/water-study.js`, a close-up view of the village water with diagnostics. It is part of the production build.
 - `tree-study.html` is a development-only page (its script is inline) for the tree models. The build leaves it out.
 
@@ -12,7 +12,7 @@ All art and audio are generated in code. `vite.config.js` splits Three.js into i
 
 ## The outdoor game
 
-`src/main.js` wires the outdoor game together: renderer, scene and lights, input, first person, the bakery transitions and the frame loop. Each subsystem it coordinates is a factory in `src/game/`:
+`src/main.js` wires the outdoor game together: renderer, scene and lights, input, first person, the transitions into the walkable rooms and the frame loop. Each subsystem it coordinates is a factory in `src/game/`:
 
 | Module | Owns |
 | --- | --- |
@@ -25,6 +25,7 @@ All art and audio are generated in code. `vite.config.js` splits Three.js into i
 | `hud.js` | toasts, the quest card, conversations and the journal |
 | `activities.js` | quests, flowers, fishing, the orchard harvest, the market's deliveries and stalls, birdwatching at the marsh's hide, pressing the old wood's flowers, the allotment beds |
 | `market.js`, `marsh.js`, `wood.js`, `allotments.js` | the market's trade, the hide's birdwatching, the wood's flower pressing and the allotment beds' renting, sowing, growing and harvesting rules, as pure decisions on the save's state |
+| `rosewood.js` | Rosewood's treasures (what Bark digs up), the jigsaw, and the footstep trail Bark follows, as pure decisions |
 | `interactions.js` | the prompt and what E does |
 | `debug-api.js` | `window.__willowmere`, which tests and benchmarks use |
 
@@ -34,14 +35,14 @@ Game text lives in `src/content/` (journal, landmarks, neighbours, and one file 
 
 - `src/world-layout.js` holds the map's bounds (walk box, camera clamp, shadow extent, plantable area), the 16 × 14 m chunk grid, the named areas behind the location label, `terrainHeight(x, z)` and `chunkRandom(cx, cz)`. Read limits from here instead of hard-coding them.
 - `src/world.js` puts the world together: it creates the water and the chunk grid, calls the village's builders, joins the brook's and the regions' colliders, bakes the village, and exposes `addStreamed`, `addLamps`, `animate` and `trees` to streamed regions.
-- `src/village/` builds the village, one module per part: `kit.js` (the shared random stream, materials, textures and the `box`/`cyl`/`orb`/`beam`/`label` helpers), `ground.js`, `paths.js`, `brook.js` (and the bridge), `buildings.js`, `fountain.js`, `furniture.js` (benches, fences, the kitchen garden's enclosure), `lamps.js` (lamps and the fixed light pool), `plants.js` (trees, shrubs, meadow, reeds, lavender, cobbles) and `accents.js`. The builders draw from one random stream in the order `world.js` calls them, so a new `rand()` call, or a reordered builder, moves everything placed after it. Give new village features their own seeded stream, as `garden.js` does. `node scripts/world-fingerprint.mjs <out.json>` hashes the whole world without a browser; compare its output on `main` and on a branch to show a refactor changed nothing.
+- `src/village/` builds the village, one module per part: `kit.js` (the shared random stream, materials, textures and the `box`/`cyl`/`orb`/`beam`/`label` helpers), `ground.js`, `paths.js`, `brook.js` (and the bridge), `buildings.js`, `fountain.js`, `furniture.js` (benches, fences, the kitchen garden's enclosure), `lamps.js` (lamps and the fixed light pool), `plants.js` (trees, shrubs, meadow, reeds, lavender, cobbles), `accents.js` and `rosewood-yard.js` (Rosewood's kitchen extension and back garden, which draws no random numbers). The builders draw from one random stream in the order `world.js` calls them, so a new `rand()` call, or a reordered builder, moves everything placed after it. Give new village features their own seeded stream, as `garden.js` does. `node scripts/world-fingerprint.mjs <out.json>` hashes the whole world without a browser; compare its output on `main` and on a branch to show a refactor changed nothing.
 - `src/bake.js` holds the chunk grid's bake, which merges the village's static meshes per chunk, material and shadow role, first person's detail range, and the small detail and thin shadow casters the overview drops when zoomed far out.
 - `src/streaming.js` builds everything beyond the village after the game starts, a slice of each frame at a time.
 - Scenery: `src/trees.js` (branching trees, leaves, wind, levels of detail), `src/flowers.js`, `src/bushes.js`, `src/reeds.js`, `src/riverbank.js`, `src/planters.js` (pots, window boxes, beds), `src/garden.js` (the kitchen garden), `src/sky.js` (first person's sky).
 - Life: `src/life.js` (the traveler, residents and wildlife), `src/cats.js`, `src/fishing.js` (the millpond's cast and bite).
 - Presentation: `src/bloom.js` (quarter-resolution bloom), `src/effects.js` (gathering, planting and watering particles), `src/visibility.js` (the player's silhouette behind scenery), `src/audio.js` (synthesized ambience), `src/icons.js` and `src/style.css`.
 - Water: `src/water.js` and `src/water-shaders.js`, described in [Water](water.md).
-- The bakery: `src/interior.js` and `src/interior.css` (camera, input, interactions, postprocessing, pause menu, entry and exit), `src/interior-movement.js` (grounded movement and furniture collision) and `src/bakery.js` (the room, its furnishings, lighting and animation).
+- The walkable rooms: `src/interior.js` and `src/interior.css` (camera, input, interactions, postprocessing, pause menu, entry and exit, shared by every room), `src/interior-movement.js` (grounded movement and furniture collision), `src/interior-kit.js` (the rooms' seeded random stream, materials, primitives and the bake that merges a dressed room by material), and one builder per room: `src/bakery.js` (The Daily Loaf) and `src/rosewood.js` (your cottage: hall, living room, bedroom, kitchen and back garden, and Bark). A room returns its scene, shadowing lights, walkable layout, the points E answers at, and `update`; it may add `interact(point)` for activities, `takeNote()` for things that happen on their own, `staticShadows` when nothing that moves casts a shadow, and `diagnostics()`. A new room is a builder plus one line in `ROOMS` in `src/interior.js` and in `INTERIOR_NAMES` in `src/main.js`; its words go in `src/content/<room>.js`.
 
 ## Regions
 
@@ -60,7 +61,7 @@ A region with gameplay usually also adds pure rules in `src/game/<region>.js`, i
 
 `npm test` runs every Playwright spec in `tests/` against a Vite server it starts on port 5174. Tests tagged `@logic` import pure modules and never open a page; `npm run test:logic` runs only those, in parallel, in seconds. `npm run typecheck` runs TypeScript over the JavaScript files that start with `// @ts-check`: the pure modules, where JSDoc types such as `SaveState` (`src/game/save.js`) and `Region` (`src/regions/index.js`) catch a misspelled field before it ships. Other files are not checked; add the line when a module is pure. CI (`.github/workflows/ci.yml`) builds, type-checks, runs the logic tier, and runs the one `@smoke` test in `tests/smoke.spec.js`, which suits software WebGL. Playwright uses `CHROME_PATH` when set, installed Chrome on macOS, or Playwright's Chromium (`npx playwright install chromium`).
 
-Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.js`). It reads state (`getState`, `getPlayer`, `getView`, `getFishing`, `getOrchard`, `getMarket`, `getMarsh`, `getWood`, `getAllotments`, `getChunks`, `getStreaming`, `getWater`, `getInterior`), moves the player (`moveTo`, `findPath`, `blocked`), reports rendering work (`getDiagnostics`), and overrides rendering for measurements (`tune`, `tuneInterior`, `setAdaptiveResolution`). `getSceneFingerprint()` hashes every object's transform, geometry, material and instances, so a refactor that must not change the world can compare it before and after, with frame-locked screenshots.
+Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.js`). It reads state (`getState`, `getPlayer`, `getView`, `getFishing`, `getOrchard`, `getMarket`, `getMarsh`, `getWood`, `getAllotments`, `getChunks`, `getStreaming`, `getWater`, `getInterior`), moves the player (`moveTo`, `findPath`, `blocked`, and `placeInterior` indoors), reports rendering work (`getDiagnostics`), and overrides rendering for measurements (`tune`, `tuneInterior`, `setAdaptiveResolution`). `getSceneFingerprint()` hashes every object's transform, geometry, material and instances, so a refactor that must not change the world can compare it before and after, with frame-locked screenshots.
 
 | Spec | Covers |
 | --- | --- |
@@ -74,4 +75,5 @@ Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.
 | `cats`, `puppy`, `trees` | wildlife, Lily and Pip, and tree geometry, culling and detail levels |
 | `water` | the water solver, captures, refraction and fallbacks (see [Water](water.md#verification)) |
 | `interior` | the walkable bakery and its rendering settings |
+| `rosewood` | Rosewood's rules (logic), its front door, rooms, Bark's following, fetch, dig and the other activities, and its draw budget |
 | `performance`, `tune`, `resolution`, `shadows` | rendering budgets and the measurement hooks (see [Regression budgets](performance.md#regression-budgets)) |

@@ -221,6 +221,12 @@ What remains on high is mostly the multisampled color pass at 2000 × 1250 and t
 
 Screenshots at device scale 2 with reduced motion compare the counter, the oven corner and the display case in front of the arched window, in the golden afternoon and after hours. Before and after match within a mean absolute difference of 1.5–2.2 levels out of 255. Under 1.5% of pixels differ by more than 16 levels, mostly along edges where the 2x MSAA used on balanced resolves differently. The warm oven glow, the window's light on the floor, and the soft contact shadows under the furniture are unchanged.
 
+### Rosewood interior
+
+Rosewood (`src/rosewood.js`) goes through the same chain and settings as the bakery. Its two shadow casters, the sun over the back garden and the spot light through the living room's front window, render once when the room opens and after a resize or quality change: the room sets `staticShadows`, so the interior never refreshes them on a timer. Everything that moves (Bark, the ball, the fish, the record, the clock's pendulum and the washing) casts no shadow into those maps, so nothing is left behind where it stood; Bark carries a soft blob shadow instead. The fire, the kitchen pendant and the bedside lamp are its three point lights, fixed for the visit, so dusk changes their intensity and compiles nothing. Bark is one merged vertex-coloured figure per moving part, sharing one material.
+
+Counted in the cloud container (SwiftShader, 1000 × 625 CSS pixels, high): 299 draws and about 0.4M triangles at the front door looking down the hall, 196 draws and 0.29M in the living room by the aquarium, 344 draws and 0.51M from the kitchen looking out into the garden, and 91 draws by Bark's kennel. The bakery's entrance view is 285. Its exterior adds the kitchen extension and the back garden to the village: behind Rosewood at height 18, 813 draws and 2.47M triangles against `main`'s 792 and 2.50M (the meadow grass under the extension and patio is cleared). The bakery itself is unchanged by sharing its helpers (`src/interior-kit.js`): 275 draws and 1,161,370 triangles before and after at the same view.
+
 ## Regression budgets
 
 These tests assert rendering work and behaviour instead of a machine-dependent FPS threshold. The village diagnostics expose `drawCalls`, `triangles`, `geometries`, `textures`, and `shadow` (`mapSize` and light-space `bounds`); water diagnostics include each pool's `reflectionSize`.
@@ -236,6 +242,7 @@ These tests assert rendering work and behaviour instead of a machine-dependent F
 - **Streaming.** `tests/streaming.spec.js` checks that the open country's 16 grass patches and the route grid stream in after startup, that first person's fog closes before its 72 m far plane, and that neither the streaming nor a walk from the green across two chunk borders into the fields at the zoom cap ever misses two display refreshes in a row (a gap of 45 ms or more between animation frames; a single missed refresh at 33 ms is load, not a stall). The first zoom-out after starting is left out of that timing: it has stalled for 50–70 ms once since before the map grew. The test skips itself where the median frame takes over 20 ms, as with software WebGL in cloud containers.
 - **Lanterns.** `tests/routing.spec.js` checks that the lanterns keep a fixed pool of point lights with no new shader programs at dusk.
 - **Bakery.** `tests/interior.spec.js` checks that the bakery's shadow maps stay cached, that its AO runs at half the scene target's width, the MSAA and sun-map size for each quality, and median draw budgets of under 330 on high and under 180 on performance.
+- **Rosewood.** `tests/rosewood.spec.js` checks that Rosewood's shadow maps stay cached with a 2048 sun map on high, and median draws at the front door under 400 on high and under 250 on performance.
 
 ## Change history
 

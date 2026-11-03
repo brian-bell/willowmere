@@ -1,0 +1,81 @@
+// @ts-check
+// Inside The Daily Loaf: the bakery's words, and where each thing the visitor
+// can press E at stands (room coordinates, see src/bakery.js).
+export const BAKERY_ROOM = {
+  title: "The Daily Loaf",
+  ariaLabel: "Inside The Daily Loaf",
+  touchLabel: "Walk around the bakery",
+  pauseLabel: "Pause bakery visit",
+  nightLabels: ["After hours", "Golden afternoon"],
+};
+
+export const BAKERY_POINTS = [
+  {
+    id: "door",
+    x: 4.8,
+    z: 5.45,
+    y: 2,
+    range: 1.85,
+    label: "Step out into Willowmere",
+  },
+  {
+    id: "pastries",
+    x: 4.55,
+    z: 2.55,
+    y: 2.55,
+    range: 2.5,
+    label: "Admire the pastries",
+    title: "SOMETHING SWEET",
+    text: "Moon croissants, berry daydreams, and just one more for the walk home. Finn has saved the warmest batch for his neighbors.",
+  },
+  {
+    id: "crumb",
+    x: -2.9,
+    z: 0.5,
+    y: 1.4,
+    range: 1.85,
+    label: "Say hello to Crumb",
+    title: "CRUMB · KEEPER OF THE MOON FLOUR",
+    text: "“A pinch of starlight. Three patient folds. And never, ever rush the dough.” Crumb tips his little hat.",
+  },
+  {
+    id: "oven",
+    x: -4.8,
+    z: -2.1,
+    y: 2,
+    range: 2.25,
+    label: "Warm your hands",
+    title: "EMBER & ASH",
+    text: "The old oven settles with a soft crackle. It has kept this room warm through a hundred winters, and it has room for one more pair of cold hands.",
+  },
+  {
+    id: "cat",
+    x: -6.5,
+    z: 0.45,
+    y: 1.4,
+    range: 1.85,
+    label: "Pet Cinnamon",
+    title: "CINNAMON · HEAD OF AFTERNOON NAPS",
+    text: "Cinnamon opens one sleepy eye, leans into your hand, and decides that you may stay.",
+  },
+  {
+    id: "tea",
+    x: -4.7,
+    z: 2.5,
+    y: 1.9,
+    range: 1.85,
+    label: "Pause for a little tea",
+    title: "A CUP OF QUIET",
+    text: "Wildflower tea, a spoonful of honey, and nowhere you need to be. The chair by the window is always yours.",
+  },
+  {
+    id: "bell",
+    x: 6.45,
+    z: -0.6,
+    y: 2.1,
+    range: 1.7,
+    label: "Ring the counter bell",
+    title: "A LITTLE DING",
+    text: "“Just a moment!” Finn calls from the flour store. “If the croissants start floating, put the kettle on.”",
+  },
+];

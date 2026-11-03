@@ -48,6 +48,14 @@ export function createInteriorWalker({ bounds, colliders, spawn }) {
     stop() {
       velocity.x = velocity.z = 0;
     },
+    /** Stands the visitor at a pose (benchmarks, screenshots and tests). */
+    place({ x = position.x, z = position.z, yaw: y = yaw, pitch: p = pitch }) {
+      position.x = x;
+      position.z = z;
+      yaw = y;
+      pitch = p;
+      this.stop();
+    },
     reset() {
       position.x = spawn.x;
       position.z = spawn.z;

@@ -3,14 +3,14 @@ import * as T from "three";
 // Deliberate planting pockets leave the paths, doors, bridge and river clear.
 // x, z, spread, height, variety (woodland / sage / flowering).
 const placements = [
-  // Cottage fence ends and the shaded space behind Rosewood.
+  // Cottage fence ends, and round Rosewood's back garden fence.
   [-17.8, -5.7, 0.85, 1.05, 2],
   [-18.6, -5.25, 0.55, 0.65, 2],
   [-11, -7.8, 0.75, 0.85, 1],
   [-10.7, -8.9, 0.6, 0.7, 1],
-  [-8.8, -9.7, 0.9, 1.05, 2],
-  [-7.4, -10, 0.6, 0.7, 2],
-  [-4.7, -10.3, 0.8, 0.9, 0],
+  [-10.6, -11.4, 0.9, 1.05, 2],
+  [-8.3, -13.2, 0.6, 0.7, 2],
+  [-3.55, -11.6, 0.8, 0.9, 0],
   [-10.95, -2.6, 0.65, 0.75, 2],
   [-11.85, -2.9, 0.45, 0.55, 2],
   // Bakery rear and mill orchard, away from their working entrances.

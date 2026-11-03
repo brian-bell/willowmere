@@ -8,6 +8,7 @@ import { marketDefaults } from "./market.js";
 import { marshDefaults } from "./marsh.js";
 import { woodDefaults } from "./wood.js";
 import { allotmentDefaults, cropBasket } from "./allotments.js";
+import { rosewoodDefaults } from "./rosewood.js";
 
 // The key predates save versions; the version now lives inside the save.
 export const STORAGE = "willowmere.save.v1";
@@ -56,6 +57,8 @@ export function defaultState() {
     ...woodDefaults(),
     // The allotment plots rented, and what each has sown.
     ...allotmentDefaults(),
+    // Bark's finds from the back garden, the jigsaw, and balls fetched.
+    ...rosewoodDefaults(),
     gathered: [],
     plants: [],
     started: false,

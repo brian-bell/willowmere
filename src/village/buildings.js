@@ -284,8 +284,9 @@ export function buildBuildings(kit, { contact }) {
     // Individual weatherboard fascia and roof ridge tiles.
     for (let zz = -d / 2 - 0.35; zz < d / 2 + 0.4; zz += 0.34)
       cyl(ro, 0, h * 1.69 + 0.43, zz, 0.11, 0.35, p).rotation.x = Math.PI / 2;
-    // Stone chimney, brick offsets and copper cap.
-    const cx = w * 0.28,
+    // Stone chimney, brick offsets and copper cap. Rosewood's stands over its
+    // living-room fireplace, on the west side.
+    const cx = (id === "home" ? -1 : 1) * w * 0.28,
       cz = -d * 0.16,
       cy = h * 1.69;
     box(mat("#9d8973"), cx, cy, cz, 0.65, 1.8, 0.62, p);
