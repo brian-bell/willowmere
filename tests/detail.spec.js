@@ -2,13 +2,14 @@ import { test, expect } from "@playwright/test";
 import * as THREE from "three";
 import { createBushes } from "../src/bushes.js";
 import {
+  COARSE_LEAVES_VIEW_HEIGHT,
   FAR_DETAIL_VIEW_HEIGHT,
   overviewFineDetail,
   overviewLeafLevel,
 } from "../src/game/detail.js";
 import { DEFAULT_VIEW_HEIGHT, MAX_VIEW_HEIGHT } from "../src/game/overview-camera.js";
 
-test("zooming out only ever coarsens the overview, and only past the old cap drops its finest detail", { tag: "@logic" }, () => {
+test("zooming out only ever coarsens the overview, and the default view keeps its finest detail", { tag: "@logic" }, () => {
   let leaves = 0,
     fine = true;
   for (let height = 10; height <= MAX_VIEW_HEIGHT; height += 0.5) {
@@ -17,11 +18,12 @@ test("zooming out only ever coarsens the overview, and only past the old cap dro
     leaves = overviewLeafLevel(height);
     fine = overviewFineDetail(height);
   }
-  // The default view keeps every leaf and pebble; the views the old cap of 30
-  // allowed keep their fine detail, so only the newly opened zoom range drops it.
+  // The default view keeps every leaf and pebble; leaves coarsen before the
+  // pebbles and fallen leaves go, and the cap drops both.
   expect(overviewLeafLevel(DEFAULT_VIEW_HEIGHT)).toBe(0);
   expect(overviewFineDetail(DEFAULT_VIEW_HEIGHT)).toBe(true);
-  expect(FAR_DETAIL_VIEW_HEIGHT).toBeGreaterThanOrEqual(30);
+  expect(FAR_DETAIL_VIEW_HEIGHT).toBeGreaterThan(COARSE_LEAVES_VIEW_HEIGHT);
+  expect(overviewLeafLevel(MAX_VIEW_HEIGHT)).toBe(1);
   expect(overviewFineDetail(MAX_VIEW_HEIGHT)).toBe(false);
 });
 

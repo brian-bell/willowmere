@@ -388,12 +388,12 @@ test("zoomed out to the cap, the overview drops small detail and keeps the villa
   // about 3.0M triangles without.
   expect(far.drawCalls).toBeLessThan(1100);
   expect(far.triangles).toBeLessThan(2.65e6);
-  // Back at the old cap of 30, every pebble and fallen leaf is back.
+  // Back at height 27, every pebble and fallen leaf is back.
   await page.evaluate(() => {
-    for (let i = 0; i < 3; i++) document.querySelector("#zoom-in").click();
+    for (let i = 0; i < 4; i++) document.querySelector("#zoom-in").click();
   });
   await page.waitForFunction(
-    () => window.__willowmere.getDiagnostics().camera.viewHeight < 30.05,
+    () => window.__willowmere.getDiagnostics().camera.viewHeight < 27.05,
     null,
     { timeout: 600000, polling: 1000 },
   );

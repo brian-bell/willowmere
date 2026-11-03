@@ -144,7 +144,14 @@ test("the open country streams in, and the player walks across chunk borders, wi
   while (!(await page.locator("#zoom-out").isDisabled()))
     await page.locator("#zoom-out").click();
   await page.waitForTimeout(2500);
-  const target = await page.evaluate(() => window.__willowmere.project(-30, 3));
+  // Zoomed out this far, x = -30 is drawn at the screen's left, where the
+  // quest card can cover it: aim at the first spot along it the canvas shows.
+  const target = await page.evaluate(() =>
+    [3, 6, 9, 12, 0, -3]
+      .map((z) => window.__willowmere.project(-30, z))
+      .find(({ x, y }) => document.elementFromPoint(x, y)?.id === "scene"),
+  );
+  expect(target).toBeDefined();
   const walking = await page.evaluate(() => window.__frames.length);
   await page.mouse.click(target.x, target.y);
   await expect
