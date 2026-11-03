@@ -175,37 +175,17 @@ test("the open country streams in, and the player walks across chunk borders, wi
     await page.locator("#zoom-out").click();
   await page.waitForTimeout(2500);
   // Zoomed out this far, x = -30 is drawn at the screen's left, where the
-  // quest card can cover it: aim at the first spot along it the canvas shows.
+  // quest card can cover it: aim at the first open spot along it (the old
+  // wood's trees and Rowan's table stand on some) that the canvas shows.
   const target = await page.evaluate(() =>
     [3, 6, 9, 12, 0, -3]
+      .filter((z) => !window.__willowmere.blocked(-30, z, 0.3))
       .map((z) => window.__willowmere.project(-30, z))
       .find(({ x, y }) => document.elementFromPoint(x, y)?.id === "scene"),
   );
   expect(target).toBeDefined();
   const walking = await page.evaluate(() => window.__frames.length);
-  // DEBUG (temporary): what the click meets.
-  const probe = () =>
-    page.evaluate((target) => {
-      const w = window.__willowmere,
-        player = w.getPlayer(),
-        ground = w.project(-30, target.z);
-      return {
-        player,
-        target,
-        ground,
-        under: document.elementFromPoint(target.x, target.y)?.id,
-        path: w.findPath(player, { x: -30, z: target.z }).length,
-        blocked: w.blocked(-30, target.z),
-        dialogs: [...document.querySelectorAll("dialog[open]")].map((d) => d.id),
-        streaming: w.getStreaming(),
-        view: w.getDiagnostics().camera,
-        wood: w.getWood(),
-      };
-    }, target);
-  console.log("DEBUG before", JSON.stringify(await probe()));
   await page.mouse.click(target.x, target.y);
-  await page.waitForTimeout(1500);
-  console.log("DEBUG after", JSON.stringify(await probe()));
   await expect
     .poll(async () => (await page.evaluate(() => window.__willowmere.getPlayer())).x, {
       timeout: 30000,
