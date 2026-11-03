@@ -58,7 +58,7 @@ export function allotmentJobs(T, world, { life } = {}) {
       -17.5,
       29,
       () => {
-        const k = createKit(T, { segments: 8 });
+        const k = createKit(T, { segments: 6, sphereDetail: 0 });
         fence(k, (x) => x < A.path.x);
         for (const plot of A.neighbours) {
           bed(k, plot);
@@ -73,7 +73,8 @@ export function allotmentJobs(T, world, { life } = {}) {
         return [mesh];
       },
       (meshes) => {
-        added(meshes);
+        // Zoomed far out, their shadows are a few pixels.
+        added(meshes, { fineShadow: true });
         world.interactables.push(
           { id: "scarecrow", name: "Scarecrow", x: A.scarecrow.x + 2.3, z: A.crossPath.z, radius: 1.1 },
           { id: "cold-frames", name: "Cold frames", x: A.coldFrames.x, z: A.coldFrames.z - 1.05, radius: 1.2 },
@@ -86,7 +87,7 @@ export function allotmentJobs(T, world, { life } = {}) {
       -7,
       30,
       () => {
-        const k = createKit(T, { segments: 8 });
+        const k = createKit(T, { segments: 6, sphereDetail: 0 });
         fence(k, (x) => x >= A.path.x);
         for (const plot of A.plots) {
           bed(k, plot);
@@ -100,7 +101,7 @@ export function allotmentJobs(T, world, { life } = {}) {
         return [mesh];
       },
       (meshes) => {
-        added(meshes);
+        added(meshes, { fineShadow: true });
         world.interactables.push(
           { id: "potting-shed", name: "Potting shed", x: A.shed.x - 0.8, z: A.shed.z - A.shed.d / 2 - 0.6, radius: 1.1 },
           { id: "water-butt", name: "Water butt", x: A.butt.x + 0.1, z: A.butt.z - 0.75, radius: 0.9 },
@@ -453,8 +454,9 @@ const NEIGHBOUR_CROPS = {
         h = range(1.9, 2.4);
       k.post("#6c8f3c", x, z, top, top + h, 0.03);
       for (const s of [-1, 1]) k.ball(COLOR.leaf, x + s * 0.12, top + h * 0.5, z, 0.14, 0.03, 0.09);
-      k.add(k.unit.cylinder, "#f0b92a", x - 0.05, top + h, z, 0.2, 0.04, 0.2, 0, 0, Math.PI / 2 - 0.3);
-      k.add(k.unit.cylinder, "#5a3d22", x - 0.08, top + h, z, 0.1, 0.05, 0.1, 0, 0, Math.PI / 2 - 0.3);
+      // Their faces turned north, to the gate, and a little up.
+      k.add(k.unit.cylinder, "#f0b92a", x, top + h, z - 0.05, 0.2, 0.04, 0.2, 0.3 - Math.PI / 2);
+      k.add(k.unit.cylinder, "#5a3d22", x, top + h + 0.01, z - 0.08, 0.1, 0.05, 0.1, 0.3 - Math.PI / 2);
     }
     const wx = plot.x - 0.6,
       wz = plot.z - 1;
@@ -518,8 +520,8 @@ const NEIGHBOUR_CROPS = {
 // Each crop as one small plant, base at the origin, for the bed's instanced
 // mesh: where each plant stands in its bed, and how it grows.
 function cropShapes(T) {
-  const shape = (build) => {
-    const k = createKit(T, { segments: 6, sphereDetail: 0 });
+  const shape = (build, sphereDetail = 0) => {
+    const k = createKit(T, { segments: 6, sphereDetail });
     build(k);
     const geometry = k.geometry();
     k.dispose();
@@ -529,10 +531,12 @@ function cropShapes(T) {
     carrot: {
       geometry: shape((k) => {
         k.cyl("#e07a2a", 0, 0.01, 0, 0.035, 0.04);
-        for (let j = 0; j < 5; j++) {
-          const a = (j / 5) * TAU;
-          k.add(k.unit.cone, j % 2 ? "#6fa046" : "#5e9038", Math.cos(a) * 0.03, 0.14, Math.sin(a) * 0.03, 0.035, 0.27, 0.02, Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3);
+        // Feathery tops, splayed: flat fronds round a taller middle one.
+        for (let j = 0; j < 6; j++) {
+          const a = (j / 6) * TAU;
+          k.add(k.unit.cone, j % 2 ? "#6fa046" : "#5e9038", Math.cos(a) * 0.06, 0.13, Math.sin(a) * 0.06, 0.07, 0.26, 0.025, Math.sin(a) * 0.5, a, -Math.cos(a) * 0.5);
         }
+        k.add(k.unit.cone, "#78aa4c", 0, 0.17, 0, 0.06, 0.32, 0.03);
       }),
       slots: (plot) =>
         carrotRows().flatMap((ox) => Array.from({ length: 8 }, (_, i) => [ox, -2 + i * 0.57])),
@@ -574,7 +578,8 @@ function cropShapes(T) {
         k.ball("#cf7826", 0, 0.2, 0, 0.21, 0.22, 0.31);
         k.ball("#cf7826", 0, 0.2, 0, 0.31, 0.22, 0.21);
         k.cyl("#6b7a3a", 0, 0.43, 0, 0.03, 0.08);
-      }),
+        // Six to a bed: rounder than the leafy crops.
+      }, 1),
       slots: () => pumpkinMounds().map(([ox, oz]) => [ox, oz]),
     },
   };

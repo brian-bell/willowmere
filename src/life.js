@@ -943,6 +943,48 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       wings[1].rotation.z = -wings[0].rotation.z;
     });
   }
+  // The regions' residents stand still but for a breath, so zoomed far out,
+  // where they are a few pixels tall, each draws as one merged copy of its
+  // body in its resting pose instead of a couple of dozen jointed batches.
+  // Their contact shadows stay.
+  const farFigures = [],
+    farMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 });
+  function farFigure(figure) {
+    const { body } = figure,
+      parts = [],
+      inverse = new THREE.Matrix4();
+    body.updateWorldMatrix(true, true);
+    inverse.copy(body.matrixWorld).invert();
+    body.traverseVisible((o) => {
+      if (!o.isMesh || o.material.transparent) return;
+      const part = o.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, o.matrixWorld));
+      for (const name of Object.keys(part.attributes))
+        if (!["position", "normal", "color"].includes(name)) part.deleteAttribute(name);
+      if (!part.attributes.color) {
+        const { r, g, b } = o.material.color,
+          colors = new Float32Array(part.attributes.position.count * 3);
+        for (let i = 0; i < colors.length; i += 3) colors.set([r, g, b], i);
+        part.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      }
+      parts.push(part.index ? part.toNonIndexed() : part);
+    });
+    const proxy = new THREE.Mesh(mergeGeometries(parts), farMaterial);
+    parts.forEach((part) => part.dispose());
+    proxy.name = `${figure.root.name} (far)`;
+    proxy.castShadow = false;
+    proxy.receiveShadow = true;
+    proxy.matrix.copy(body.matrix);
+    proxy.matrixAutoUpdate = false;
+    proxy.visible = false;
+    figure.root.add(proxy);
+    return { body, proxy };
+  }
+  function showFarFigures(far) {
+    for (const { body, proxy } of farFigures) {
+      body.visible = !far;
+      proxy.visible = far;
+    }
+  }
   const npcs = [...residents.map(({ figure, ...npc }) => npc), lily];
   return {
     player,
@@ -953,6 +995,8 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     addResident(def) {
       const npc = resident(def);
       batchParts(npc.group);
+      farFigures.push(farFigure(npc.figure));
+      showFarFigures(!castsShadows);
       residents.push(npc);
       const { figure, ...entry } = npc;
       npcs.push(entry);
@@ -963,6 +1007,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
      * Zoomed far out, a figure's shadow is a few pixels for a dozen draws.
      */
     setCastShadows(on) {
+      if (on !== castsShadows) showFarFigures(!on);
       if (on === castsShadows && casters?.figures === figures.length) return;
       if (casters?.figures !== figures.length) {
         // Residents stream in later; gather every caster again when they do.
