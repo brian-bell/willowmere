@@ -946,9 +946,38 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
   // The regions' residents stand still but for a breath, so zoomed far out,
   // where they are a few pixels tall, each draws as one merged copy of its
   // body in its resting pose instead of a couple of dozen jointed batches.
-  // Their contact shadows stay.
+  // Their contact shadows stay. The copy rebuilds round parts with fewer
+  // segments and leaves out the smallest (eyes, spectacles), which are under a
+  // pixel there.
   const farFigures = [],
-    farMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 });
+    farMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 }),
+    farPartScale = new THREE.Vector3();
+  function coarsePart(geometry) {
+    const p = geometry.parameters;
+    if (geometry.attributes.color || !p) return geometry.clone();
+    if (geometry.type === "SphereGeometry")
+      return new THREE.SphereGeometry(
+        p.radius,
+        Math.min(p.widthSegments, 8),
+        Math.min(p.heightSegments, 5),
+        p.phiStart,
+        p.phiLength,
+        p.thetaStart,
+        p.thetaLength,
+      );
+    if (geometry.type === "CylinderGeometry")
+      return new THREE.CylinderGeometry(
+        p.radiusTop,
+        p.radiusBottom,
+        p.height,
+        Math.min(p.radialSegments, 8),
+        1,
+        p.openEnded,
+        p.thetaStart,
+        p.thetaLength,
+      );
+    return geometry.clone();
+  }
   function farFigure(figure) {
     const { body } = figure,
       parts = [],
@@ -957,7 +986,10 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     inverse.copy(body.matrixWorld).invert();
     body.traverseVisible((o) => {
       if (!o.isMesh || o.material.transparent) return;
-      const part = o.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, o.matrixWorld));
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+      o.getWorldScale(farPartScale);
+      if (o.geometry.boundingSphere.radius * Math.max(farPartScale.x, farPartScale.y, farPartScale.z) < 0.04) return;
+      const part = coarsePart(o.geometry).applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, o.matrixWorld));
       for (const name of Object.keys(part.attributes))
         if (!["position", "normal", "color"].includes(name)) part.deleteAttribute(name);
       if (!part.attributes.color) {

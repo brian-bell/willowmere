@@ -248,6 +248,29 @@ These tests assert rendering work and behaviour instead of a machine-dependent F
 
 Measurements recorded as each change landed, newest first, each against the `main` it was merged into. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the combined baseline. Entries counted in the cloud container ran on SwiftShader, so they give draw calls and triangles but no timings.
 
+### Allotments (2026-11-03)
+
+The map expansion's last region. South of the kitchen garden, between the open fields and the marsh, a flat fenced square of eight raised beds on the fields' own grass (no ground box, like the market lane): a gravel path from the garden road to a potting shed, a cross path through the east and west gates, cold frames, compost bays, a water butt, a noticeboard, a wheelbarrow and a scarecrow. Four beds are the neighbours' (cabbages, sunflowers, potatoes, rhubarb); four are to let, and the player rents, sows, waters and harvests carrots, lettuces, runner beans and pumpkins there. Basil, the allotment keeper, joins by the shed through `life.addResident`. The layout, colliders and grass mask load with the village from `src/regions/allotments-layout.js`; five jobs stream in from `src/regions/allotments.js` (the paths, the west and east halves, the rentable beds' crops, and Basil). Nothing there goes into the water's captures.
+
+- **Crops.** Each rentable bed's crop is one instanced mesh, at full size when it is added (its bounding sphere is computed then), scaled by growth afterwards, and drawn only while something grows there: `count` drops to 0 rather than toggling `visible`, which the detail system owns. The neighbours' crops are one merged mesh. Both hide zoomed far out (`far`), and every structure drops its shadow there (`fineShadow`).
+- **Residents zoomed far out.** From height 30, where the detail system turns fine shadows off, each region's resident (Rowan, Hazel, Bram, Wren and Basil) draws as one merged, vertex-coloured copy of its body in its resting pose, instead of about 23 jointed batches (`farFigure` in `src/life.js`). The copy rebuilds spheres and cylinders with at most 8 segments and leaves out parts under 4 cm across, so it counts about 3,400 triangles against the figure's 5,200. The village's own people are unchanged. This took about 40 draws off the village at the cap, which Rosewood's yard had put 20 over the test's 1,100.
+- **The village.** The allotments stay out of the village scatter's colliders, and the village's views gain only what they see of the region.
+
+Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high quality, `?resolution=fixed`, with the frame-locked probe, against `main` (`137a491`), with a fresh save (no beds rented) unless it says otherwise. Each cell is the most over the frames counted; the brackets give a frame without a water reflection where that differs.
+
+| View | `main` draws / triangles | Allotments draws / triangles |
+| --- | --- | --- |
+| Village spawn (−2.8, 6.2), height 39 | 1,120 / 2.633M (904 / 2.38M) | 1,079 / 2.638M (862 / 2.38M) |
+| Village spawn, height 18 | 969 / 3.10M | 996 / 3.12M |
+| Village's south-west edge (−12, 18), height 18 | 647 / 2.55M | 702 / 2.58M |
+| Cross path (−6.5, 28.6), height 18 | 555 / 2.20M (empty field) | 618 / 2.23M |
+| Cross path, height 30 | 792 / 1.93M | 786 / 1.94M |
+| Cross path, height 18, every bed growing | | 616 / 2.27M |
+| First person at the east gate (−2.5, 28.6), facing in | 400 / 1.10M | 453 / 1.13M |
+| First person by the carrots (−12.6, 24), facing the village | 1,285 / 2.64M | 1,315 / 2.66M |
+
+`tests/performance.spec.js` holds the cross path under 1,000 draws and 2.5M triangles at heights 18 and 30 with every bed growing, and the village's edge facing the allotments with the other edges. `npm run benchmark` measures it as "high, allotments" and "high, allotments, first person"; `--ablate` adds it at height 30.
+
 ### Old wood (2026-11-03)
 
 Phase 5's third region. West of the wildflower meadow, from the village's edge to the map's rim and between the orchard hill and the south-west fields, a strip of woodland on a gently rolling floor (never more than about a metre, level in the clearing and flat at the village's edge): three earth trails, 64 oaks and amber beeches (16 of them young trees between the crowns), the great oak, a mossy clearing with a fairy ring whose mushrooms glow at blue hour, a hollow log, stumps and fallen branches, ferns, toadstools, a fingerpost, soft shafts of sunlight, and patches of seven woodland flowers that the player presses into the journal. Rowan, who forages here, joins at her stump table through `life.addResident`. The wood's shape, heights, trees, colliders and grass mask load with the village from `src/regions/wood-layout.js`; fourteen jobs stream in from `src/regions/wood.js` (the floor, six stands of trees and the great oak, the logs, stumps and Rowan's table, the ferns, the mushrooms and fairy ring, the flowers, the light shafts, and Rowan).
