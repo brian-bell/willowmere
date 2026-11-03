@@ -50,34 +50,41 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
   const job = (key, x, z, step, added) => ({ key, x, z, step, added });
   // The nearest water, the village's brook, lies 36 m off: none of the wood
   // would show in its reflections.
-  const added = (meshes) => {
+  const added = (meshes, options) => {
     for (const mesh of meshes) {
-      world.addStreamed(mesh);
+      world.addStreamed(mesh, options);
       world.water.excludeFromCaptures(mesh);
     }
   };
-  const addedDetail = (mesh) => {
-    world.addStreamed(mesh, { detail: true });
+  // Small things also hide when the overview zooms far out (`far`), where
+  // a fern or a toadstool is a pixel or two.
+  const addedDetail = (mesh, far = false) => {
+    world.addStreamed(mesh, { detail: true, far });
     world.water.excludeFromCaptures(mesh);
   };
   const leafMaterials = world.trees.materials.grounded(new T.Vector4(0, 0, -1e4, 0)),
     painted = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.88 });
-  // The trees in six stands, each one job, one set of meshes and one level
-  // of detail; the great oak stands alone.
+  // The trees in two stands, west and east of the clearing, each one job,
+  // one set of meshes and one level of detail; the great oak stands alone.
+  // Fewer stands draw fewer times: zoomed out, all of the wood is in view
+  // at once. Each tree keeps the seed it had in the six bands the wood
+  // first had, so its shape stays as drawn.
   const stands = [];
   for (const [side, west] of [
     ["west", true],
     ["east", false],
-  ])
+  ]) {
+    const trees = [];
     for (const [band, from, to] of [
       ["north", -Infinity, -7],
       ["middle", -7, 7],
       ["south", 7, Infinity],
     ])
-      stands.push({
-        name: `${band}-${side}`,
-        trees: TREES.filter((t) => t.x < -35 === west && t.z >= from && t.z < to),
-      });
+      TREES.filter((t) => t.x < -35 === west && t.z >= from && t.z < to).forEach((tree, index) =>
+        trees.push({ ...tree, seed: [index, `${band}-${side}`.length * 7] }),
+      );
+    stands.push({ name: side, trees });
+  }
   stands.push({
     name: "great oak",
     trees: [{ id: "great-oak", kind: "oak", x: W.oak.x, z: W.oak.z, wide: W.oak.scale, tall: 1.2, great: true }],
@@ -120,7 +127,8 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
         ),
       ),
     job("wood logs, stumps and table", W.log.x, W.log.z, () => logsAndStumps(T, world, range, painted), (meshes) => {
-      added(meshes);
+      // Zoomed far out, their shadows are a few pixels.
+      added(meshes, { fineShadow: true });
       const l = W.log;
       world.interactables.push(
         {
@@ -134,10 +142,10 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
         { id: "wood-signpost", name: "Fingerpost", x: W.signpost.x, z: W.signpost.z - 0.7, radius: 1.2 },
       );
     }),
-    job("wood ferns", -36, 2, () => ferns(T, range), ([mesh]) => addedDetail(mesh)),
+    job("wood ferns", -36, 2, () => ferns(T, range), ([mesh]) => addedDetail(mesh, true)),
     job("wood mushrooms and fairy ring", W.ring.x, W.ring.z, () => mushrooms(T, range), (meshes) => {
       const [toadstools, ring] = meshes;
-      addedDetail(toadstools);
+      addedDetail(toadstools, true);
       // The ring glows at blue hour, like the village's lamps.
       added([ring]);
       world.interactables.push({
@@ -150,7 +158,7 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
     }),
     job("wood flowers", -33, 2, () => flowers(T, range), (meshes) => {
       const honeysuckle = meshes[2];
-      for (const mesh of meshes) addedDetail(mesh);
+      for (const mesh of meshes) addedDetail(mesh, true);
       const open = honeysuckle.userData.open;
       world.animate(W.flowers.honeysuckle.x, W.flowers.honeysuckle.z, () => open(dusk()));
       for (const flower of FLOWERS) {
@@ -366,9 +374,11 @@ function treeBuilder(T, world, stand, leafMaterials) {
     crownClusters = [],
     axis = new T.Vector3(0, 0, 1);
   let next = 0;
-  function* build(tree, index) {
+  function* build(tree, order) {
+    // A tree's place in its first band (see woodJobs), which seeds its shape.
+    const index = tree.seed?.[0] ?? order;
     const style = KINDS[tree.kind],
-      rand = chunkRandom(index, stand.name.length * 7 + (tree.great ? 3 : 0), 19),
+      rand = tree.seed ? chunkRandom(index, tree.seed[1], 19) : chunkRandom(index, stand.name.length * 7 + 3, 19),
       range = (a, b) => a + (b - a) * rand(),
       wide = tree.wide ?? tree.scale,
       tall = tree.tall ?? tree.scale,
@@ -506,29 +516,43 @@ function treeBuilder(T, world, stand, leafMaterials) {
       if (c % 4 === 3) yield;
     }
   }
-  let building = null;
+  // Each tree's shells and distant crown are shaped as it finishes, so the
+  // last slice only merges.
+  const shellShape = new T.IcosahedronGeometry(1, 1),
+    shellParts = [],
+    crownParts = [],
+    shape = (clusters) => crownShells(clusters, 1, materials.crown, shellShape).geometry;
+  let building = null,
+    shellsFrom = 0,
+    crownsFrom = 0;
+  const merged = (parts) => {
+    const geometry = mergeGeometries(parts, false);
+    for (const part of parts) part.dispose();
+    geometry.computeBoundingSphere();
+    return geometry;
+  };
   return (deadline) => {
     while (next < stand.trees.length) {
       building ??= build(stand.trees[next], next);
       if (building.next().done) {
         building = null;
         next++;
+        if (shells.length > shellsFrom) shellParts.push(shape(shells.slice(shellsFrom)));
+        if (crownClusters.length > crownsFrom) crownParts.push(shape(crownClusters.slice(crownsFrom)));
+        shellsFrom = shells.length;
+        crownsFrom = crownClusters.length;
       }
       if (performance.now() > deadline) return null;
     }
     // Merging and instancing run in a slice of their own.
     if (next++ === stand.trees.length) return null;
     const name = stand.name === "great oak" ? "Great oak" : `Old wood trees (${stand.name})`;
-    const woodGeometry = mergeGeometries(wood, false);
-    for (const part of wood) part.dispose();
-    woodGeometry.computeBoundingSphere();
-    const woodMesh = new T.Mesh(woodGeometry, materials.wood);
+    const woodMesh = new T.Mesh(merged(wood), materials.wood);
     woodMesh.name = `${name}: bark and limbs`;
     // Shells: the crowns' leafy mass, so a modest number of leaves reads as
     // a full canopy. The leaves cast the crown's shadow, dappled.
-    const shellMesh = crownShells(shells, 1, materials.crown, new T.IcosahedronGeometry(1, 1));
+    const shellMesh = new T.Mesh(merged(shellParts), materials.crown);
     shellMesh.name = `${name}: canopy shade`;
-    shellMesh.visible = true;
     shellMesh.castShadow = false;
     const ordered = [...leaves.filter((_, i) => i % 2 === 0), ...leaves.filter((_, i) => i % 2)],
       lift = new T.InstancedBufferAttribute(Float32Array.from(ordered, (l) => l.lift), 1),
@@ -554,8 +578,10 @@ function treeBuilder(T, world, stand, leafMaterials) {
     leafMesh.name = `${name}: leaves`;
     leafMesh.castShadow = true;
     // Distant crowns, for first person beyond the leaves' range.
-    const crownMesh = crownShells(crownClusters, 1, materials.crown, new T.IcosahedronGeometry(1, 1));
+    const crownMesh = new T.Mesh(merged(crownParts), materials.crown);
     crownMesh.name = `${name}: distant crowns`;
+    crownMesh.castShadow = true;
+    crownMesh.visible = false;
     for (const mesh of [woodMesh, shellMesh, leafMesh, crownMesh]) {
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;

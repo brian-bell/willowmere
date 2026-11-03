@@ -311,11 +311,10 @@ export function createDetail(chunks, fieldGround, casterRoots = []) {
       "Riverbank grass tufts",
     ],
     detailParts = [];
-  function addDetail(mesh, field = false) {
+  function addDetail(mesh, field = false, far = FAR_HIDDEN.some((name) => mesh.name.startsWith(name))) {
     const sphere = (mesh.isInstancedMesh ? mesh.boundingSphere : mesh.geometry.boundingSphere)
       .clone()
       .applyMatrix4(mesh.matrixWorld);
-    const far = FAR_HIDDEN.some((name) => mesh.name.startsWith(name));
     detailParts.push({ mesh, sphere, field, far });
   }
   // The open country's ground and grass, which a benchmark can hide to
@@ -330,8 +329,8 @@ export function createDetail(chunks, fieldGround, casterRoots = []) {
   // Thin casters whose shadows the overview drops when zoomed far out.
   const fineCasters = [];
   let fineShadows = true;
-  function addCaster(mesh) {
-    if (!mesh.castShadow || !FINE_CASTERS.some((name) => mesh.name.startsWith(name))) return;
+  function addCaster(mesh, fine = FINE_CASTERS.some((name) => mesh.name.startsWith(name))) {
+    if (!mesh.castShadow || !fine) return;
     fineCasters.push(mesh);
     mesh.castShadow = fineShadows;
   }
@@ -343,7 +342,10 @@ export function createDetail(chunks, fieldGround, casterRoots = []) {
   }
   return {
     addDetail,
-    /** A streamed mesh that may be a fine shadow caster (a region's reeds). */
+    /**
+     * A streamed mesh that may be a fine shadow caster (a region's reeds), by
+     * name or when `fine` says so.
+     */
     addCaster,
     /** A streamed piece of the open country, shown or hidden with the rest. */
     addField(mesh) {

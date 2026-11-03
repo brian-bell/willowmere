@@ -225,7 +225,7 @@ Screenshots at device scale 2 with reduced motion compare the counter, the oven 
 
 These tests assert rendering work and behaviour instead of a machine-dependent FPS threshold. The village diagnostics expose `drawCalls`, `triangles`, `geometries`, `textures`, and `shadow` (`mapSize` and light-space `bounds`); water diagnostics include each pool's `reflectionSize`.
 
-- **Draw budgets.** `tests/performance.spec.js` holds the village with live water and 30 planted bouquets under 1,600 draws, 3.2M triangles and 320 geometries. With every region streamed in, it holds the green and the inside of the village's edge facing each region under the same draws and triangles: a region's scenery, water and shadows add to the village's views there, which the regions' own viewpoints never see. It holds each region's benchmark viewpoint under 1,000 draws and 2.5M triangles at height 18: the millpond's south bank (8.6, −25.8), the orchard's bench, the market square (36.5, 3.2) and the marsh's boardwalk (7.8, 31.2), the last two also at height 30. It holds the village zoomed out to the cap of 39, with every region in, under 1,100 draws and 2.65M triangles, with the far detail hidden there and back at height 27. Its `@logic` tests check that character batches keep their detailed geometry and moving joints, and that flower bouquets share bounded resources and grow independently.
+- **Draw budgets.** `tests/performance.spec.js` holds the village with live water and 30 planted bouquets under 1,600 draws, 3.2M triangles and 320 geometries. With every region streamed in, it holds the green and the inside of the village's edge facing each region under the same draws and triangles: a region's scenery, water and shadows add to the village's views there, which the regions' own viewpoints never see. It holds each region's benchmark viewpoint under 1,000 draws and 2.5M triangles at height 18: the millpond's south bank (8.6, −25.8), the orchard's bench, the market square (36.5, 3.2), the marsh's boardwalk (7.8, 31.2) and the old wood's clearing (−35.5, 0), the last three also at height 30. It holds the village zoomed out to the cap of 39, with every region in, under 1,100 draws and 2.65M triangles, with the far detail hidden there and back at height 27. Its `@logic` tests check that character batches keep their detailed geometry and moving joints, and that flower bouquets share bounded resources and grow independently.
 - **Zoom detail.** `tests/detail.spec.js` (`@logic`) checks that zooming out only ever coarsens the overview, that the default view keeps its ground detail, and that coarse shrub leaves keep every leaf and its outline.
 - **Measurement hooks.** `tests/tune.spec.js` checks that each outdoor `tune` override takes effect in the diagnostics and the submitted work, that `null` restores every default, and that the quality presets still apply their own settings afterwards.
 - **Trees.** `tests/trees.spec.js` checks independent culling, shared wind materials, and that coarse leaf detail halves the drawn leaves without changing canopy bounds. `tests/orchard.spec.js` checks that in first person trees beyond 40 m draw crowns that cast shadows while nearer ones keep their leaves, and that the overview gives every tree its leaves back.
@@ -240,6 +240,31 @@ These tests assert rendering work and behaviour instead of a machine-dependent F
 ## Change history
 
 Measurements recorded as each change landed, newest first, each against the `main` it was merged into. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the combined baseline. Entries counted in the cloud container ran on SwiftShader, so they give draw calls and triangles but no timings.
+
+### Old wood (2026-11-03)
+
+Phase 5's third region. West of the wildflower meadow, from the village's edge to the map's rim and between the orchard hill and the south-west fields, a strip of woodland on a gently rolling floor (never more than about a metre, level in the clearing and flat at the village's edge): three earth trails, 64 oaks and amber beeches (16 of them young trees between the crowns), the great oak, a mossy clearing with a fairy ring whose mushrooms glow at blue hour, a hollow log, stumps and fallen branches, ferns, toadstools, a fingerpost, soft shafts of sunlight, and patches of seven woodland flowers that the player presses into the journal. Rowan, who forages here, joins at her stump table through `life.addResident`. The wood's shape, heights, trees, colliders and grass mask load with the village from `src/regions/wood-layout.js`; fourteen jobs stream in from `src/regions/wood.js` (the floor, six stands of trees and the great oak, the logs, stumps and Rowan's table, the ferns, the mushrooms and fairy ring, the flowers, the light shafts, and Rowan).
+
+- **Trees.** Built a limb per slice into one bark mesh, one shell mesh, one instanced leaf mesh and one distant-crown mesh per stand, each stand one level of detail. The shells are the crowns' leafy mass in the leaves' own colours (dark shells read as black balls through gaps), and every stand but the great oak draws the coarse blade even up close: twice a fine leaf's area for half its triangles, so half as many leaves cover a crown. All the wood's leaves come to 66k triangles; a first draft with fine blades added about 1M triangles at the wood's overview.
+- **Floor.** One 0.4 m grid with vertex-coloured moss, litter and trails, like the orchard's. The open country's grass gives out a few metres in from the meadow, since scattered blades read as spikes. Ferns, flowers and toadstools only take shadows.
+- **Light shafts.** Six open tubes along the sun's direction in one additive mesh, a small shader of their own, faded out by blue hour. The wood overview compiles 75–76 shader programs against `main`'s 71 there.
+- **The village.** Every region after the orchard's now stays out of the village scatter's colliders (`laterSet` in `src/world.js`), so the village's random stream is unchanged; its scene fingerprint matches `main`'s except the open country's grass, which gains the wood's notch.
+
+Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high quality, `?resolution=fixed`, with the frame-locked probe, against `main` (`7e38f0f`):
+
+| View | `main` draws / triangles | Old wood draws / triangles |
+| --- | --- | --- |
+| Clearing (-35.5, 0), height 18 | 354 / 2.01M (empty field) | 502 / 2.44M |
+| Clearing, height 30 | 611 / 2.11M | 702 / 2.35M |
+| Trail by Rowan's table (-31.5, 2.5), height 18 | 475 / 2.17M | 605 / 2.57M |
+| Trail by Rowan's table, height 30 | 685 / 2.28M | 775 / 2.51M |
+| Village spawn (-2.8, 6.2), height 18 | 766 / 2.88M | 784 / 2.98M |
+| First person by Rowan's table (-30.4, 3.6), facing the clearing | 212 / 0.79M | 277 / 1.07M |
+| First person on the trail from the meadow (-24.6, 5.1) | 225 / 0.82M | 316 / 1.07M |
+| First person by the great oak (-35.8, -5.2) | 180 / 0.65M | 241 / 0.89M |
+| First person in the clearing at blue hour | 181 / 0.74M | 240 / 0.98M |
+
+`tests/performance.spec.js` holds the benchmark's wood viewpoint, the clearing (-35.5, 0), under 1,000 draws and 2.5M triangles at height 18 and at the zoom cap. `npm run benchmark` measures it as "high, wood" and "high, wood, first person"; `--ablate` adds the wood at height 30. Nearer the village the overview takes in the village's west side too and runs a little over 2.5M, as the village's south edge does since the marsh.
 
 ### Zoom detail (2026-11-02)
 
@@ -267,31 +292,6 @@ Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high
 In `tests/performance.spec.js`'s own run at 1600 × 1000 (the most over six frames, reflection frames included, with every region streamed in), the village at 39 counts 1,019 draws and 2.54M triangles: under the old village's draws at 39 and within 5% of its triangles. The test zooms the village out to the cap and checks that the far detail is hidden, that the view stays under 1,100 draws and 2.65M triangles, and that zooming back in to 27 brings every pebble and fallen leaf back; `tests/detail.spec.js` (`@logic`) checks that zooming out only ever coarsens the view, that the default view keeps its fine detail, and that the coarse shrub leaf keeps every leaf and its outline at a third of the triangles.
 
 On the Apple M5 (`npm run benchmark -- <label> --ablate` at device scale 2, uncapped, two rounds, on mains power, one revision after another with nothing else on the GPU), the zoomed-out row at 39 measured 17.5 ms mean and 37 ms p95 with 859 draws and 2.24M triangles, against 19.2 ms, 35 ms, 1,071 and 2.91M for `main` at its cap of 30, and 20.2 ms, 36 ms, 1,148 and 2.98M for `main` with the cap lifted to 39. That run measured before the far detail moved down to 30. The machine ran every row slower that day than when the 9.3 ms row above was taken (the default view's "high" row ranged 12.5–17.5 ms across the three revisions, against 8.8 ms in October), and the first revision after a rest ran fastest whatever its code, so read the mean as no slower than `main` at its old cap rather than as a saving; the draws and triangles are the firm result. At the default height the frame's work is unchanged. In first person, shrubs beyond 18 m now take the coarse leaf as trees do, for 4–10% fewer triangles (the orchard's first-person view 3.26M → 2.96M, the market's 3.03M → 2.80M) at the same draws.
-
-### Old wood (2026-11-03)
-
-Phase 5's third region. West of the wildflower meadow, from the village's edge to the map's rim and between the orchard hill and the south-west fields, a strip of woodland on a gently rolling floor (never more than about a metre, level in the clearing and flat at the village's edge): three earth trails, 64 oaks and amber beeches (16 of them young trees between the crowns), the great oak, a mossy clearing with a fairy ring whose mushrooms glow at blue hour, a hollow log, stumps and fallen branches, ferns, toadstools, a fingerpost, soft shafts of sunlight, and patches of seven woodland flowers that the player presses into the journal. Rowan, who forages here, joins at her stump table through `life.addResident`. The wood's shape, heights, trees, colliders and grass mask load with the village from `src/regions/wood-layout.js`; fourteen jobs stream in from `src/regions/wood.js` (the floor, six stands of trees and the great oak, the logs, stumps and Rowan's table, the ferns, the mushrooms and fairy ring, the flowers, the light shafts, and Rowan).
-
-- **Trees.** Built a limb per slice into one bark mesh, one shell mesh, one instanced leaf mesh and one distant-crown mesh per stand, each stand one level of detail. The shells are the crowns' leafy mass in the leaves' own colours (dark shells read as black balls through gaps), and every stand but the great oak draws the coarse blade even up close: twice a fine leaf's area for half its triangles, so half as many leaves cover a crown. All the wood's leaves come to 66k triangles; a first draft with fine blades added about 1M triangles at the wood's overview.
-- **Floor.** One 0.4 m grid with vertex-coloured moss, litter and trails, like the orchard's. The open country's grass gives out a few metres in from the meadow, since scattered blades read as spikes. Ferns, flowers and toadstools only take shadows.
-- **Light shafts.** Six open tubes along the sun's direction in one additive mesh, a small shader of their own, faded out by blue hour. The wood overview compiles 75–76 shader programs against `main`'s 71 there.
-- **The village.** Every region after the orchard's now stays out of the village scatter's colliders (`laterSet` in `src/world.js`), so the village's random stream is unchanged; its scene fingerprint matches `main`'s except the open country's grass, which gains the wood's notch.
-
-Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high quality, `?resolution=fixed`, with the frame-locked probe, against `main` (`7e38f0f`):
-
-| View | `main` draws / triangles | Old wood draws / triangles |
-| --- | --- | --- |
-| Clearing (-35.5, 0), height 18 | 354 / 2.01M (empty field) | 502 / 2.44M |
-| Clearing, height 30 | 611 / 2.11M | 702 / 2.35M |
-| Trail by Rowan's table (-31.5, 2.5), height 18 | 475 / 2.17M | 605 / 2.57M |
-| Trail by Rowan's table, height 30 | 685 / 2.28M | 775 / 2.51M |
-| Village spawn (-2.8, 6.2), height 18 | 766 / 2.88M | 784 / 2.98M |
-| First person by Rowan's table (-30.4, 3.6), facing the clearing | 212 / 0.79M | 277 / 1.07M |
-| First person on the trail from the meadow (-24.6, 5.1) | 225 / 0.82M | 316 / 1.07M |
-| First person by the great oak (-35.8, -5.2) | 180 / 0.65M | 241 / 0.89M |
-| First person in the clearing at blue hour | 181 / 0.74M | 240 / 0.98M |
-
-`tests/performance.spec.js` holds the benchmark's wood viewpoint, the clearing (-35.5, 0), under 1,000 draws and 2.5M triangles at height 18 and at the zoom cap. `npm run benchmark` measures it as "high, wood" and "high, wood, first person"; `--ablate` adds the wood at height 30. Nearer the village the overview takes in the village's west side too and runs a little over 2.5M, as the village's south edge does since the marsh.
 
 ### Willow marsh (2026-11-02)
 

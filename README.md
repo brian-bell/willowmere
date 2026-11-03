@@ -47,6 +47,7 @@ The countryside streams in around the village once you start:
 - **The orchard hill**, north-west: shake the apple and pear trees and open the hives to fill your basket. Finn buys fruit and honey.
 - **The market lane**, east over the brook: carry Finn's loaves to Hazel at the Copper Kettle and Bram at the post office, and shop the stalls for seeds and keepsakes in the golden afternoon.
 - **The willow marsh**, south along the brook: walk the boardwalk, meet Wren, and watch from the bird hide. Some birds only come out at blue hour.
+- **The old wood**, west past the wildflower meadow: follow the trails under the oaks and beeches, meet Rowan by the clearing's fairy ring, and press a woodland flower from each patch into your journal. The anemones close at blue hour, and the honeysuckle opens only then.
 
 ## Inside The Daily Loaf
 

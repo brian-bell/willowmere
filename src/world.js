@@ -1669,9 +1669,11 @@ export function createWorld(T, scene) {
     grassBlade: { geometry: blades.geometry, material: blades.material },
     /**
      * Registers a mesh that streamed in after startup with the chunk under its
-     * centre, and with first person's detail range when `detail` is set.
+     * centre, and with first person's detail range when `detail` is set;
+     * zoomed far out, the overview hides it when `far` is set and drops its
+     * shadow when `fineShadow` is.
      */
-    addStreamed(mesh, { detail: small = false, field = false } = {}) {
+    addStreamed(mesh, { detail: small = false, field = false, far = undefined, fineShadow = undefined } = {}) {
       mesh.updateMatrixWorld();
       const chunk = chunkOf(mesh);
       chunk.meshes.push(mesh);
@@ -1679,8 +1681,8 @@ export function createWorld(T, scene) {
         chunk.glow.add(mesh.material);
         glowMaterials.add(mesh.material);
       }
-      detail.addCaster(mesh);
-      if (small) detail.addDetail(mesh, field);
+      detail.addCaster(mesh, fineShadow);
+      if (small || far) detail.addDetail(mesh, field, far);
       if (field) detail.addField(mesh);
     },
     /**

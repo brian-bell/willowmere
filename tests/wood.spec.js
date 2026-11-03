@@ -173,7 +173,7 @@ test("the wood streams in, and a woodland flower presses into the journal", asyn
   await page.evaluate(() => window.__willowmere.moveTo(-26.2, 6.6));
   const expected = [
     "Old wood floor",
-    "Old wood trees (middle-east): leaves",
+    "Old wood trees (east): leaves",
     "Great oak: distant crowns",
     "Old wood logs and stumps",
     "Old wood ferns",
