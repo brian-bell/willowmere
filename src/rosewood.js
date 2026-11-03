@@ -2170,6 +2170,7 @@ export function createRosewood({ state, save }) {
       y: 2.2,
       range: 1.5,
       label: "Throw the ball for Bark",
+      fallback: true,
       available: () => holding && inGarden(player.z) && !busy(),
     },
     {

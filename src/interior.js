@@ -245,9 +245,12 @@ export function createInterior({
           break;
         }
       }
-      if (!occluded && distance + (1 - facing) < score) {
+      // A fallback point (Rosewood's ball throw, which is always in front of
+      // the visitor) answers only when nothing else does.
+      const value = distance + (1 - facing) + (point.fallback ? 100 : 0);
+      if (!occluded && value < score) {
         best = point;
-        score = distance + (1 - facing);
+        score = value;
       }
     }
     nearest = best;
