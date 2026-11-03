@@ -1,3 +1,4 @@
+// @ts-check
 // The market lane's words: its two residents, what Finn and they say about
 // the bread deliveries, and what the stalls say to a shopper.
 import { MARKET } from "../regions/market-layout.js";

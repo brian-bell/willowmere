@@ -1,3 +1,4 @@
+// @ts-check
 // The market lane's shape: the lane east from the mill to the map's edge, the
 // market square and its stalls, the tea room and the post office, and the
 // footbridge that crosses the brook south of the village's own bridge. Pure

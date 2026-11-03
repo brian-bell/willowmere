@@ -1,3 +1,4 @@
+// @ts-check
 // The millpond's shape: where its water, banks, weir, footbridge and jetty lie.
 // Pure data and functions, loaded with the village: the terrain, colliders,
 // ground height and region label need it before the pond's meshes stream in

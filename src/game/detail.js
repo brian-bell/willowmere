@@ -1,3 +1,4 @@
+// @ts-check
 // Levels of detail by distance and zoom. Pure, so the logic tests can run it.
 // Each threshold is where a part of the scenery shrinks to a few pixels.
 

@@ -1,3 +1,4 @@
+// @ts-check
 // The region registry: every region beyond the village, in one list. The map's
 // layout (src/world-layout.js), the world (src/world.js), the open country's
 // grass (src/regions/outskirts.js) and the game (src/main.js) read regions
@@ -38,6 +39,26 @@ import { orchardRegion } from "./orchard-layout.js";
 import { marketRegion } from "./market-layout.js";
 import { marshRegion } from "./marsh-layout.js";
 
+/**
+ * @typedef {{ minX?: number, maxX?: number, minZ?: number, maxZ?: number }} OpenBox
+ * @typedef {{ minX: number, maxX: number, minZ: number, maxZ: number }} Box
+ * @typedef {object} Region The fields above, as the checker sees them.
+ * @property {string} id
+ * @property {string} name
+ * @property {OpenBox} [area]
+ * @property {Box} [ground]
+ * @property {(x: number, z: number) => number} [height]
+ * @property {boolean} [exactHeight]
+ * @property {boolean} [deepBed]
+ * @property {(x: number, z: number) => number | null | undefined} [deck]
+ * @property {(x: number, z: number) => number | null | undefined} [water]
+ * @property {() => object[]} [colliders]
+ * @property {(x: number, z: number) => boolean} [grass]
+ * @property {(x: number, z: number) => boolean} [planting]
+ * @property {(T: any, world: any, game?: any) => Promise<{ jobs: object[] } & Record<string, any>>} [stream]
+ */
+
+/** @type {Region[]} */
 export const regions = [
   millpondRegion,
   orchardRegion,

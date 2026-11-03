@@ -1,3 +1,4 @@
+// @ts-check
 // The willow marsh's words: its resident, what the bird hide shows a patient
 // watcher, and Wren's tips for the birds still to see.
 import { MARSH } from "../regions/marsh-layout.js";
