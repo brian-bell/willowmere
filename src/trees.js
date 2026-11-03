@@ -874,11 +874,12 @@ export function createTrees(placements, groundHeight = () => 0) {
     geometry.dispose();
   group.userData.treeCount = placements.length;
   group.userData.leafCount = leafRecords.length;
-  let foliageShown = true;
+  let foliageShown = true,
+    groundDetailShown = true;
   function show(lod) {
     lod.mesh.visible = foliageShown && lod.level < 2;
     if (lod.crown) lod.crown.visible = foliageShown && lod.level === 2;
-    for (const mesh of lod.underneath) mesh.visible = lod.level < 2;
+    for (const mesh of lod.underneath) mesh.visible = groundDetailShown && lod.level < 2;
   }
   return {
     group,
@@ -916,6 +917,15 @@ export function createTrees(placements, groundHeight = () => 0) {
         crown: !!lod.crown?.visible,
         crownShadow: !!lod.crown?.castShadow,
       })),
+    /**
+     * Shows or hides the small things at every tree's foot (fallen leaves,
+     * moss, hollows), which the overview drops when zoomed far out.
+     */
+    setGroundDetail(shown) {
+      if (shown === groundDetailShown) return;
+      groundDetailShown = shown;
+      for (const lod of lods) show(lod);
+    },
     /** Shows or hides every canopy (leaves and crowns), for measuring them. */
     setFoliageShown(shown) {
       foliageShown = shown;

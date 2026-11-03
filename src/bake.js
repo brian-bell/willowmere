@@ -2,7 +2,8 @@
 // detail, glowing materials and animations are grouped by chunk, so a view
 // only pays for the chunks it can see. The village's plain meshes bake into
 // one draw per chunk, material and shadow role; small detail (grass,
-// blossoms, pebbles) hides beyond first person's detail range. Streamed
+// blossoms, pebbles) hides beyond first person's detail range and when the
+// overview zooms far out. Streamed
 // regions join the same chunks through world.addStreamed.
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { WORLD, chunkBounds, chunkCoords, terrainMaxIn } from "./world-layout.js";
@@ -278,23 +279,44 @@ export function bakeScenery(T, scene, { chunkAt, chunkOf }, { skip, selfCulled }
   return glowMaterials;
 }
 
+// Grass, blossoms and pebbles cover only a few pixels in the distance, so
+// first person skips the parts beyond DETAIL_RANGE. Zoomed far out (when,
+// src/game/detail.js says), the overview hides the pebbles and the tufts on
+// the brook's banks; the grass and blossoms stay, because their speckle is the
+// meadow's texture from above and costs few triangles. Thin and small
+// casters (reeds, cattails, shrub stems and blossoms) stop casting shadows
+// there too: their shadows are lines a pixel wide.
+export const DETAIL_RANGE = 30;
+const FAR_HIDDEN = ["River pebbles", "Riverbank shingle and pebbles", "Riverbank grass tufts"],
+  FINE_CASTERS = [
+    "Reed leaves and stems",
+    "Cattail heads",
+    "Shrub branching stems",
+    "Small cream and blush blossoms",
+  ];
+
 /**
- * Small detail and the open country, whose visibility first person and the
- * benchmark change. `fieldGround` is the open country's ground, which
- * showFields("ground") keeps.
+ * Small detail and the open country, whose visibility first person, the
+ * overview's zoom and the benchmark change. `fieldGround` is the open
+ * country's ground, which showFields("ground") keeps; `casterRoots` hold
+ * the village's fine shadow casters.
  */
-export function createDetail(chunks, fieldGround) {
-  // Grass, blossoms and pebbles cover only a few pixels in the distance, so
-  // first person skips the parts beyond DETAIL_RANGE. Each part keeps its
-  // world-space bounds; they never move.
-  const DETAIL_RANGE = 30,
-    DETAIL_NAMES = ["Grass blades", "Meadow blossoms", "River pebbles"],
+export function createDetail(chunks, fieldGround, casterRoots = []) {
+  // Each part keeps its world-space bounds; they never move.
+  const DETAIL_NAMES = [
+      "Grass blades",
+      "Meadow blossoms",
+      "River pebbles",
+      "Riverbank shingle and pebbles",
+      "Riverbank grass tufts",
+    ],
     detailParts = [];
   function addDetail(mesh, field = false) {
     const sphere = (mesh.isInstancedMesh ? mesh.boundingSphere : mesh.geometry.boundingSphere)
       .clone()
       .applyMatrix4(mesh.matrixWorld);
-    detailParts.push({ mesh, sphere, field });
+    const far = FAR_HIDDEN.some((name) => mesh.name.startsWith(name));
+    detailParts.push({ mesh, sphere, field, far });
   }
   // The open country's ground and grass, which a benchmark can hide to
   // measure them: shown is true, false, or "ground" for the ground alone.
@@ -305,8 +327,24 @@ export function createDetail(chunks, fieldGround) {
   for (const chunk of chunks.values())
     for (const mesh of chunk.meshes)
       if (DETAIL_NAMES.some((name) => mesh.name.startsWith(name))) addDetail(mesh);
+  // Thin casters whose shadows the overview drops when zoomed far out.
+  const fineCasters = [];
+  let fineShadows = true;
+  function addCaster(mesh) {
+    if (!mesh.castShadow || !FINE_CASTERS.some((name) => mesh.name.startsWith(name))) return;
+    fineCasters.push(mesh);
+    mesh.castShadow = fineShadows;
+  }
+  for (const root of casterRoots) root.traverse((node) => node.isMesh && addCaster(node));
+  function setFineShadows(on) {
+    if (on === fineShadows) return;
+    fineShadows = on;
+    for (const mesh of fineCasters) mesh.castShadow = on;
+  }
   return {
     addDetail,
+    /** A streamed mesh that may be a fine shadow caster (a region's reeds). */
+    addCaster,
     /** A streamed piece of the open country, shown or hidden with the rest. */
     addField(mesh) {
       fieldPatches.push(mesh);
@@ -321,16 +359,25 @@ export function createDetail(chunks, fieldGround) {
       for (const mesh of [...fieldGround, ...fieldPatches]) mesh.visible = fieldShown(mesh);
     },
     /**
-     * Hides small detail more than DETAIL_RANGE from (x, z), or shows it all
-     * when called without a position (the overview).
+     * First person: hides small detail more than DETAIL_RANGE from (x, z).
      */
     setDetailFocus(x, z) {
+      setFineShadows(true);
       for (const { mesh, sphere, field } of detailParts)
         mesh.visible =
           (!field || fieldShown(mesh)) &&
-          (x === undefined ||
-            Math.hypot(sphere.center.x - x, sphere.center.z - z) - sphere.radius <
-              DETAIL_RANGE);
+          Math.hypot(sphere.center.x - x, sphere.center.z - z) - sphere.radius <
+            DETAIL_RANGE;
+    },
+    /**
+     * The overview: shows every piece of small detail, or hides the pebbles
+     * and bank tufts and drops the fine casters' shadows when zoomed far out
+     * (`near` false).
+     */
+    setOverviewDetail(near) {
+      setFineShadows(near);
+      for (const { mesh, field, far } of detailParts)
+        mesh.visible = (near || !far) && (!field || fieldShown(mesh));
     },
   };
 }

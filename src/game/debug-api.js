@@ -30,6 +30,7 @@ export function createDebugApi(g) {
     world.bushes.group.visible = foliage;
     world.showFields(overrides.fields ?? true);
     world.trees.setDetail(g.leafDetail());
+    world.bushes.setDetail(g.leafDetail());
     g.showSky();
     // The scaler stands aside while the ratio is forced; clearing it resumes
     // from the quality's cap.

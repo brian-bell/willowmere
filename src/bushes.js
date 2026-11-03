@@ -83,6 +83,30 @@ function leafGeometry() {
   return geometry;
 }
 
+// The same leaf as two triangles folded along the midrib, for shrubs that
+// cover few pixels (zoomed out, or far off in first person): the outline and
+// colours of the folded leaf at a third of its triangles.
+function coarseLeafGeometry() {
+  const geometry = new T.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new T.Float32BufferAttribute(
+      [0, 0, 0, -0.32, 0.025, 0.52, 0, 0.09, 1, 0.32, 0.025, 0.52],
+      3,
+    ),
+  );
+  geometry.setAttribute(
+    "color",
+    new T.Float32BufferAttribute(
+      [0.72, 0.77, 0.64, 0.84, 0.89, 0.76, 1, 1, 0.92, 0.88, 0.93, 0.8],
+      3,
+    ),
+  );
+  geometry.setIndex([0, 1, 2, 0, 2, 3]);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 // groundHeight(x, z) seats each shrub pocket on the terrain under it.
 export function createBushes(groundHeight = () => 0) {
   let seed = 28719;
@@ -196,8 +220,10 @@ export function createBushes(groundHeight = () => 0) {
     seat(leaves, first[1], y, (leaf) => leaf.matrix);
     if (y) for (let i = first[2]; i < flowers.length; i++) flowers[i].position.y += y;
   }
+  const fineLeaf = leafGeometry(),
+    coarseLeaf = coarseLeafGeometry();
   const foliage = new T.InstancedMesh(
-    leafGeometry(),
+    fineLeaf,
     new T.MeshStandardMaterial({
       vertexColors: true,
       roughness: 0.87,
@@ -252,8 +278,32 @@ export function createBushes(groundHeight = () => 0) {
     mesh.computeBoundingSphere();
     group.add(mesh);
   }
+  // The bake splits the leaves into one mesh per chunk, so the levels are
+  // found among the group's children when first set.
+  let parts = null;
+  const center = new T.Vector3();
   return {
     group,
     footprints: placements.map(([x, z, r]) => ({ x, z, r: r * 0.95 })),
+    /**
+     * Level 0 draws the folded leaves, any other level the two-triangle
+     * leaf, as trees.setDetail does. A function picks the level for each
+     * chunk's leaves from their centre.
+     */
+    setDetail(level) {
+      parts ??= group.children
+        .filter((mesh) => mesh.name.startsWith(foliage.name))
+        .map((mesh) => ({
+          mesh,
+          center: mesh.boundingSphere.center.clone().applyMatrix4(mesh.matrixWorld),
+        }));
+      for (const part of parts) {
+        const next = typeof level === "function" ? level(center.copy(part.center)) : level;
+        part.mesh.geometry = next ? coarseLeaf : fineLeaf;
+      }
+    },
+    /** Triangles each leaf draws at the current level, for tests. */
+    leafTriangles: () =>
+      (parts ?? [{ mesh: foliage }]).map(({ mesh }) => mesh.geometry.index.count / 3),
   };
 }

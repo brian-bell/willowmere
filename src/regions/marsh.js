@@ -84,32 +84,36 @@ export function marshJobs(T, world, { life, dusk = () => 0 } = {}) {
         },
       );
     }),
+    // A job and a set of meshes per tree, so each culls on its own: two
+    // willows stand just off the village's south edge.
     ...[
       ["west", M.willows.filter((w) => w.x < M.brookX)],
       ["east", M.willows.filter((w) => w.x >= M.brookX)],
-    ].map(([side, trees]) =>
-      job(
-        `marsh ${side} willows`,
-        trees.reduce((n, t) => n + t.x, 0) / trees.length,
-        trees.reduce((n, t) => n + t.z, 0) / trees.length,
-        willowBuilder(T, world, side, trees),
-        (meshes) => {
-          const [wood, leaves, crown] = meshes;
-          added(meshes);
-          // The leaves' bounds enclose both blades and the wind's sway.
-          leaves.geometry = leaves.userData.coarse;
-          leaves.computeBoundingSphere();
-          leaves.geometry = leaves.userData.fine;
-          leaves.boundingSphere.radius += 0.14;
-          world.water.excludeFromCaptures(leaves, crown);
-          world.trees.adopt({
-            mesh: leaves,
-            fine: leaves.userData.fine,
-            coarse: leaves.userData.coarse,
-            crown,
-            center: leaves.boundingSphere.center.clone(),
-          });
-        },
+    ].flatMap(([side, trees]) =>
+      trees.map((tree, index) =>
+        job(
+          `marsh ${side} willow ${index + 1}`,
+          tree.x,
+          tree.z,
+          willowBuilder(T, world, side, [tree], index),
+          (meshes) => {
+            const [wood, leaves, crown] = meshes;
+            added(meshes);
+            // The leaves' bounds enclose both blades and the wind's sway.
+            leaves.geometry = leaves.userData.coarse;
+            leaves.computeBoundingSphere();
+            leaves.geometry = leaves.userData.fine;
+            leaves.boundingSphere.radius += 0.14;
+            world.water.excludeFromCaptures(leaves, crown);
+            world.trees.adopt({
+              mesh: leaves,
+              fine: leaves.userData.fine,
+              coarse: leaves.userData.coarse,
+              crown,
+              center: leaves.boundingSphere.center.clone(),
+            });
+          },
+        ),
       ),
     ),
     job("marsh reeds", 12, 29, reedBuilder(reeds), ([group]) => {
@@ -479,13 +483,14 @@ function hideAndBench(T, range, material) {
 const WILLOW_LEAVES = ["#567c58", "#6b925b", "#82a464", "#9ab577", "#739659"];
 
 /**
- * Builds a group of willows a tree per slice, then returns its three meshes:
+ * Builds willows a tree per slice (`first` numbers the first of them), then
+ * returns their three meshes:
  * wood, the leaves, and the distant crowns. (No shady shells inside the
  * crowns, as other trees have: through a willow's thin curtains they show as
  * dark balls.) Each willow's limbs arch up and out from a short leaning trunk, and
  * curtains of leafy strands hang from them almost to the ground.
  */
-function willowBuilder(T, world, side, trees) {
+function willowBuilder(T, world, side, trees, first = 0) {
   const { materials, blades } = world.trees,
     leafMaterials = materials.grounded(new T.Vector4(0, 0, -1e4, 0)),
     wood = [],
@@ -615,7 +620,7 @@ function willowBuilder(T, world, side, trees) {
   let building = null;
   return (deadline) => {
     while (next < trees.length) {
-      building ??= build(trees[next], next);
+      building ??= build(trees[next], first + next);
       if (building.next().done) {
         building = null;
         next++;
@@ -624,7 +629,7 @@ function willowBuilder(T, world, side, trees) {
     }
     // Merging and instancing run in a slice of their own.
     if (next++ === trees.length) return null;
-    const name = `Willows (${side})`;
+    const name = trees.length === 1 ? `Willow (${side} ${first + 1})` : `Willows (${side})`;
     const woodGeometry = mergeGeometries(wood, false);
     for (const part of wood) part.dispose();
     woodGeometry.computeBoundingSphere();
@@ -732,6 +737,8 @@ function reedBuilder(placements) {
     blade: 8,
     stem: [6, 4],
     head: 6,
+    // Small batches, so those out of view, and their shadows, are culled.
+    cell: 5,
   });
   let next = 0;
   return (deadline) => {
