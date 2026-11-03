@@ -245,7 +245,7 @@ Measurements recorded as each change landed, newest first, each against the `mai
 
 Phase 5's third region. West of the wildflower meadow, from the village's edge to the map's rim and between the orchard hill and the south-west fields, a strip of woodland on a gently rolling floor (never more than about a metre, level in the clearing and flat at the village's edge): three earth trails, 64 oaks and amber beeches (16 of them young trees between the crowns), the great oak, a mossy clearing with a fairy ring whose mushrooms glow at blue hour, a hollow log, stumps and fallen branches, ferns, toadstools, a fingerpost, soft shafts of sunlight, and patches of seven woodland flowers that the player presses into the journal. Rowan, who forages here, joins at her stump table through `life.addResident`. The wood's shape, heights, trees, colliders and grass mask load with the village from `src/regions/wood-layout.js`; fourteen jobs stream in from `src/regions/wood.js` (the floor, six stands of trees and the great oak, the logs, stumps and Rowan's table, the ferns, the mushrooms and fairy ring, the flowers, the light shafts, and Rowan).
 
-- **Trees.** Built a limb per slice into one bark mesh, one shell mesh, one instanced leaf mesh and one distant-crown mesh per stand, each stand one level of detail. The shells are the crowns' leafy mass in the leaves' own colours (dark shells read as black balls through gaps), and every stand but the great oak draws the coarse blade even up close: twice a fine leaf's area for half its triangles, so half as many leaves cover a crown. All the wood's leaves come to 66k triangles; a first draft with fine blades added about 1M triangles at the wood's overview.
+- **Trees.** Built a limb per slice into one bark mesh, one shell mesh, one instanced leaf mesh and one distant-crown mesh per stand, each stand one level of detail. Every stand but the great oak draws the coarse blade even up close: twice a fine leaf's area for half its triangles, so half as many leaves cover a crown. A first draft with fine blades added about 1M triangles at the wood's overview. (The shells and leaves were reworked the same day; see "Old wood crowns" below.)
 - **Floor and small scenery.** One 0.4 m grid with vertex-coloured moss, litter and trails, like the orchard's. The open country's grass gives out a few metres in from the meadow, since scattered blades read as spikes. Ferns, flowers and toadstools only take shadows, and split into one instanced mesh per chunk (`splitByChunk` in `src/regions/kit.js`): built as one mesh each across the wood, their bounding spheres reached into the village green's view, which drew all of them without seeing any. The six tree stands stay six for the same reason: merged into two, they put the green 46,000 triangles over its 3.2M.
 - **Zoom cap.** Zoomed far out (from height 30), the ferns, toadstools, flowers and light shafts hide and the logs, stumps and Rowan's table stop casting shadows, through the `far` and `fineShadow` options of `world.addStreamed`; the trees take the coarse leaves and their shells hide with the village trees' ground detail. The wood is in view from the village at the cap, where it still adds about 50 draws and 107,000 triangles, leaving that test (1,100 draws and 2.65M) about 5 draws and 25,000 triangles of room on the frames that render a reflection.
 - **Light shafts.** Six open tubes along the sun's direction in one additive mesh, a small shader of their own, faded out by blue hour. The wood overview compiles 74–75 shader programs against `main`'s 72 there.
@@ -268,6 +268,29 @@ Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high
 | First person in the clearing at blue hour | 181 / 0.65M | 240 / 0.83M |
 
 In `tests/performance.spec.js`'s own run on an M5 (1600 × 1000, the most over six frames), the village's green counted 942 draws and 3.05M triangles against `main`'s 929 and 3.00M, the edge facing the wood 673 and 2.87M, and the north-west edge by the orchard 552 and 2.59M against 530 and 2.48M. The test holds the benchmark's wood viewpoint, the clearing (−35.5, 0), under 1,000 draws and 2.5M triangles at heights 18 and 30, and the village's edge facing the wood with the other edges. `npm run benchmark` measures it as "high, wood" and "high, wood, first person"; `--ablate` adds the wood at height 30. On the M5 at 60 fps, before the small scenery split, those measured 355 draws, 1.93M triangles and 2.0 ms; 199, 725k and 2.5 ms; and 519, 1.71M and 3.5 ms.
+
+### Old wood crowns (2026-11-03)
+
+The wood's crowns read as smooth balls with leaves scattered round them: each leaf cluster sat on a shell at 0.8 of its radius in 1.3 times the leaves' colour, and its 30 coarse blades stood out radially from it, so from above most showed an edge or a tip. Now, in `src/regions/wood.js`:
+
+- **Leaves lie on the crown.** Each leaf lies over the cluster's surface like a shingle (`shingle`): face out, tip drooping roughly downhill and lifted 10–40° off the crown, so from above it shows its whole face. They cover the top and flanks down to 0.72 of the radius below the centre (the great oak's, which walkers stand under, all the way round), between 0.68 and 1.04 of the radius out.
+- **A leaf-shaped blade.** The coarse blade, a rhombus, reads as a square lying face up; the wood draws a copy reshaped as a kite (`kite`), broadest a third of the way up and narrower, with the same four triangles, 10% larger.
+- **Twice the leaves up close, the same zoomed out.** 60 leaves a cluster instead of 30. The leaves are ordered every fourth first, and `trees.adopt()` takes a `far` share: at the coarse level (above height 24) the wood draws a quarter of them, as many as it drew before, so heights 27 to 39, where the zoom-cap budget is tight, count exactly what `main` does.
+- **Shade, not balls.** The shells sit at 0.56 of the radius in 0.6 times the leaves' colour, squat underneath (`stretch` 0.75), and `crownShells` takes a `rough` amount: broader lumps, a mottled colour, and normals turned mostly upward, so a shell takes the light evenly instead of shading round like a ball. Every other caller passes no `rough` and is unchanged.
+
+Counted in the cloud container (SwiftShader) at 1200 × 750, high quality, `?resolution=fixed`, with a frame-locked probe, against `main` (`7ccb6f7`):
+
+| View | `main` draws / triangles | Crowns draws / triangles |
+| --- | --- | --- |
+| Wood by the trail (−30, 6), height 18 | 447 / 2.08M | 447 / 2.19M |
+| Same, height 10 | 286 / 1.45M | 286 / 1.55M |
+| Clearing (−35.5, 0), height 24 | 534 / 2.26M | 534 / 2.37M |
+| Clearing, heights 27 and 30 | 645 / 1.90M; 481 / 1.63M | the same |
+| Village spawn (−3, 5), height 18 | 812 / 2.90M | 812 / 2.94M |
+| Village spawn, height 39 | 877 / 2.36M | the same |
+| First person by Rowan's table (−31.5, 2.5), facing the village | 1,505 / 3.01M | 1,505 / 3.08M |
+
+Up close the wood's leaves come to about 115,000 more triangles (half of them in the shadow pass); no draws are added.
 
 ### Zoom detail (2026-11-02)
 
