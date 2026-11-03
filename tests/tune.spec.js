@@ -1,10 +1,20 @@
 import { test, expect } from "@playwright/test";
 
-// Reads the diagnostics after a frame has rendered with the current settings.
+// Reads the diagnostics once frames have rendered with the current settings.
+// Water reflections are captured on a clock, at most one body's a frame (each
+// body every 1/24 s, the marsh's and millpond's less often), so one frame's
+// draw calls swing by a reflection pass. Over 24 frames every body in view
+// captures: report the frame that drew the most.
 const diagnostics = (page) =>
   page.evaluate(async () => {
     for (let i = 0; i < 2; i++) await new Promise(requestAnimationFrame);
-    return window.__willowmere.getDiagnostics();
+    let most = null;
+    for (let i = 0; i < 24; i++) {
+      await new Promise(requestAnimationFrame);
+      const sample = window.__willowmere.getDiagnostics();
+      if (!most || sample.drawCalls > most.drawCalls) most = sample;
+    }
+    return most;
   });
 const tune = (page, settings) =>
   page.evaluate((settings) => window.__willowmere.tune(settings), settings);
