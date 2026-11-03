@@ -329,10 +329,18 @@ test("zoomed out to the cap, the overview drops small detail and keeps the villa
   });
   await page.goto("/?resolution=fixed");
   await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
+  // Every region is in view from the cap, so let the whole map stream in,
+  // drawing little meanwhile so slow (software) renderers get there too.
+  await page.evaluate(() =>
+    window.__willowmere.tune({ foliage: false, fields: false, water: false, shadowUpdate: false }),
+  );
   await page.waitForFunction(() => !window.__willowmere.getStreaming().pending, null, {
     timeout: 600000,
     polling: 1000,
   });
+  await page.evaluate(() =>
+    window.__willowmere.tune({ foliage: null, fields: null, water: null, shadowUpdate: null }),
+  );
   const SMALL = [
     "River pebbles",
     "Riverbank shingle and pebbles",
@@ -375,10 +383,11 @@ test("zoomed out to the cap, the overview drops small detail and keeps the villa
   expect(far.small).toBeGreaterThan(30);
   expect(far.smallShown).toBe(0);
   // The village zoomed out as far as it went before the map grew counted
-  // up to 1,104 draws and 2.41M triangles; this view without zoom detail
-  // counts up to 1,253 and 2.95M (1,003 and 2.37M with it).
+  // up to 1,104 draws and 2.41M triangles. With the regions around it, this
+  // view counts about 1,020 draws and 2.54M triangles with zoom detail, and
+  // about 3.0M triangles without.
   expect(far.drawCalls).toBeLessThan(1100);
-  expect(far.triangles).toBeLessThan(2.45e6);
+  expect(far.triangles).toBeLessThan(2.65e6);
   // Back at the old cap of 30, every pebble and fallen leaf is back.
   await page.evaluate(() => {
     for (let i = 0; i < 3; i++) document.querySelector("#zoom-in").click();
