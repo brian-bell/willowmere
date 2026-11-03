@@ -12,7 +12,7 @@ import {
 import { allowsGrass } from "./index.js";
 
 // Blades per square metre, about the village meadow's density.
-const GRASS_DENSITY = 1.7;
+export const GRASS_DENSITY = 1.7;
 // Blades stay this far inside the grass slab's edge.
 const RIM_MARGIN = 0.5;
 
@@ -22,17 +22,12 @@ const RIM_MARGIN = 0.5;
  * 16 patches of about 3,400–5,100 triangles each.
  */
 export function outskirtsJobs(T, world) {
-  const { ground } = WORLD,
-    { geometry, material } = world.grassBlade,
+  const { geometry, material } = world.grassBlade,
     jobs = [];
   for (let cx = -2; cx <= 2; cx++)
     for (let cz = -2; cz <= 2; cz++) {
       if (Math.abs(cx) <= 1 && Math.abs(cz) <= 1) continue;
-      const b = chunkBounds(cx, cz),
-        minX = (cx === -2 ? ground.minX : b.minX) + (cx === -2 ? RIM_MARGIN : 0),
-        maxX = (cx === 2 ? ground.maxX : b.maxX) - (cx === 2 ? RIM_MARGIN : 0),
-        minZ = (cz === -2 ? ground.minZ : b.minZ) + (cz === -2 ? RIM_MARGIN : 0),
-        maxZ = (cz === 2 ? ground.maxZ : b.maxZ) - (cz === 2 ? RIM_MARGIN : 0);
+      const { minX, maxX, minZ, maxZ } = patchBounds(cx, cz);
       jobs.push({
         key: `${cx},${cz}`,
         x: (minX + maxX) / 2,
@@ -52,6 +47,18 @@ export function outskirtsJobs(T, world) {
       });
     }
   return jobs;
+}
+
+/** The ground chunk (cx, cz)'s grass patch scatters over. */
+export function patchBounds(cx, cz) {
+  const { ground } = WORLD,
+    b = chunkBounds(cx, cz);
+  return {
+    minX: (cx === -2 ? ground.minX : b.minX) + (cx === -2 ? RIM_MARGIN : 0),
+    maxX: (cx === 2 ? ground.maxX : b.maxX) - (cx === 2 ? RIM_MARGIN : 0),
+    minZ: (cz === -2 ? ground.minZ : b.minZ) + (cz === -2 ? RIM_MARGIN : 0),
+    maxZ: (cz === 2 ? ground.maxZ : b.maxZ) - (cz === 2 ? RIM_MARGIN : 0),
+  };
 }
 
 function grassPatch(T, geometry, material, rand, b, key) {
