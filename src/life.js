@@ -6,6 +6,15 @@ import { createCat } from "./cats.js";
  * plane; groundHeight(x, z) lifts everyone onto the terrain under them.
  */
 export function createLife(THREE, scene, groundHeight = () => 0) {
+  // Everything that walks, flies or wags, whose cast shadows the overview
+  // drops when zoomed far out (each keeps its soft contact shadow).
+  const figures = [];
+  const addFigure = (root) => {
+    figures.push(root);
+    scene.add(root);
+  };
+  let casters = null,
+    castsShadows = true;
   const materials = new Map();
   const mat = (color, roughness = 0.86) => {
     const key = `${color}:${roughness}`;
@@ -314,7 +323,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
   });
   const player = traveler.root;
   player.name = "Traveler";
-  scene.add(player);
+  addFigure(player);
   const npcDefinitions = [
     {
       id: "mabel",
@@ -372,7 +381,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     figure.root.position.set(def.x, groundHeight(def.x, def.z), def.z);
     figure.root.rotation.y = def.facing ?? (def.id === "finn" ? 0.2 : -0.5);
     figure.root.name = def.name;
-    scene.add(figure.root);
+    addFigure(figure.root);
     return { ...def, group: figure.root, figure };
   }
   const residents = npcDefinitions.map(resident);
@@ -385,7 +394,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     size: 0.8,
   });
   girl.root.name = "Lily";
-  scene.add(girl.root);
+  addFigure(girl.root);
   const skirt = new THREE.Mesh(
     new THREE.CylinderGeometry(0.22, 0.34, 0.32, 18),
     mat(0xc77b9a),
@@ -414,7 +423,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     puppyBody = new THREE.Group();
   puppy.name = "Pip the puppy";
   puppy.add(puppyBody);
-  scene.add(puppy);
+  addFigure(puppy);
   shadow(puppy, 0.4, 0.27);
   const fur = 0xcfa168,
     cream = 0xf4e2bb,
@@ -506,7 +515,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
 
   const leash = new THREE.Group();
   leash.name = "Lily and Pip leash";
-  scene.add(leash);
+  addFigure(leash);
   const leashGeometry = new THREE.CylinderGeometry(0.019, 0.019, 1, 6);
   for (let i = 0; i < 12; i++) {
     const segment = new THREE.Mesh(leashGeometry, mat(0x735671));
@@ -634,7 +643,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
   butterflyLocations.forEach(([x, z], i) => {
     const root = new THREE.Group();
     root.scale.setScalar(0.57 + (i % 3) * 0.06);
-    scene.add(root);
+    addFigure(root);
     const wingMaterial = new THREE.MeshStandardMaterial({
       color: [0xe9bd66, 0xe8b7b9, 0x93b3be][i % 3],
       side: THREE.DoubleSide,
@@ -667,7 +676,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     cat.root.name = name;
     cat.root.scale.setScalar(1.15);
     shadow(cat.root, 0.44, 0.25);
-    scene.add(cat.root);
+    addFigure(cat.root);
     const [x, z] = center;
     const route = new THREE.CatmullRomCurve3(
       [
@@ -696,7 +705,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
   const birds = [];
   for (let i = 0; i < 4; i++) {
     const root = new THREE.Group();
-    scene.add(root);
+    addFigure(root);
     sphere(root, 0x65717a, 0, 0, 0, 0.075, 0.065, 0.19);
     const wings = [-1, 1].map((s) => {
       const pivot = new THREE.Group();
@@ -948,6 +957,26 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       const { figure, ...entry } = npc;
       npcs.push(entry);
       return entry;
+    },
+    /**
+     * Turns the figures' cast shadows on or off; their contact shadows stay.
+     * Zoomed far out, a figure's shadow is a few pixels for a dozen draws.
+     */
+    setCastShadows(on) {
+      if (on === castsShadows && casters?.figures === figures.length) return;
+      if (casters?.figures !== figures.length) {
+        // Residents stream in later; gather every caster again when they do.
+        casters = { figures: figures.length, meshes: [] };
+        for (const root of figures)
+          root.traverse((o) => {
+            if (o.isMesh && (o.castShadow || o.userData.castsShadow)) {
+              o.userData.castsShadow = true;
+              casters.meshes.push(o);
+            }
+          });
+      }
+      castsShadows = on;
+      for (const mesh of casters.meshes) mesh.castShadow = on;
     },
     /** Shows or hides Pip's straw hat. */
     setPipHat(on) {

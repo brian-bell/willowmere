@@ -139,11 +139,19 @@ test("the open country streams in, and the player walks across chunk borders, wi
   // Starting and the first zoom-out stall once on their own, as they did
   // before the map grew (see docs/performance.md), so timing resumes for the
   // walk: from the village green west across the chunk borders at x = -8 and
-  // x = -24 into the fields, at the zoom cap.
+  // x = -24 into the fields, zoomed out to the cap.
   await page.locator("#start").click();
-  for (let i = 0; i < 4; i++) await page.locator("#zoom-out").click();
+  while (!(await page.locator("#zoom-out").isDisabled()))
+    await page.locator("#zoom-out").click();
   await page.waitForTimeout(2500);
-  const target = await page.evaluate(() => window.__willowmere.project(-30, 3));
+  // Zoomed out this far, x = -30 is drawn at the screen's left, where the
+  // quest card can cover it: aim at the first spot along it the canvas shows.
+  const target = await page.evaluate(() =>
+    [3, 6, 9, 12, 0, -3]
+      .map((z) => window.__willowmere.project(-30, z))
+      .find(({ x, y }) => document.elementFromPoint(x, y)?.id === "scene"),
+  );
+  expect(target).toBeDefined();
   const walking = await page.evaluate(() => window.__frames.length);
   await page.mouse.click(target.x, target.y);
   await expect

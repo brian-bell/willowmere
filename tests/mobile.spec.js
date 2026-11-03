@@ -16,6 +16,9 @@ async function start(page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__willowmere);
   await page.locator("#start").tap();
+  // Starting zooms in to the default height, in one frame when motion is
+  // reduced; taps aimed by projecting a point need the view to be there.
+  await page.waitForFunction(() => window.__willowmere.getDiagnostics().camera.viewHeight === 18);
 }
 
 // Returns pairs of visible HUD panels whose boxes overlap, and panels that leave the screen.

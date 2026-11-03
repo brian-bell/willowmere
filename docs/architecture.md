@@ -19,6 +19,7 @@ All art and audio are generated in code. `vite.config.js` splits Three.js into i
 | `resolution.js` | the adaptive pixel ratio |
 | `overview-camera.js` | yaw, tilt, pan, zoom and follow |
 | `shadows.js` | fitting the sun's shadow to the view |
+| `detail.js` | which levels of detail each zoom and distance draws, as pure thresholds |
 | `navigation.js` | collision and route finding |
 | `save.js` | the visit's progress in browser storage |
 | `hud.js` | toasts, the quest card, conversations and the journal |
@@ -33,7 +34,7 @@ Game text lives in `src/content/` (journal, landmarks, neighbours, and one file 
 
 - `src/world-layout.js` holds the map's bounds (walk box, camera clamp, shadow extent, plantable area), the 16 × 14 m chunk grid, the named areas behind the location label, `terrainHeight(x, z)` and `chunkRandom(cx, cz)`. Read limits from here instead of hard-coding them.
 - `src/world.js` builds the village's environment, materials and collision layout, places lanterns (`lamp`) and animations (`animate`), and exposes `addStreamed`, `addLamps` and `trees` to streamed regions.
-- `src/bake.js` holds the chunk grid's bake, which merges the village's static meshes per chunk, material and shadow role, and first person's detail range.
+- `src/bake.js` holds the chunk grid's bake, which merges the village's static meshes per chunk, material and shadow role, first person's detail range, and the small detail and thin shadow casters the overview drops when zoomed far out.
 - `src/streaming.js` builds everything beyond the village after the game starts, a slice of each frame at a time.
 - Scenery: `src/trees.js` (branching trees, leaves, wind, levels of detail), `src/flowers.js`, `src/bushes.js`, `src/reeds.js`, `src/riverbank.js`, `src/planters.js` (pots, window boxes, beds), `src/garden.js` (the kitchen garden), `src/sky.js` (first person's sky).
 - Life: `src/life.js` (the traveler, residents and wildlife), `src/cats.js`, `src/fishing.js` (the millpond's cast and bite).

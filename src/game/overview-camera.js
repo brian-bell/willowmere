@@ -22,9 +22,10 @@ export const CAMERA_DISTANCE = RESTING_OFFSET.length(),
   PAN_LIMIT = 18,
   DEFAULT_VIEW_HEIGHT = 18,
   MIN_VIEW_HEIGHT = 10,
-  // At 39 the overview held about twice the village's content, which culling
-  // cannot reduce; the cap lifts once zoom-based detail reduction exists.
-  MAX_VIEW_HEIGHT = 30,
+  // Zoomed out this far the view holds more than the village; coarse foliage
+  // and hidden small detail (src/game/detail.js) keep it within the village
+  // view's cost.
+  MAX_VIEW_HEIGHT = 39,
   ZOOM_STEP = 3;
 
 /**
@@ -177,7 +178,9 @@ export function createOverviewCamera({ camera, isFirstPerson, onZoom }) {
         THREE.MathUtils.clamp(1.5 + (p.z - 5) * follow, bounds.minZ, bounds.maxZ),
       );
       if (Math.abs(viewHeight - targetViewHeight) > 0.01) {
-        viewHeight = THREE.MathUtils.lerp(viewHeight, targetViewHeight, 1 - Math.exp(-dt * 2.4));
+        viewHeight = motion
+          ? THREE.MathUtils.lerp(viewHeight, targetViewHeight, 1 - Math.exp(-dt * 2.4))
+          : targetViewHeight;
         onZoom();
       }
       // A jump (moveTo) takes the view straight there.
