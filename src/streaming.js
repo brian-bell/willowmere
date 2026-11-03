@@ -47,11 +47,16 @@ export function createStreamer(renderer, scene, { budget = 2.5, target = null } 
     compiling++;
     const join = () => {
       compiling--;
-      ready.push(() => {
-        finished++;
-        for (const object of objects) scene.add(object);
-        job.added?.(objects);
-      });
+      ready.push(
+        Object.assign(
+          () => {
+            finished++;
+            for (const object of objects) scene.add(object);
+            job.added?.(objects);
+          },
+          { key: `${job.key ?? ""} (${objects.map((o) => o.name).join("; ").slice(0, 120)})` },
+        ),
+      );
     };
     // Shared materials are usually compiled already, and resolve at once.
     // Without parallel compiling, compileAsync would block anyway (and warn),
@@ -101,13 +106,21 @@ export function createStreamer(renderer, scene, { budget = 2.5, target = null } 
      * milliseconds, nearest (x, z) first.
      */
     update(x, z, camera) {
-      ready.shift()?.();
+      // DEBUG (temporary): trace each join and step.
+      let t0 = performance.now();
+      const joining = ready.shift();
+      if (joining) {
+        joining();
+        window.__tr?.joins.push([joining.key, +(performance.now() - t0).toFixed(1)]);
+      }
       if (!queue.length) return;
       const deadline = performance.now() + budget;
       let index = nearest(x, z);
       while (queue.length && performance.now() < deadline) {
-        const job = queue[index],
-          result = job.step(deadline);
+        const job = queue[index];
+        t0 = performance.now();
+        const result = job.step(deadline);
+        window.__tr?.steps.push([job.key ?? "", +(performance.now() - t0).toFixed(1), result != null]);
         if (result == null) continue;
         queue.splice(index, 1);
         place(job, [].concat(result), camera);

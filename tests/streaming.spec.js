@@ -158,6 +158,39 @@ test("the open country streams in, and the player walks across chunk borders, wi
       return gaps;
     }, from);
   const STALL = 45;
+  // DEBUG (temporary): print what each stalled frame and the frame before it did.
+  const report = (label, from) =>
+    page.evaluate(
+      ({ label, from, STALL }) => {
+        const frames = window.__frames,
+          byRaf = new Map((window.__trace || []).map((t) => [t.raf, t])),
+          round = (t) =>
+            t && {
+              frame: t.frame,
+              js: +(t.js ?? -1).toFixed(1),
+              stream: +(t.stream ?? -1).toFixed(1),
+              prep: +(t.prep ?? -1).toFixed(1),
+              water: +(t.water ?? -1).toFixed(1),
+              render: +(t.render ?? -1).toFixed(1),
+              draws: t.draws,
+              steps: t.steps,
+              joins: t.joins,
+              programs: t.programs,
+            },
+          lines = [];
+        for (let i = Math.max(from, 1); i < frames.length; i++) {
+          const gap = frames[i][0] - frames[i - 1][0];
+          if (gap < STALL) continue;
+          lines.push(
+            `STALL ${label} gap ${gap.toFixed(1)} ms at frame index ${i}: before ${JSON.stringify(round(byRaf.get(frames[i - 1][0])))} after ${JSON.stringify(round(byRaf.get(frames[i][0])))}`,
+          );
+        }
+        const all = frames.slice(Math.max(from, 1)).map((f, i) => f[0] - frames[Math.max(from, 1) + i - 1][0]);
+        lines.push(`SUMMARY ${label}: ${all.length} gaps, ${all.filter((g) => g > 20).length} over 20 ms, ${all.filter((g) => g >= STALL).length} at ${STALL}+`);
+        return lines;
+      },
+      { label, from, STALL },
+    );
   // The patches stream in on the loading view, from its third frame.
   await expect
     .poll(async () => (await streaming(page)).pending, { timeout: 30000 })
@@ -165,6 +198,7 @@ test("the open country streams in, and the player walks across chunk borders, wi
   const loaded = await page.evaluate(
     () => window.__frames.findIndex(([, loaded]) => loaded) + 2,
   );
+  for (const line of await report("streaming", loaded)) console.log(line);
   expect(Math.max(...(await gapsSince(loaded)))).toBeLessThan(STALL);
   // Starting and the first zoom-out stall once on their own, as they did
   // before the map grew (see docs/performance.md), so timing resumes for the
@@ -191,5 +225,6 @@ test("the open country streams in, and the player walks across chunk borders, wi
       timeout: 30000,
     })
     .toBeLessThan(-26);
+  for (const line of await report("walk", walking)) console.log(line);
   expect(Math.max(...(await gapsSince(walking)))).toBeLessThan(STALL);
 });
