@@ -99,9 +99,64 @@ test("village keeps a draw-call budget with live water and a planted garden", as
   });
   // Counts are deterministic enough for CI; FPS depends on the machine/GPU.
   expect(Math.max(...samples.map((s) => s.drawCalls))).toBeLessThan(1600);
+  // The village's triangle cap: looser than the regions' 2.5M (see below).
+  expect(Math.max(...samples.map((s) => s.triangles))).toBeLessThan(3e6);
   // This includes individually culled tree geometry and shared flower meshes.
   // The former per-petal garden would allocate over 1,000 geometries here.
   expect(Math.max(...samples.map((s) => s.geometries))).toBeLessThan(320);
+  expect(errors).toEqual([]);
+});
+
+test("the village's edges keep its budget with every region streamed in beside them", async ({
+  page,
+}) => {
+  test.setTimeout(2400000);
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "willowmere.save.v1",
+      JSON.stringify({
+        started: true,
+        quests: { mabel: false, flower: false, plant: false },
+        plants: [],
+      }),
+    );
+  });
+  await page.goto("/?resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
+  // Software WebGL streams the whole map in slowly; a GPU takes seconds.
+  await page.waitForFunction(() => !window.__willowmere.getStreaming().pending, null, {
+    timeout: 1800000,
+    polling: 2000,
+  });
+  // Inside the village's edge facing each region, at the default height: a
+  // region's scenery, water and shadows add to the village's own here, which
+  // the regions' own viewpoints never see.
+  const edges = {
+    "south, by the marsh": [10, 18],
+    "north, by the millpond": [8, -18],
+    "north-west, by the orchard": [-18, -18],
+    "east, by the market lane": [21, 2],
+  };
+  for (const [edge, [x, z]] of Object.entries(edges)) {
+    await page.evaluate(([x, z]) => window.__willowmere.moveTo(x, z), [x, z]);
+    const samples = await page.evaluate(async () => {
+      const values = [];
+      for (let i = 0; i < 4; i++) await new Promise(requestAnimationFrame);
+      for (let i = 0; i < 6; i++) {
+        await new Promise(requestAnimationFrame);
+        values.push(window.__willowmere.getDiagnostics());
+      }
+      return values;
+    });
+    expect(Math.max(...samples.map((s) => s.drawCalls)), edge).toBeLessThan(1600);
+    expect(Math.max(...samples.map((s) => s.triangles)), edge).toBeLessThan(3e6);
+  }
   expect(errors).toEqual([]);
 });
 
@@ -275,8 +330,8 @@ test("the willow marsh keeps the same budget as the millpond", async ({ page }) 
         "Marsh ground, banks and bed",
         "Marsh footbridge and boardwalk",
         "Marsh hide and bench",
-        "Willows (west): leaves",
-        "Willows (east): leaves",
+        "Willow (west 1): leaves",
+        "Willow (east 1): leaves",
         "Marsh lily pads",
         "Marsh heron",
         "Marsh fireflies",

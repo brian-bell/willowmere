@@ -41,11 +41,12 @@ export function createReeds(placements, bedHeight) {
  * into the group's meshes, a batch at a time until performance.now() passes
  * `deadline`, and returns true once every batch is merged. `detail` sets the
  * segments along each blade, around and along each stem, and round each
- * seed head: the village's reeds, seen close, keep the defaults.
+ * seed head: the village's reeds, seen close, keep the defaults. `cell`, in
+ * metres, batches the plants by square instead of the village's bands.
  */
 export function createReedBuilder(
   bedHeight,
-  { blade = 16, stem = [9, 6], head = 10 } = {},
+  { blade = 16, stem = [9, 6], head = 10, cell = null } = {},
 ) {
   const group = new T.Group();
   group.name = "Riverbank reeds";
@@ -108,7 +109,10 @@ export function createReedBuilder(
       angle = rand() * TAU,
       lean = range(0.08, 0.2),
       leafColor = new T.Color(greens[Math.floor(rand() * greens.length)]);
-    const key = `${x < 12 ? "west" : "east"}:${Math.floor((z + 21) / 7)}`;
+    // The village's batches run along the brook; `cell` cuts square ones instead.
+    const key = cell
+      ? `${Math.floor(x / cell)}:${Math.floor(z / cell)}`
+      : `${x < 12 ? "west" : "east"}:${Math.floor((z + 21) / 7)}`;
     if (!batches.has(key)) batches.set(key, [[], []]);
     const parts = batches.get(key);
 
