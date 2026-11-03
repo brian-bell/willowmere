@@ -1,3 +1,4 @@
+// @ts-check
 // The adaptive resolution scaler. Every pass fills the full drawing buffer, so
 // the frame rate follows pixel count. Each quality caps the pixel ratio; the
 // scaler lowers it while frames run long and raises it again once they are
@@ -29,7 +30,7 @@ export function createResolutionScaler({
   now,
   setPixelRatio,
   resize,
-  overrides = {},
+  overrides = /** @type {{ pixelRatio?: number }} */ ({}),
 }) {
   const state = {
     adaptive,

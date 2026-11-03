@@ -1,3 +1,4 @@
+// @ts-check
 // The neighbors' name cards in conversation, and what they say beyond the
 // phrases life.js gives each of them.
 export const NEIGHBOR_TITLES = {

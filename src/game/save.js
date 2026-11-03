@@ -1,3 +1,4 @@
+// @ts-check
 // The visit's progress, saved to this browser. A save carries the version it
 // was written at; loading runs the migrations it has missed, then merges it
 // into the defaults field by field, so a field added to the defaults later
@@ -54,6 +55,8 @@ export function defaultState() {
   };
 }
 
+/** The visit's progress, as saved. @typedef {ReturnType<typeof defaultState>} SaveState */
+
 /** @param {unknown} value */
 const isRecord = (value) =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -93,7 +96,7 @@ export function loadState(storage) {
     if (isRecord(saved) && isRecord(saved.quests) && Array.isArray(saved.plants)) {
       const from = Number.isInteger(saved.version) ? saved.version : 1;
       for (let version = from; version < SAVE_VERSION; version++) MIGRATIONS[version]?.(saved);
-      state = /** @type {ReturnType<typeof defaultState>} */ (mergeSave(state, saved));
+      state = /** @type {SaveState} */ (mergeSave(state, saved));
       // A save from a newer version (after a rollback) keeps its number, so
       // its migrations never run twice.
       state.version = Math.max(from, SAVE_VERSION);

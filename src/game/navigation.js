@@ -1,3 +1,4 @@
+// @ts-check
 // Walking rules: the player's collision test, and a route grid searched with
 // A* for point-and-click movement. No three.js, so tests run it in Node.
 
