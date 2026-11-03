@@ -183,7 +183,29 @@ test("the open country streams in, and the player walks across chunk borders, wi
   );
   expect(target).toBeDefined();
   const walking = await page.evaluate(() => window.__frames.length);
+  // DEBUG (temporary): what the click meets.
+  const probe = () =>
+    page.evaluate((target) => {
+      const w = window.__willowmere,
+        player = w.getPlayer(),
+        ground = w.project(-30, target.z);
+      return {
+        player,
+        target,
+        ground,
+        under: document.elementFromPoint(target.x, target.y)?.id,
+        path: w.findPath(player, { x: -30, z: target.z }).length,
+        blocked: w.blocked(-30, target.z),
+        dialogs: [...document.querySelectorAll("dialog[open]")].map((d) => d.id),
+        streaming: w.getStreaming(),
+        view: w.getDiagnostics().camera,
+        wood: w.getWood(),
+      };
+    }, target);
+  console.log("DEBUG before", JSON.stringify(await probe()));
   await page.mouse.click(target.x, target.y);
+  await page.waitForTimeout(1500);
+  console.log("DEBUG after", JSON.stringify(await probe()));
   await expect
     .poll(async () => (await page.evaluate(() => window.__willowmere.getPlayer())).x, {
       timeout: 30000,
