@@ -733,12 +733,6 @@ function animate(now) {
   if (document.hidden) return;
   elapsed += dt;
   frame++;
-  // DEBUG (temporary): per-frame trace for the streaming stall test.
-  const trace = (window.__trace ||= []),
-    tr = { frame, raf: now, start: performance.now(), steps: [], joins: [], programs: [] };
-  window.__tr = tr;
-  trace.push(tr);
-  if (trace.length > 4000) trace.shift();
   if (interior?.active) {
     interior.update(dt, elapsed, motion);
     return;
@@ -864,15 +858,10 @@ function animate(now) {
   else world.setOverviewDetail(fineDetail);
   world.trees.setGroundDetail(fineDetail);
   life.setCastShadows(fineDetail);
-  let t0 = performance.now();
   streamer.update(p.x, p.z, camera);
-  tr.stream = performance.now() - t0;
-  t0 = performance.now();
   sunShadow.fit({ firstPerson, yaw, targetYaw: overview.targetYaw });
   scene.updateMatrixWorld();
-  tr.prep = performance.now() - t0;
   renderer.info.reset();
-  t0 = performance.now();
   // RenderPass draws into readBuffer; water resolves refraction from that pass.
   if (overrides.water ?? true)
     world.water.render(renderer, camera, {
@@ -881,13 +870,7 @@ function animate(now) {
       sun,
       target: composer.readBuffer,
     });
-  tr.water = performance.now() - t0;
-  const programs = renderer.info.programs.length;
-  t0 = performance.now();
   composer.render();
-  tr.render = performance.now() - t0;
-  tr.programs = renderer.info.programs.slice(programs).map((p) => `${p.name}|${p.cacheKey.split(",").at(-1).slice(0, 40)}`);
-  tr.draws = renderer.info.render.calls;
   if (frame === 3) $("#loading").classList.add("loaded");
   // Every region's builder, the open country's included, loads once the
   // village is on screen.
@@ -903,7 +886,6 @@ function animate(now) {
           }),
         );
   }
-  tr.js = performance.now() - tr.start;
 }
 updateUI();
 requestAnimationFrame(animate);
