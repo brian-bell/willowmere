@@ -38,6 +38,7 @@ import { millpondRegion } from "./millpond-layout.js";
 import { orchardRegion } from "./orchard-layout.js";
 import { marketRegion } from "./market-layout.js";
 import { marshRegion } from "./marsh-layout.js";
+import { woodRegion } from "./wood-layout.js";
 
 /**
  * @typedef {{ minX?: number, maxX?: number, minZ?: number, maxZ?: number }} OpenBox
@@ -64,6 +65,7 @@ export const regions = [
   orchardRegion,
   marketRegion,
   marshRegion,
+  woodRegion,
   // The open country: the label everywhere else, and its grass.
   {
     id: "fields",

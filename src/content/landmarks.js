@@ -72,6 +72,24 @@ export const LANDMARK_LINES = {
     "The brook slips out from under the village and spreads into the marsh, slow and golden.",
     "Downstream, the reeds grow taller than you. Somewhere out there, a heron is waiting.",
   ],
+  "fairy-ring": [
+    "A perfect circle of pale mushrooms. You walk round it, not through it. Just in case.",
+    "The grass inside the ring is shorter and greener, as if something dances here at night.",
+    "Someone has left an acorn cup of water at the ring’s edge. For the fairies, presumably.",
+  ],
+  "great-oak": [
+    "You put your palm on the bark. It is warm, and very old, and in no hurry at all.",
+    "Its roots heave up through the moss like the backs of sleeping animals.",
+    "High above, a woodpecker knocks twice, as if asking to come in.",
+  ],
+  "hollow-log": [
+    "You crouch and peer inside. It smells of moss and rain. Something small has made a bed of leaves.",
+    "The old log is soft with moss and studded with tiny brown mushrooms.",
+  ],
+  "wood-signpost": [
+    "A weathered fingerpost: “The Old Wood. Mind the roots, mind the fairies.”",
+    "Below the arrow, smaller letters: “Bluebells in May. Rowan at the clearing most days.”",
+  ],
 };
 
 // Any landmark without lines of its own.

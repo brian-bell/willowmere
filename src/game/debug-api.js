@@ -82,6 +82,11 @@ export function createDebugApi(g) {
       wren: g.life.npcs.some((n) => n.id === "wren"),
       heron: !!g.scene.getObjectByName("Marsh heron"),
     }),
+    getWood: () => ({
+      pressed: { ...g.state.pressed },
+      coins: g.state.coins,
+      rowan: g.life.npcs.some((n) => n.id === "rowan"),
+    }),
     getView: () => ({
       mode: g.firstPerson ? "first-person" : "overview",
       camera: g.camera.type,

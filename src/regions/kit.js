@@ -6,6 +6,7 @@
 // sails). Every region builds with the same kit, so a beam, a post or a box
 // means the same thing in each.
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { chunkKey } from "../world-layout.js";
 
 /**
  * A fresh kit: `segments` round each cylinder, `sphereDetail` subdivides
@@ -228,4 +229,42 @@ export function limb(T, curve, radius, tip, segments, radial, out) {
   geometry.setIndex(indices);
   out.push(geometry.toNonIndexed());
   geometry.dispose();
+}
+
+/**
+ * Splits an instanced mesh scattered over a region into one instanced mesh
+ * per chunk, sharing its geometry and material, so each part culls on its
+ * own: one mesh across a whole region has a bounding sphere that reaches
+ * into views that never see it. Returns the parts (the mesh itself when its
+ * instances all fall in one chunk).
+ */
+export function splitByChunk(T, mesh) {
+  const groups = new Map(),
+    matrix = new T.Matrix4(),
+    color = new T.Color();
+  for (let i = 0; i < mesh.count; i++) {
+    mesh.getMatrixAt(i, matrix);
+    const key = chunkKey(matrix.elements[12], matrix.elements[14]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(i);
+  }
+  if (groups.size < 2) return [mesh];
+  return [...groups.values()].map((indices) => {
+    const part = new T.InstancedMesh(mesh.geometry, mesh.material, indices.length);
+    indices.forEach((source, i) => {
+      mesh.getMatrixAt(source, matrix);
+      part.setMatrixAt(i, matrix);
+      if (mesh.instanceColor) {
+        mesh.getColorAt(source, color);
+        part.setColorAt(i, color);
+      }
+    });
+    part.name = mesh.name;
+    part.castShadow = mesh.castShadow;
+    part.receiveShadow = mesh.receiveShadow;
+    part.matrixAutoUpdate = mesh.matrixAutoUpdate;
+    part.userData = mesh.userData;
+    part.computeBoundingSphere();
+    return part;
+  });
 }

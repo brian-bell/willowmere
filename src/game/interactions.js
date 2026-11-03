@@ -51,8 +51,15 @@ export function createInteractions({
             : n.id === "lily" && activities.pipHat
               ? oneOf(LILY_HAT)
               : oneOf(phrases);
-    // Wren follows her greeting with a tip for a bird still to spot.
-    const lines = n.id === "wren" ? [line, activities.wrenLine(session.dusk)] : [line];
+    // Wren follows her greeting with a tip for a bird still to spot, Rowan
+    // with one for a flower still to press.
+    const tip =
+        n.id === "wren"
+          ? activities.wrenLine(session.dusk)
+          : n.id === "rowan"
+            ? activities.rowanLine(session.dusk)
+            : null,
+      lines = tip ? [line, tip] : [line];
     hud.openDialogue(NEIGHBOR_TITLES[n.id] || n.name, lines, () => {
       if (selling) activities.sellBasket();
       if (delivery === "give") activities.deliveryGiven();
@@ -117,6 +124,11 @@ export function createInteractions({
       hud.openDialogue("THE BIRD HIDE", activities.watchBirds(session.dusk));
       return;
     }
+    if (nearest.data.type === "wood-flower") {
+      const { flower } = nearest.data;
+      hud.openDialogue("THE OLD WOOD", [activities.pressFlower(flower, session.dusk)]);
+      return;
+    }
     if (nearest.data.type === "stall") {
       const { stall } = nearest.data;
       hud.openDialogue(STALLS[stall].name.toUpperCase(), [
@@ -166,7 +178,9 @@ export function createInteractions({
               ? "Enter The Daily Loaf"
               : i.type === "stall"
                 ? activities.stallLabel(i.stall, session.dusk)
-                : i.name,
+                : i.type === "wood-flower"
+                  ? activities.flowerLabel(i.flower, session.dusk)
+                  : i.name,
         });
     }
     candidates.sort((a, b) => a.d - b.d);

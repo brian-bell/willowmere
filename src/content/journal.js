@@ -1,6 +1,7 @@
 // @ts-check
 import { FISH } from "../fishing.js";
 import { BIRDS } from "../game/marsh.js";
+import { FLOWERS } from "../game/wood.js";
 
 // The welcome quests, in the order the quest card lists them.
 export const QUESTS = ["mabel", "flower", "plant"];
@@ -9,8 +10,8 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * The journal's entries as [title, text] rows, for a save's `state` and the
- * region id the player stands in. The millpond, orchard, market lane and
- * marsh entries appear once the player has been there or done something there.
+ * region id the player stands in. The millpond, orchard, market lane,
+ * marsh and old wood entries appear once the player has been there or done something there.
  */
 export function journalEntries(state, here) {
   const rows = [
@@ -68,6 +69,14 @@ export function journalEntries(state, here) {
       spotted.length
         ? `You’ve spotted ${spotted.length} of ${BIRDS.length} marsh birds from the hide: ${spotted.map((bird) => bird.name.toLowerCase()).join(", ")}.${spotted.length < BIRDS.length ? " Some only come out at blue hour." : ""}`
         : "Sit in the bird hide across the willow marsh, south of the village, and watch the reeds. Some birds only come out at blue hour.",
+    ]);
+  const pressed = FLOWERS.filter((flower) => state.pressed[flower.id]);
+  if (pressed.length || here === "wood")
+    rows.push([
+      "The old wood",
+      pressed.length
+        ? `You’ve pressed ${pressed.length} of ${FLOWERS.length} woodland flowers: ${pressed.map((flower) => flower.name.toLowerCase()).join(", ")}.${pressed.length < FLOWERS.length ? " Rowan, by the clearing, knows where the others grow." : ""}`
+        : "Find the woodland flowers in the old wood, west of the meadow, and press one of each. Rowan, by the clearing, knows where they grow.",
     ]);
   return rows;
 }
