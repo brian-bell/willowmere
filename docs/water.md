@@ -41,8 +41,6 @@ After initial captures, at most one body's reflection updates per frame; visible
 
 Turning off decorative motion freezes fluid time and jet motion while allowing camera and lighting changes. Quality changes recreate bounded simulation resources and reset ripples. The bakery runs in its own scene, suspending the outdoor water update. GPUs without `EXT_color_buffer_float` retain the optical and analytical wave model using byte color captures, with numerical ripple simulation disabled. `dispose()` releases all water-owned targets, textures, geometries, and materials.
 
-The new river dressing uses a separate random sequence and preserves the existing village layout after the retired ripple strips.
-
 ## Refraction from the main pass
 
 The water shader needs the opaque scene behind each surface: its linear color and depth. Rendering the scene a second time for this doubled the village's geometry work, so the village shares its main pass instead:
