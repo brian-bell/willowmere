@@ -10,6 +10,11 @@
 // A job is { x, z, step(deadline) }. `step` works until performance.now()
 // passes `deadline`, then returns nothing to be called again next slice, or
 // the finished objects (an object, an array, or an empty array) when done.
+//
+// A region's builder loads with import() and hands over its jobs later:
+// `load(label, promise)` counts the promise as pending until its jobs are
+// queued, so `pending` reaches 0 only once every builder has loaded and
+// every job has joined the scene.
 export function createStreamer(renderer, scene, { budget = 2.5, target = null } = {}) {
   const queue = [],
     // Compiled pieces join the scene one per frame, so their first draws and
@@ -17,7 +22,10 @@ export function createStreamer(renderer, scene, { budget = 2.5, target = null } 
     ready = [],
     parallel = renderer.extensions.has("KHR_parallel_shader_compile");
   let compiling = 0,
+    loading = 0,
     finished = 0;
+  // Jobs queued per loaded label.
+  const loaded = {};
   function nearest(x, z) {
     let best = 0,
       bestDistance = Infinity;
@@ -67,9 +75,23 @@ export function createStreamer(renderer, scene, { budget = 2.5, target = null } 
     add(...jobs) {
       queue.push(...jobs);
     },
-    /** Jobs still building or compiling. */
+    /** Queues the jobs `promise` resolves to, under `label`. */
+    load(label, promise) {
+      loading++;
+      return promise
+        .then((jobs) => {
+          loaded[label] = jobs.length;
+          queue.push(...jobs);
+        })
+        .finally(() => loading--);
+    },
+    /** Builders still loading, and jobs still building or compiling. */
     get pending() {
-      return queue.length + compiling + ready.length;
+      return loading + queue.length + compiling + ready.length;
+    },
+    /** How many jobs each loaded label queued. */
+    get loaded() {
+      return { ...loaded };
     },
     get finished() {
       return finished;

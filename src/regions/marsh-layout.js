@@ -1,3 +1,4 @@
+// @ts-check
 // The willow marsh's shape: the brook south of the village, the reedy mere it
 // spreads into, the boardwalk on stilts across its western shallows, the bird
 // hide on its far shore, the trails round it and the footbridge where the

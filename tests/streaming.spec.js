@@ -1,4 +1,24 @@
 import { test, expect } from "@playwright/test";
+import { regions, allowsGrass } from "../src/regions/index.js";
+import { patchBounds, GRASS_DENSITY } from "../src/regions/outskirts.js";
+
+// How many blades the open country's patch at (cx, cz) should hold: its
+// scatter, times the share of its ground where the regions let grass grow,
+// sampled every 25 cm. Returns the expected count and its standard deviation.
+function expectedBlades(cx, cz) {
+  const b = patchBounds(cx, cz),
+    scattered = Math.round((b.maxX - b.minX) * (b.maxZ - b.minZ) * GRASS_DENSITY),
+    step = 0.25;
+  let open = 0,
+    samples = 0;
+  for (let x = b.minX + step / 2; x < b.maxX; x += step)
+    for (let z = b.minZ + step / 2; z < b.maxZ; z += step) {
+      samples++;
+      if (allowsGrass(x, z)) open++;
+    }
+  const share = open / samples;
+  return { blades: scattered * share, spread: Math.sqrt(scattered * share * (1 - share)) };
+}
 
 const streaming = (page) =>
   page.evaluate(() => window.__willowmere.getStreaming());
@@ -17,10 +37,20 @@ test("the open country streams in around the village after startup", async ({
   await expect
     .poll(async () => streaming(page), { timeout: 600000 })
     .toMatchObject({ pending: 0 });
-  // The route grid, 16 grass patches (one per chunk around the village), the
-  // fishing float, the millpond's six pieces, the orchard hill's six and the
-  // market lane's seven (six pieces and its residents).
-  expect((await streaming(page)).finished).toBe(37);
+  // Every region in the registry with a builder loaded and queued its pieces,
+  // and every piece finished: theirs, plus the route grid and the fishing
+  // float that the game queues itself.
+  const done = await streaming(page);
+  expect(Object.keys(done.regions).sort()).toEqual(
+    regions.filter((region) => region.stream).map((region) => region.id).sort(),
+  );
+  for (const [id, jobs] of Object.entries(done.regions))
+    expect(jobs, id).toBeGreaterThan(0);
+  expect(done.finished).toBe(
+    2 + Object.values(done.regions).reduce((sum, jobs) => sum + jobs, 0),
+  );
+  // The open country's 16 grass patches, one per chunk around the village.
+  expect(done.regions.fields).toBe(16);
   const chunks = await page.evaluate(() => window.__willowmere.getChunks());
   const patches = chunks.flatMap((chunk) =>
     chunk.meshes
@@ -31,14 +61,14 @@ test("the open country streams in around the village after startup", async ({
   for (const patch of patches) {
     const [cx, cz] = patch.chunk.split(",").map(Number);
     expect(Math.max(Math.abs(cx), Math.abs(cz)), patch.chunk).toBe(2);
-    // The millpond's water and banks take part of two patches' ground, the
-    // orchard hill's path a strip of a third, and the market lane's gravel and
-    // buildings part of the three east of the village.
-    const pond = ["0,-2", "1,-2"].includes(patch.chunk),
-      path = patch.chunk === "-1,-2",
-      market = ["2,-1", "2,0", "2,1"].includes(patch.chunk);
-    expect(patch.instances, patch.chunk).toBeGreaterThan(
-      pond || market ? 200 : path ? 400 : 500,
+    // Each patch grows grass wherever the regions allow it, and only there:
+    // the millpond's water, the orchard's path, the market's gravel and the
+    // marsh's mere take their share of it. Blades scatter at random, so the
+    // count may stray from the expected one by up to four standard deviations.
+    const { blades, spread } = expectedBlades(cx, cz);
+    expect(patch.instances, patch.chunk).toBeGreaterThan(0);
+    expect(Math.abs(patch.instances - blades), patch.chunk).toBeLessThanOrEqual(
+      4 * spread + 2,
     );
     // Each patch culls as a unit no larger than a rim corner.
     expect(patch.radius).toBeLessThan(18);

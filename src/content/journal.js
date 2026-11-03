@@ -1,3 +1,4 @@
+// @ts-check
 import { FISH } from "../fishing.js";
 import { BIRDS } from "../game/marsh.js";
 import { FLOWERS } from "../game/wood.js";

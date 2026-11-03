@@ -877,10 +877,14 @@ function animate(now) {
   if (frame >= 3 && !openCountryRequested) {
     openCountryRequested = true;
     for (const region of regions)
-      region.stream?.(THREE, world, { life, dusk: () => duskMix }).then(({ jobs, ...loaded }) => {
-        activities.regionLoaded[region.id]?.(loaded);
-        streamer.add(...jobs);
-      });
+      if (region.stream)
+        streamer.load(
+          region.id,
+          region.stream(THREE, world, { life, dusk: () => duskMix }).then(({ jobs, ...loaded }) => {
+            activities.regionLoaded[region.id]?.(loaded);
+            return jobs;
+          }),
+        );
   }
 }
 updateUI();

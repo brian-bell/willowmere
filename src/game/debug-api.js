@@ -137,6 +137,8 @@ export function createDebugApi(g) {
     getStreaming: () => ({
       pending: g.streamer.pending,
       finished: g.streamer.finished,
+      // Jobs each region's builder queued, by region id, once it has loaded.
+      regions: g.streamer.loaded,
     }),
     getDiagnostics: () => {
       const { scene, renderer, world, composer, overrides, camera } = g,

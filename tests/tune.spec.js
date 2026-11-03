@@ -1,10 +1,20 @@
 import { test, expect } from "@playwright/test";
 
-// Reads the diagnostics after a frame has rendered with the current settings.
+// Reads the diagnostics once frames have rendered with the current settings.
+// Water reflections are captured on a clock, at most one body's a frame (each
+// body every 1/24 s, the marsh's and millpond's less often), so one frame's
+// draw calls swing by a reflection pass. Over 24 frames every body in view
+// captures: report the frame that drew the most.
 const diagnostics = (page) =>
   page.evaluate(async () => {
     for (let i = 0; i < 2; i++) await new Promise(requestAnimationFrame);
-    return window.__willowmere.getDiagnostics();
+    let most = null;
+    for (let i = 0; i < 24; i++) {
+      await new Promise(requestAnimationFrame);
+      const sample = window.__willowmere.getDiagnostics();
+      if (!most || sample.drawCalls > most.drawCalls) most = sample;
+    }
+    return most;
   });
 const tune = (page, settings) =>
   page.evaluate((settings) => window.__willowmere.tune(settings), settings);
@@ -12,10 +22,17 @@ const tune = (page, settings) =>
 test("tune toggles each outdoor override and null restores the defaults", async ({
   page,
 }) => {
+  test.setTimeout(900000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/?resolution=fixed");
   await page.waitForFunction(() => window.__willowmere?.getWater().frame > 10);
+  // Every comparison below is against the base frame, so the regions must have
+  // finished streaming in first: their trees join the leaf count and their
+  // pieces the draw calls.
+  await page.waitForFunction(() => !window.__willowmere.getStreaming().pending, null, {
+    timeout: 600000,
+  });
   // The default view draws every leaf; the loading view is zoomed out.
   await page.locator("#start").click();
   await expect

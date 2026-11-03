@@ -1,3 +1,4 @@
+// @ts-check
 // What each village landmark says when the player stops by: one line, picked
 // at random, per interaction. Keyed by the interactable's id or type.
 export const LANDMARK_LINES = {

@@ -1,7 +1,10 @@
+// @ts-check
 // The market lane's trade, as pure decisions on the save's state: Finn's bread
 // deliveries to the lane's residents, and what the market stalls sell. No
 // three.js and no DOM, so the logic tests run it in Node; activities.js shows
 // the results.
+
+/** @typedef {import("./save.js").SaveState} SaveState */
 
 // Finn bakes a loaf for each of the lane's residents; a round pays for each
 // loaf and a little more once both are delivered. He has another batch ready
@@ -37,6 +40,7 @@ export function marketDefaults() {
  * What Finn does about deliveries when the player talks to him: "give" hands
  * over a new round (and puts the loaves in the bag), "carrying" means loaves
  * are still to deliver, "resting" that the next batch is not out of the oven.
+ * @param {SaveState} state
  */
 export function finnDelivery(state, now) {
   const d = state.deliveries;
@@ -49,6 +53,7 @@ export function finnDelivery(state, now) {
 /**
  * Hands `resident` their loaf, if one is in the bag. Returns the petals it
  * earns and whether it finished the round, or null when there is none for them.
+ * @param {SaveState} state
  */
 export function deliverLoaf(state, resident, now) {
   const d = state.deliveries,
@@ -70,6 +75,7 @@ export function deliverLoaf(state, resident, now) {
 /**
  * What a stall offers right now: `open` at the golden afternoon, `owned`
  * once its keepsake is bought, and whether the purse covers the price.
+ * @param {SaveState} state
  */
 export function stallOffer(state, id, dusk) {
   const stall = STALLS[id];
@@ -85,6 +91,7 @@ export function stallOffer(state, id, dusk) {
  * Buys from a stall. Returns what happened: "closed" at blue hour, "browse"
  * at a stall with nothing for sale, "owned" for a keepsake already bought,
  * "short" when the purse is light, or "bought" (the state is updated).
+ * @param {SaveState} state
  */
 export function buyFromStall(state, id, dusk) {
   const offer = stallOffer(state, id, dusk);
