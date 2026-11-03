@@ -850,15 +850,15 @@ export function createRosewood({ state, save }) {
     orb(brass, x, 0.44, 0.85, 0.05, 0.05, 0.05, fire);
   }
   const flameMat = new T.MeshBasicMaterial({
-    color: "#ffb35a",
+    color: "#ff7c32",
     transparent: true,
-    opacity: 0.85,
+    opacity: 0.75,
     blending: T.AdditiveBlending,
     depthWrite: false,
   });
   const flames = [];
   for (let i = 0; i < 5; i++) {
-    const f = mesh(new T.ConeGeometry(0.12 - (i % 2) * 0.03, 0.55, 10), flameMat, -0.32 + i * 0.16, 0.55, 0.66, fire);
+    const f = mesh(new T.ConeGeometry(0.15 - (i % 2) * 0.04, 0.85 - (i % 2) * 0.25, 10), flameMat, -0.32 + i * 0.16, 0.7, 0.66, fire);
     f.castShadow = f.receiveShadow = false;
     flames.push(f);
   }
@@ -1697,7 +1697,6 @@ export function createRosewood({ state, save }) {
     box(sageDark, -0.8, y, 0.06, 1.55, h - 0.04, 0.08, 0.02, backLeaf);
     for (let i = -2; i <= 2; i++) box(sage, -0.8 + i * 0.29, y, 0.11, 0.25, h - 0.2, 0.02, 0.006, backLeaf);
   }
-  box(windowMat, -0.8, 2.55, 0.12, 0.7, 0.6, 0.02, 0, backLeaf).castShadow = false;
   orb(brass, -1.4, 1.5, 0.16, 0.05, 0.05, 0.05, backLeaf);
   colliders.push({ x: backDoor[1] + 0.25, z: P.back + 0.8, w: 0.3, d: 1.5 });
 
@@ -1785,6 +1784,29 @@ export function createRosewood({ state, save }) {
     slope.castShadow = false;
   }
   box(mat("#9d8973", 0.9), -2.6, H + 4.0, P.partition + 0.6, 0.9, 2.6, 0.9, 0.02).castShadow = false;
+  // Climbing roses on a trellis round the kitchen window, the cottage's
+  // namesake, and a lantern by the back door.
+  const wallFace = P.back - WT - 0.03;
+  for (let i = 0; i < 6; i++) {
+    const x = -4.0 + i * 0.72;
+    beam(paleWood, [x, 0.2, wallFace - 0.04], [x, 4.1, wallFace - 0.04], 0.04);
+  }
+  for (const y of [1.0, 2.0, 3.6]) beam(paleWood, [-4.1, y, wallFace - 0.06], [-0.3, y, wallFace - 0.06], 0.04);
+  for (let i = 0; i < 70; i++) {
+    const x = range(-4.2, -0.2),
+      y = range(0.3, 4.0);
+    // Leave the window itself clear.
+    if (Math.abs(x + 2.2) < 0.95 && Math.abs(y - 2.75) < 0.8) continue;
+    const blade = leaf(leafMats[i % 4], x, y, wallFace - 0.08, 0.06, range(0.14, 0.22));
+    blade.rotation.set(range(-0.4, 0.4) + Math.PI, 0, range(-1.5, 1.5));
+    blade.castShadow = false;
+    if (i % 3 === 0) orb(i % 2 ? rose : roseLight, x + 0.03, y + 0.05, wallFace - 0.12, 0.07, 0.07, 0.05).castShadow = false;
+  }
+  const lantern = group(2.55, 2.9, wallFace - 0.15);
+  box(dark, 0, 0.34, 0.1, 0.05, 0.05, 0.3, 0.01, lantern);
+  box(dark, 0, 0.0, 0, 0.26, 0.04, 0.26, 0.01, lantern);
+  box(dark, 0, 0.36, 0, 0.3, 0.06, 0.3, 0.01, lantern);
+  box(hallGlow, 0, 0.18, 0, 0.2, 0.3, 0.2, 0.01, lantern).castShadow = false;
   // A sky dome, warm at the horizon.
   const skyMat = new T.ShaderMaterial({
     side: T.BackSide,
@@ -2028,7 +2050,7 @@ export function createRosewood({ state, save }) {
   const ambient = new T.HemisphereLight("#fff1dc", "#6b5a48", 1.15);
   scene.add(ambient);
   const sun = new T.DirectionalLight("#ffe7bf", 2.3);
-  sun.position.set(-6, 13, 9);
+  sun.position.set(-7, 14, -7);
   sun.target.position.set(0, 0, -2);
   scene.add(sun, sun.target);
   sun.castShadow = true;
@@ -2215,6 +2237,19 @@ export function createRosewood({ state, save }) {
     { id: "kennel", x: -4.5, z: -8.6, y: 1.0, range: 2.0, label: "Look at Bark's kennel" },
     { id: "birdbath", x: 1.1, z: -8.4, y: 1.2, range: 2.0, label: "Watch the robin" },
   ];
+
+  // The space a point stands in: E answers only within the visitor's own, so
+  // nothing is reached through a wall.
+  const zoneOf = (x, z) =>
+    z < P.back - WT / 2 ? "garden" : z < P.partition ? "kitchen" : x < -hallX ? "living" : x > hallX ? "bedroom" : "hall";
+  for (const point of points) {
+    if (point.id === "door" || point.id === "throw") continue;
+    const zone = zoneOf(point.x, point.z),
+      dynamic = point.id === "bark" || point.id === "ball",
+      own = point.available;
+    point.available = () =>
+      (own?.() ?? true) && zoneOf(player.x, player.z) === (dynamic ? zoneOf(point.x, point.z) : zone);
+  }
 
   function interact(point) {
     const id = point.id;
