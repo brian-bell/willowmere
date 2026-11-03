@@ -15,6 +15,7 @@ import { buildFurniture } from "./village/furniture.js";
 import { buildLamps } from "./village/lamps.js";
 import { buildPlants } from "./village/plants.js";
 import { buildAccents } from "./village/accents.js";
+import { buildRosewoodYard } from "./village/rosewood-yard.js";
 
 // The world: the village (built by the modules in src/village/), the water,
 // the collision layout shared with the regions, the chunk bake, and what the
@@ -92,6 +93,8 @@ export function createWorld(T, scene) {
     scatterColliders,
   });
   buildAccents(kit);
+  // Rosewood's kitchen extension and back garden draw no random numbers.
+  buildRosewoodYard(kit, { fence, contact });
   // Bake the village into its chunks, and let first person hide small
   // detail far from the eye (see bake.js).
   const glowMaterials = bakeScenery(T, scene, grid, {

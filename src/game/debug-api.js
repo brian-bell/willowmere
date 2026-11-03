@@ -98,6 +98,7 @@ export function createDebugApi(g) {
     }),
     getInterior: () => g.interior?.diagnostics() ?? { active: false },
     tuneInterior: (settings) => g.interior?.tune(settings),
+    placeInterior: (pose) => g.interior?.place(pose),
     getWater: () => g.world.water.diagnostics(),
     getChunks: () => {
       const animating = new Set(g.world.animatedChunks()),

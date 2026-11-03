@@ -197,8 +197,10 @@ let tool = "hand",
   day = "day";
 let interior = null,
   interiorLoading = false;
-async function enterBakery() {
-  if (interiorLoading || interior?.active) return;
+// The bakery and Rosewood open as walkable rooms (src/interior.js).
+const INTERIOR_NAMES = { bakery: "The bakery", rosewood: "Rosewood" };
+async function enterInterior(room = "bakery") {
+  if (interiorLoading || interior?.active || !INTERIOR_NAMES[room]) return;
   interiorLoading = true;
   releaseLook();
   begin();
@@ -212,29 +214,32 @@ async function enterBakery() {
       const { createInterior } = await import("./interior.js");
       interior = createInterior({
         renderer,
-        onExit: leaveBakery,
+        onExit: leaveInterior,
         onStep: () => audio.step(),
-        onInteract: () => audio.chime(),
+        onInteract: (sound) => audio.cue(sound),
+        state,
+        save,
       });
     }
     // The scaler only measures the village, so the bakery uses the quality's
     // full ratio; the village resumes at its own ratio on the way out.
     resolution.outdoor = resolution.pixelRatio;
     scaler.apply(resolution.ceiling);
-    interior.enter();
+    interior.enter(room);
     const url = new URL(location.href);
-    url.searchParams.set("interior", "bakery");
+    url.searchParams.set("interior", room);
     history.replaceState(null, "", url);
     $("#loading").classList.add("loaded");
   } catch (error) {
-    console.error("Could not open bakery", error);
-    toast("The bakery couldn’t open. Please try again.");
+    console.error(`Could not open ${room}`, error);
+    toast(`${INTERIOR_NAMES[room]} couldn’t open. Please try again.`);
   } finally {
     interiorLoading = false;
   }
 }
-function leaveBakery() {
+function leaveInterior() {
   interior?.exit();
+  audio.cue("music:off");
   scaler.apply(Math.min(resolution.outdoor, resolution.ceiling));
   keys.clear();
   velocity.set(0, 0);
@@ -244,7 +249,7 @@ function leaveBakery() {
   updateViewUI();
   resize();
 }
-$("#visit-bakery").onclick = enterBakery;
+$("#visit-bakery").onclick = () => enterInterior("bakery");
 $("#motion").checked = motion;
 function begin() {
   if (!started) overview.setZoom(DEFAULT_VIEW_HEIGHT);
@@ -315,7 +320,7 @@ const interactions = createInteractions({
   clickPath,
   begin,
   isIndoors: () => !!interior?.active || interiorLoading,
-  enterBakery,
+  enterInterior,
 });
 function releaseLook() {
   if (dragging && canvas.hasPointerCapture(dragging.id))
@@ -938,5 +943,5 @@ window.__willowmere = createDebugApi({
     overview.snap();
   },
 });
-if (new URLSearchParams(location.search).get("interior") === "bakery")
-  enterBakery();
+const startRoom = new URLSearchParams(location.search).get("interior");
+if (startRoom) enterInterior(startRoom);

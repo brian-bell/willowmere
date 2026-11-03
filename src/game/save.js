@@ -7,6 +7,7 @@
 import { marketDefaults } from "./market.js";
 import { marshDefaults } from "./marsh.js";
 import { woodDefaults } from "./wood.js";
+import { rosewoodDefaults } from "./rosewood.js";
 
 // The key predates save versions; the version now lives inside the save.
 export const STORAGE = "willowmere.save.v1";
@@ -52,6 +53,8 @@ export function defaultState() {
     ...marshDefaults(),
     // Woodland flowers pressed in the old wood.
     ...woodDefaults(),
+    // Bark's finds from the back garden, the jigsaw, and balls fetched.
+    ...rosewoodDefaults(),
     gathered: [],
     plants: [],
     started: false,
