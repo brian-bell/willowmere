@@ -45,6 +45,10 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     depthWrite: false,
   });
   const shadowGeo = new THREE.CircleGeometry(1, 24);
+  // Every person shares these few fixed shapes rather than building their own.
+  const coatGeo = new THREE.CylinderGeometry(0.19, 0.255, 0.54, 14),
+    smileGeo = new THREE.TorusGeometry(0.026, 0.005, 4, 8, Math.PI),
+    hatCrownGeo = new THREE.CylinderGeometry(0.153, 0.193, 0.19, 18);
   const shadow = (parent, sx, sz) => {
     const s = new THREE.Mesh(shadowGeo, shadowMat);
     s.rotation.x = -Math.PI / 2;
@@ -84,7 +88,6 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       m(leg, "box", 0x382f28, 0, -0.491, 0.045, 0.17, 0.032, 0.265);
       legs.push(leg);
     }
-    const coatGeo = new THREE.CylinderGeometry(0.19, 0.255, 0.54, 14);
     const torso = new THREE.Mesh(coatGeo, mat(coat));
     torso.position.y = 0.87;
     torso.castShadow = true;
@@ -148,19 +151,13 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       sphere(body, hair, side * 0.15, 1.427, 0.058, 0.062, 0.105, 0.091);
     }
     sphere(body, skin, 0, 1.313, 0.18, 0.027, 0.03, 0.031);
-    const smile = new THREE.Mesh(
-      new THREE.TorusGeometry(0.026, 0.005, 4, 8, Math.PI),
-      mat(0x9e6553),
-    );
+    const smile = new THREE.Mesh(smileGeo, mat(0x9e6553));
     smile.rotation.z = Math.PI;
     smile.position.set(0, 1.28, 0.164);
     body.add(smile);
     if (hat) {
       m(body, "cylinder", 0xf1dfab, 0, 1.51, -0.015, 0.313, 0.043, 0.255);
-      const crown = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.153, 0.193, 0.19, 18),
-        mat(0xe7d29b),
-      );
+      const crown = new THREE.Mesh(hatCrownGeo, mat(0xe7d29b));
       crown.position.set(0, 1.616, -0.02);
       crown.castShadow = true;
       body.add(crown);
@@ -943,6 +940,80 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       wings[1].rotation.z = -wings[0].rotation.z;
     });
   }
+  // The regions' residents stand still but for a breath, so zoomed far out,
+  // where they are a few pixels tall, each draws as one merged copy of its
+  // body in its resting pose instead of a couple of dozen jointed batches.
+  // Their contact shadows stay. The copy rebuilds round parts with fewer
+  // segments and leaves out the smallest (eyes, spectacles), which are under a
+  // pixel there.
+  const farFigures = [],
+    farMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 }),
+    farPartScale = new THREE.Vector3();
+  function coarsePart(geometry) {
+    const p = geometry.parameters;
+    if (geometry.attributes.color || !p) return geometry.clone();
+    if (geometry.type === "SphereGeometry")
+      return new THREE.SphereGeometry(
+        p.radius,
+        Math.min(p.widthSegments, 8),
+        Math.min(p.heightSegments, 5),
+        p.phiStart,
+        p.phiLength,
+        p.thetaStart,
+        p.thetaLength,
+      );
+    if (geometry.type === "CylinderGeometry")
+      return new THREE.CylinderGeometry(
+        p.radiusTop,
+        p.radiusBottom,
+        p.height,
+        Math.min(p.radialSegments, 8),
+        1,
+        p.openEnded,
+        p.thetaStart,
+        p.thetaLength,
+      );
+    return geometry.clone();
+  }
+  function farFigure(figure) {
+    const { body } = figure,
+      parts = [],
+      inverse = new THREE.Matrix4();
+    body.updateWorldMatrix(true, true);
+    inverse.copy(body.matrixWorld).invert();
+    body.traverseVisible((o) => {
+      if (!o.isMesh || o.material.transparent) return;
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+      o.getWorldScale(farPartScale);
+      if (o.geometry.boundingSphere.radius * Math.max(farPartScale.x, farPartScale.y, farPartScale.z) < 0.04) return;
+      const part = coarsePart(o.geometry).applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, o.matrixWorld));
+      for (const name of Object.keys(part.attributes))
+        if (!["position", "normal", "color"].includes(name)) part.deleteAttribute(name);
+      if (!part.attributes.color) {
+        const { r, g, b } = o.material.color,
+          colors = new Float32Array(part.attributes.position.count * 3);
+        for (let i = 0; i < colors.length; i += 3) colors.set([r, g, b], i);
+        part.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      }
+      parts.push(part.index ? part.toNonIndexed() : part);
+    });
+    const proxy = new THREE.Mesh(mergeGeometries(parts), farMaterial);
+    parts.forEach((part) => part.dispose());
+    proxy.name = `${figure.root.name} (far)`;
+    proxy.castShadow = false;
+    proxy.receiveShadow = true;
+    proxy.matrix.copy(body.matrix);
+    proxy.matrixAutoUpdate = false;
+    proxy.visible = false;
+    figure.root.add(proxy);
+    return { body, proxy };
+  }
+  function showFarFigures(far) {
+    for (const { body, proxy } of farFigures) {
+      body.visible = !far;
+      proxy.visible = far;
+    }
+  }
   const npcs = [...residents.map(({ figure, ...npc }) => npc), lily];
   return {
     player,
@@ -953,6 +1024,8 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     addResident(def) {
       const npc = resident(def);
       batchParts(npc.group);
+      farFigures.push(farFigure(npc.figure));
+      showFarFigures(!castsShadows);
       residents.push(npc);
       const { figure, ...entry } = npc;
       npcs.push(entry);
@@ -963,6 +1036,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
      * Zoomed far out, a figure's shadow is a few pixels for a dozen draws.
      */
     setCastShadows(on) {
+      if (on !== castsShadows) showFarFigures(!on);
       if (on === castsShadows && casters?.figures === figures.length) return;
       if (casters?.figures !== figures.length) {
         // Residents stream in later; gather every caster again when they do.

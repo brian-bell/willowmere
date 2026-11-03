@@ -15,11 +15,15 @@ import {
   ROWAN_TIPS,
 } from "../content/wood.js";
 import { flowerById, flowerOpen, flowerToSeek, pressFlower as pressInJournal } from "./wood.js";
+import { BASIL_TIPS, PLOT_LINES, PLOT_PROMPTS } from "../content/allotments.js";
+import { CROPS, PLOTS, RENT, basilTopic, plotStage, tendPlot as tendInSave, waterPlot } from "./allotments.js";
+import { plotById, plotFront } from "../regions/allotments-layout.js";
 
 // What the player does and earns: the welcome quests, gathering and planting
 // flowers, fishing from the millpond's jetty, the orchard's fruit and honey,
-// which Finn buys, the market lane's bread deliveries and stalls, and
-// birdwatching from the marsh's hide and pressing the old wood's flowers.
+// which Finn buys, the market lane's bread deliveries and stalls,
+// birdwatching from the marsh's hide, pressing the old wood's flowers, and
+// the allotment beds, whose vegetables Finn buys too.
 // Each changes the save, then updates the HUD, saves and chimes.
 
 // Wildflower bouquets to gather, by index into the save's `gathered` list.
@@ -38,7 +42,19 @@ const COTTAGE_LANTERN = { x: -4.55, z: -2.75 };
 // A shaken tree ripens again, and a hive refills, after a few minutes.
 const FRUIT_REGROW_MS = 4 * 60 * 1000,
   HONEY_REFILL_MS = 6 * 60 * 1000,
-  HARVEST_PRICE = { apple: 2, pear: 2, honey: 6 };
+  HARVEST_PRICE = {
+    apple: 2,
+    pear: 2,
+    honey: 6,
+    ...Object.fromEntries(Object.entries(CROPS).map(([id, crop]) => [id, crop.price])),
+  };
+// What's in the basket, by name: one and many.
+const GOODS = {
+  apple: ["apple", "apples"],
+  pear: ["pear", "pears"],
+  honey: ["jar of honey", "jars of honey"],
+  ...Object.fromEntries(Object.entries(CROPS).map(([id, crop]) => [id, [crop.one, crop.many]])),
+};
 
 /**
  * `blocked(x, z, r)` is the walking test planting keeps clear of;
@@ -106,6 +122,19 @@ export function createActivities({
   }
   /** Plants a seed a step ahead of the player, who faces `facing` (radians). */
   function plant(facing) {
+    // Beside an empty allotment bed, the seed goes in there.
+    const p0 = player.position,
+      bed = PLOTS.find((plot) => {
+        const front = plotFront(plotById(plot.id));
+        return (
+          Math.hypot(front.x - p0.x, front.z - p0.z) < 1.6 &&
+          plotStage(state, plot.id, Date.now()).stage === "empty"
+        );
+      });
+    if (bed) {
+      if (tendPlot(bed.id) === PLOT_LINES.noSeeds) toast(PLOT_LINES.noSeeds);
+      return;
+    }
     if (state.seeds <= 0) {
       toast("Your seed pouch is empty. Finn has a few to spare.");
       return;
@@ -127,10 +156,18 @@ export function createActivities({
     complete("plant");
     reward("A small beginning. Your flowers are planted.");
   }
-  /** Waters the nearest thirsty planted flower within reach. */
+  /** Waters a dry allotment bed in reach, else the nearest thirsty planted flower. */
   function water() {
     const p = player.position,
-      thirsty = state.plants.find((q) => Math.hypot(q.x - p.x, q.z - p.z) < 2 && !q.watered);
+      bed = PLOTS.find((plot) => {
+        const front = plotFront(plotById(plot.id));
+        return Math.hypot(front.x - p.x, front.z - p.z) < 1.6 && waterPlot(state, plot.id, Date.now());
+      });
+    if (bed) {
+      wateredBed(bed.id, PLOT_LINES.watered);
+      return;
+    }
+    const thirsty = state.plants.find((q) => Math.hypot(q.x - p.x, q.z - p.z) < 2 && !q.watered);
     if (!thirsty) {
       toast("Plant some flowers first, then give them a drink.");
       return;
@@ -167,13 +204,13 @@ export function createActivities({
       g.scale.setScalar(THREE.MathUtils.lerp(g.scale.x, targetScale, 1 - Math.exp(-dt * 1.5)));
     }
   }
-  /** Finn tops up a nearly empty seed pouch. */
-  function restockSeeds() {
+  /** Finn (or Basil, `who`) tops up a nearly empty seed pouch. */
+  function restockSeeds(who = "Finn") {
     if (state.seeds >= 3) return;
     state.seeds += 3;
     updateUI();
     save();
-    toast("Finn tucked three seeds into your pouch.");
+    toast(`${who} tucked three seeds into your pouch.`);
   }
 
   // Fishing: the float and line stream in with the millpond's jetty.
@@ -263,20 +300,18 @@ export function createActivities({
       `You lift the roof gently and take a jar of wildflower honey. The bees hardly mind.${first ? " +5 petals" : ""}`,
     );
   }
-  const basketCount = () => state.basket.apple + state.basket.pear + state.basket.honey;
-  // Finn buys the orchard's fruit and honey for the bakery.
+  const basketCount = () => Object.values(state.basket).reduce((n, count) => n + count, 0);
+  // Finn buys the orchard's fruit and honey and the allotments' vegetables
+  // for the bakery.
   function sellBasket() {
-    const { apple, pear, honey } = state.basket,
-      petals =
-        apple * HARVEST_PRICE.apple + pear * HARVEST_PRICE.pear + honey * HARVEST_PRICE.honey,
-      goods = [
-        [apple, "apple"],
-        [pear, "pear"],
-        [honey, "jar of honey", "jars of honey"],
-      ]
-        .filter(([n]) => n)
-        .map(([n, one, many = `${one}s`]) => `${n} ${n === 1 ? one : many}`);
-    state.basket = { apple: 0, pear: 0, honey: 0 };
+    const kinds = Object.keys(GOODS).filter((kind) => state.basket[kind] > 0),
+      petals = kinds.reduce((n, kind) => n + state.basket[kind] * HARVEST_PRICE[kind], 0),
+      goods = kinds.map((kind) => {
+        const n = state.basket[kind],
+          [one, many] = GOODS[kind];
+        return `${n} ${n === 1 ? one : many}`;
+      });
+    for (const kind of Object.keys(state.basket)) state.basket[kind] = 0;
     state.coins += petals;
     reward(
       `Finn takes ${goods.join(" and ").replace(/ and (?=.* and )/, ", ")} for the bakery. +${petals} petals`,
@@ -379,6 +414,71 @@ export function createActivities({
     return flower ? ROWAN_TIPS[flower.id] : oneOf(ROWAN_DONE);
   }
 
+  // The allotments: renting, sowing, watering and harvesting the beds. The
+  // beds' crops stream in with the allotments.
+  let beds = null;
+  /** Shows each bed's crop at its stage. */
+  function updateAllotments() {
+    if (!beds) return;
+    const now = Date.now();
+    for (const plot of PLOTS) {
+      const { stage, growth } = plotStage(state, plot.id, now);
+      beds.show(plot.id, stage, growth);
+    }
+  }
+  /** Keeps the orchard's trees and the allotment beds up to date. */
+  function updateHarvests() {
+    updateOrchard();
+    updateAllotments();
+  }
+  function wateredBed(id, message) {
+    if (motion()) {
+      const front = plotFront(plotById(id));
+      effects.burst(front.x, 0.5, front.z);
+    }
+    updateAllotments();
+    reward(message);
+  }
+  /** The prompt at an allotment bed. */
+  function plotLabel(id) {
+    const crop = CROPS[plotById(id).crop],
+      { stage } = plotStage(state, id, Date.now());
+    return stage === "free" ? PLOT_PROMPTS.free(RENT) : PLOT_PROMPTS[stage](crop);
+  }
+  /** Does what a bed needs next: returns the line it answers with. */
+  function tendPlot(id) {
+    const result = tendInSave(state, id, Date.now());
+    const crop = CROPS[plotById(id).crop];
+    if (result.kind === "short") return PLOT_LINES.short(result.price);
+    if (result.kind === "no-seeds") return PLOT_LINES.noSeeds;
+    if (result.kind === "growing") return PLOT_LINES.growing(result.growth);
+    if (result.kind === "none") return "";
+    updateAllotments();
+    const front = plotFront(plotById(id));
+    if (result.kind === "watered") {
+      wateredBed(id, `${crop.name} watered. Now they grow.`);
+      return PLOT_LINES.watered;
+    }
+    if (motion()) effects.burst(front.x, 0.5, front.z);
+    if (result.kind === "rented") {
+      reward(`${crop.name} bed rented · −${result.price} petals`);
+      return PLOT_LINES.rented(result.price);
+    }
+    if (result.kind === "sown") {
+      reward(`${crop.name} sown. They’ll want water.`);
+      return `${PLOT_LINES.sown[result.crop]} ${PLOT_LINES.needsWater}`;
+    }
+    reward(
+      `${result.count} ${crop.many} into the basket.${result.first ? ` +${result.petals} petals` : ""}`,
+    );
+    return `${PLOT_LINES.harvested[result.crop]} Finn will buy them for the bakery.`;
+  }
+  /** What Basil says about the beds. */
+  function basilLine() {
+    const { topic, crop } = basilTopic(state, Date.now());
+    return topic === "rent" ? BASIL_TIPS.rent(RENT) : BASIL_TIPS[topic](CROPS[crop]);
+  }
+
   return {
     complete,
     flowerGroups,
@@ -391,6 +491,7 @@ export function createActivities({
     fishingResult,
     updateFishing,
     updateOrchard,
+    updateHarvests,
     shakeTree,
     collectHoney,
     basketCount,
@@ -407,6 +508,9 @@ export function createActivities({
     flowerLabel,
     pressFlower,
     rowanLine,
+    plotLabel,
+    tendPlot,
+    basilLine,
     get orchardReady() {
       return !!orchard;
     },
@@ -418,6 +522,10 @@ export function createActivities({
       orchard({ harvest }) {
         orchard = harvest;
         updateOrchard();
+      },
+      allotments(loaded) {
+        beds = loaded.beds;
+        updateAllotments();
       },
     },
   };

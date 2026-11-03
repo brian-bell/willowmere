@@ -87,6 +87,22 @@ export function createDebugApi(g) {
       coins: g.state.coins,
       rowan: g.life.npcs.some((n) => n.id === "rowan"),
     }),
+    getAllotments: () => ({
+      plots: structuredClone(g.state.plots),
+      basket: { ...g.state.basket },
+      harvested: { ...g.state.harvested },
+      coins: g.state.coins,
+      seeds: g.state.seeds,
+      basil: g.life.npcs.some((n) => n.id === "basil"),
+      // Which beds' crops show, and how many "to let" boards stand.
+      crops: Object.fromEntries(
+        ["carrots", "lettuces", "runner beans", "pumpkins"].map((many) => {
+          const mesh = g.scene.getObjectByName(`Allotment ${many}`);
+          return [many, mesh ? mesh.count > 0 : null];
+        }),
+      ),
+      boards: g.scene.getObjectByName("Allotment to-let boards")?.count ?? null,
+    }),
     getView: () => ({
       mode: g.firstPerson ? "first-person" : "overview",
       camera: g.camera.type,

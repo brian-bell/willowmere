@@ -10,6 +10,7 @@ import {
   pathDistance,
 } from "../src/regions/orchard-layout.js";
 import { WORLD, inVillage, terrainHeight } from "../src/world-layout.js";
+import { cropBasket } from "../src/game/allotments.js";
 import { collides as blockedBy } from "../src/game/navigation.js";
 
 test("the hill rises from the lawn and falls back to it before the village and the rim", { tag: "@logic" }, () => {
@@ -164,8 +165,9 @@ test("the orchard hill streams in, and its trees and hives give fruit and honey"
     timeout: 600000,
   });
   orchard = await page.evaluate(() => window.__willowmere.getOrchard());
-  expect(orchard.basket).toEqual({ apple: 3, pear: 0, honey: 1 });
-  expect(orchard.harvested).toEqual({ apple: 3, pear: 0, honey: 1 });
+  // The basket also holds the allotments' crops, none picked here.
+  expect(orchard.basket).toEqual({ apple: 3, pear: 0, honey: 1, ...cropBasket() });
+  expect(orchard.harvested).toEqual({ apple: 3, pear: 0, honey: 1, ...cropBasket() });
   expect(tree.z).toBeCloseTo(-26.9, 1);
   expect(errors).toEqual([]);
 });

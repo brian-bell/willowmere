@@ -23,8 +23,8 @@ All art and audio are generated in code. `vite.config.js` splits Three.js into i
 | `navigation.js` | collision and route finding |
 | `save.js` | the visit's progress in browser storage: a versioned save, merged field by field into the defaults, with migrations for changed fields |
 | `hud.js` | toasts, the quest card, conversations and the journal |
-| `activities.js` | quests, flowers, fishing, the orchard harvest, the market's deliveries and stalls, birdwatching at the marsh's hide, pressing the old wood's flowers |
-| `market.js`, `marsh.js`, `wood.js` | the market's trade, the hide's birdwatching and the wood's flower pressing rules, as pure decisions on the save's state |
+| `activities.js` | quests, flowers, fishing, the orchard harvest, the market's deliveries and stalls, birdwatching at the marsh's hide, pressing the old wood's flowers, the allotment beds |
+| `market.js`, `marsh.js`, `wood.js`, `allotments.js` | the market's trade, the hide's birdwatching, the wood's flower pressing and the allotment beds' renting, sowing, growing and harvesting rules, as pure decisions on the save's state |
 | `rosewood.js` | Rosewood's treasures (what Bark digs up), the jigsaw, and the footstep trail Bark follows, as pure decisions |
 | `interactions.js` | the prompt and what E does |
 | `debug-api.js` | `window.__willowmere`, which tests and benchmarks use |
@@ -46,7 +46,7 @@ Game text lives in `src/content/` (journal, landmarks, neighbours, and one file 
 
 ## Regions
 
-Each area beyond the village (the millpond, the orchard hill, the market lane, the willow marsh, the old wood, and the open fields around them) is an entry in the registry, `src/regions/index.js`. The terrain field, the location label, the open country's grass and soil, walking and click heights, planting, colliders and streaming all loop that list, so a new region adds one line there instead of edits to the core files. The fields an entry may set are documented at the top of that file.
+Each area beyond the village (the millpond, the orchard hill, the market lane, the willow marsh, the old wood, the allotments, and the open fields around them) is an entry in the registry, `src/regions/index.js`. The terrain field, the location label, the open country's grass and soil, walking and click heights, planting, colliders and streaming all loop that list, so a new region adds one line there instead of edits to the core files. The fields an entry may set are documented at the top of that file.
 
 A region has two halves:
 
@@ -61,7 +61,7 @@ A region with gameplay usually also adds pure rules in `src/game/<region>.js`, i
 
 `npm test` runs every Playwright spec in `tests/` against a Vite server it starts on port 5174. Tests tagged `@logic` import pure modules and never open a page; `npm run test:logic` runs only those, in parallel, in seconds. `npm run typecheck` runs TypeScript over the JavaScript files that start with `// @ts-check`: the pure modules, where JSDoc types such as `SaveState` (`src/game/save.js`) and `Region` (`src/regions/index.js`) catch a misspelled field before it ships. Other files are not checked; add the line when a module is pure. CI (`.github/workflows/ci.yml`) builds, type-checks, runs the logic tier, and runs the one `@smoke` test in `tests/smoke.spec.js`, which suits software WebGL. Playwright uses `CHROME_PATH` when set, installed Chrome on macOS, or Playwright's Chromium (`npx playwright install chromium`).
 
-Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.js`). It reads state (`getState`, `getPlayer`, `getView`, `getFishing`, `getOrchard`, `getMarket`, `getMarsh`, `getWood`, `getChunks`, `getStreaming`, `getWater`, `getInterior`), moves the player (`moveTo`, `findPath`, `blocked`, and `placeInterior` indoors), reports rendering work (`getDiagnostics`), and overrides rendering for measurements (`tune`, `tuneInterior`, `setAdaptiveResolution`). `getSceneFingerprint()` hashes every object's transform, geometry, material and instances, so a refactor that must not change the world can compare it before and after, with frame-locked screenshots.
+Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.js`). It reads state (`getState`, `getPlayer`, `getView`, `getFishing`, `getOrchard`, `getMarket`, `getMarsh`, `getWood`, `getAllotments`, `getChunks`, `getStreaming`, `getWater`, `getInterior`), moves the player (`moveTo`, `findPath`, `blocked`, and `placeInterior` indoors), reports rendering work (`getDiagnostics`), and overrides rendering for measurements (`tune`, `tuneInterior`, `setAdaptiveResolution`). `getSceneFingerprint()` hashes every object's transform, geometry, material and instances, so a refactor that must not change the world can compare it before and after, with frame-locked screenshots.
 
 | Spec | Covers |
 | --- | --- |
@@ -71,7 +71,7 @@ Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.
 | `camera`, `first-person`, `mobile` | the overview camera, first person, and the phone HUD and touch controls |
 | `navigation`, `routing` | collision and route finding; click-to-walk across the map and the lantern light pool |
 | `world-layout`, `chunks`, `streaming` | the map's bounds, regions and terrain; the chunk bake; streaming and first person's distance limits |
-| `millpond`, `orchard`, `market`, `marsh`, `wood` | each region's layout, crossings, routes and activities |
+| `millpond`, `orchard`, `market`, `marsh`, `wood`, `allotments` | each region's layout, crossings, routes and activities |
 | `cats`, `puppy`, `trees` | wildlife, Lily and Pip, and tree geometry, culling and detail levels |
 | `water` | the water solver, captures, refraction and fallbacks (see [Water](water.md#verification)) |
 | `interior` | the walkable bakery and its rendering settings |

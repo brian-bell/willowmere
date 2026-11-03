@@ -57,7 +57,7 @@ test("regions name the same village places as always, and the fields beyond", { 
     [36, 25],
     [36, -25],
     [0, -30],
-    [-12, 30],
+    [-30, 30],
     [30, 30],
     [-47, 41],
   ])
@@ -88,6 +88,14 @@ test("regions name the same village places as always, and the fields beyond", { 
     [-30, 20.5],
   ])
     expect(regionAt(x, z).name).toBe("The old wood");
+  // South of the village's west half, beside the marsh, lie the allotments.
+  for (const [x, z] of [
+    [-12, 30],
+    [-23.5, 21.5],
+    [-0.5, 40],
+    [-5, 25],
+  ])
+    expect(regionAt(x, z).name).toBe("The allotments");
 });
 
 test("chunk seeds are independent of build order", { tag: "@logic" }, () => {
