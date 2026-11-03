@@ -23,10 +23,6 @@ export const LANDMARK_LINES = {
     "Warm bread, wild honey, and a hint of cinnamon drift through the open window.",
     "Finn is just outside. He’s always happy to share a story — and a few seeds.",
   ],
-  home: [
-    "Your little cottage. The kettle is warm, and the afternoon can wait.",
-    "There’s nowhere you need to be. You’re home.",
-  ],
   mill: [
     "The old wheel turns with the river, as it has for a hundred quiet summers.",
   ],

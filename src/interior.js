@@ -5,6 +5,7 @@ import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { SoftBloomPass, BloomOutputPass } from "./bloom.js";
 import { createBakery } from "./bakery.js";
+import { createRosewood } from "./rosewood.js";
 import { createInteriorWalker } from "./interior-movement.js";
 import "./interior.css";
 
@@ -51,10 +52,26 @@ class InteriorAO extends SSAOPass {
   }
 }
 
-export function createInterior({ renderer, onExit, onStep, onInteract }) {
-  const bakery = createBakery();
-  bakery.scene.matrixWorldAutoUpdate = false;
-  const walker = createInteriorWalker(bakery.layout);
+// The walkable interiors share one camera, input, postprocessing chain and
+// panel. Each room (the bakery, Rosewood) is built the first time it opens
+// and supplies its scene, lights, walkable layout, the points E answers at,
+// and its own animation; `state` and `save` are the visit's progress.
+const ROOMS = {
+  bakery: () => createBakery(),
+  rosewood: (progress) => createRosewood(progress),
+};
+
+export function createInterior({
+  renderer,
+  onExit,
+  onStep,
+  onInteract,
+  state,
+  save,
+}) {
+  const rooms = new Map();
+  let room = null,
+    walker = null;
   const canvas = renderer.domElement;
   const camera = new T.PerspectiveCamera(
     66,
@@ -66,15 +83,13 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
   const pmrem = new T.PMREMGenerator(renderer);
   const environment = new RoomEnvironment();
   const environmentTarget = pmrem.fromScene(environment, 0.04);
-  bakery.scene.environment = environmentTarget.texture;
-  bakery.scene.environmentIntensity = 0.24;
   environment.dispose();
   pmrem.dispose();
-  // Both shadowing lights are fixed and almost everything they light is merged
-  // static geometry. Their maps refresh in turn a few times a second for the
-  // slow cat and star mobile, instead of re-rendering the room twice a frame.
-  const shadowLights = [bakery.sun, bakery.windowLight];
-  for (const light of shadowLights) light.shadow.autoUpdate = false;
+  // Every room's shadowing lights are fixed and almost everything they light
+  // is merged static geometry. Their maps refresh in turn a few times a
+  // second for the slow movers (the bakery's cat and star mobile), instead of
+  // re-rendering the room once per light every frame.
+  let shadowLights = [];
   let shadowClock = 0,
     shadowTurn = 0,
     shadowMotion = true;
@@ -82,13 +97,29 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
     for (const light of shadowLights) light.shadow.needsUpdate = true;
     shadowClock = 0;
   }
+  function openRoom(id) {
+    if (!rooms.has(id)) {
+      const built = ROOMS[id]({ state, save });
+      built.id = id;
+      built.scene.matrixWorldAutoUpdate = false;
+      built.scene.environment = environmentTarget.texture;
+      built.scene.environmentIntensity = built.environmentIntensity ?? 0.24;
+      for (const light of built.shadowLights) light.shadow.autoUpdate = false;
+      rooms.set(id, { room: built, walker: createInteriorWalker(built.layout) });
+    }
+    ({ room, walker } = rooms.get(id));
+    shadowLights = room.shadowLights;
+    renderPass.scene = room.scene;
+    ao.scene = room.scene;
+  }
   const renderTarget = new T.WebGLRenderTarget(innerWidth, innerHeight, {
     samples: 2,
     type: T.HalfFloatType,
   });
   const composer = new EffectComposer(renderer, renderTarget);
-  composer.addPass(new RenderPass(bakery.scene, camera));
-  const ao = new InteriorAO(bakery.scene, camera, innerWidth, innerHeight, 12);
+  const renderPass = new RenderPass(new T.Scene(), camera);
+  composer.addPass(renderPass);
+  const ao = new InteriorAO(renderPass.scene, camera, innerWidth, innerHeight, 12);
   ao.kernelRadius = 0.35;
   ao.minDistance = 0.001;
   ao.maxDistance = 0.035;
@@ -101,16 +132,16 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
   panel.id = "bakery-view";
   panel.setAttribute("aria-label", "Inside The Daily Loaf");
   panel.innerHTML = `
-    <header class="bakery-heading"><span>WILLOWMERE</span><h1>The Daily Loaf</h1></header>
-    <nav class="bakery-actions" aria-label="Bakery controls">
+    <header class="bakery-heading"><span>WILLOWMERE</span><h1></h1></header>
+    <nav class="bakery-actions" aria-label="Room controls">
       <button id="bakery-look" aria-pressed="false">Free look <span aria-hidden="true">⌖</span></button>
-      <button id="bakery-menu" aria-label="Pause bakery visit">Pause <kbd>Esc</kbd></button>
+      <button id="bakery-menu" aria-label="Pause your visit">Pause <kbd>Esc</kbd></button>
     </nav>
     <div class="bakery-crosshair" aria-hidden="true"><i></i></div>
     <button id="bakery-interact" hidden><kbd>E</kbd><span></span></button>
     <div id="bakery-note" role="status" hidden><span></span><p></p></div>
     <footer class="bakery-help"><span><b>WASD</b> walk <i>·</i> <b>Drag</b> look <i>·</i> <b>E</b> interact</span><span>Make yourself at home.</span></footer>
-    <div class="bakery-touch" role="group" aria-label="Walk around the bakery">
+    <div class="bakery-touch" role="group">
       <button data-walk="forward" aria-label="Walk forward">↑</button>
       <button data-walk="left" aria-label="Step left">←</button>
       <button data-walk="back" aria-label="Walk backward">↓</button>
@@ -141,81 +172,10 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
     lastStepDistance = 0,
     bob = 0;
   let pointerLockReleasedAt = -Infinity;
-  const points = [
-    {
-      id: "door",
-      x: 4.8,
-      z: 5.45,
-      y: 2,
-      range: 1.85,
-      label: "Step out into Willowmere",
-    },
-    {
-      id: "pastries",
-      x: 4.55,
-      z: 2.55,
-      y: 2.55,
-      range: 2.5,
-      label: "Admire the pastries",
-      title: "SOMETHING SWEET",
-      text: "Moon croissants, berry daydreams, and just one more for the walk home. Finn has saved the warmest batch for his neighbors.",
-    },
-    {
-      id: "crumb",
-      x: -2.9,
-      z: 0.5,
-      y: 1.4,
-      range: 1.85,
-      label: "Say hello to Crumb",
-      title: "CRUMB · KEEPER OF THE MOON FLOUR",
-      text: "“A pinch of starlight. Three patient folds. And never, ever rush the dough.” Crumb tips his little hat.",
-    },
-    {
-      id: "oven",
-      x: -4.8,
-      z: -2.1,
-      y: 2,
-      range: 2.25,
-      label: "Warm your hands",
-      title: "EMBER & ASH",
-      text: "The old oven settles with a soft crackle. It has kept this room warm through a hundred winters, and it has room for one more pair of cold hands.",
-    },
-    {
-      id: "cat",
-      x: -6.5,
-      z: 0.45,
-      y: 1.4,
-      range: 1.85,
-      label: "Pet Cinnamon",
-      title: "CINNAMON · HEAD OF AFTERNOON NAPS",
-      text: "Cinnamon opens one sleepy eye, leans into your hand, and decides that you may stay.",
-    },
-    {
-      id: "tea",
-      x: -4.7,
-      z: 2.5,
-      y: 1.9,
-      range: 1.85,
-      label: "Pause for a little tea",
-      title: "A CUP OF QUIET",
-      text: "Wildflower tea, a spoonful of honey, and nowhere you need to be. The chair by the window is always yours.",
-    },
-    {
-      id: "bell",
-      x: 6.45,
-      z: -0.6,
-      y: 2.1,
-      range: 1.7,
-      label: "Ring the counter bell",
-      title: "A LITTLE DING",
-      text: "“Just a moment!” Finn calls from the flour store. “If the croissants start floating, put the kettle on.”",
-    },
-  ];
-
   function clearInput() {
     keys.clear();
     touch.clear();
-    walker.stop();
+    walker?.stop();
     dragging = null;
   }
   function releaseMouse() {
@@ -258,7 +218,8 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
     const p = walker.position;
     let best = null,
       score = Infinity;
-    for (const point of points) {
+    for (const point of room.points) {
+      if (point.available && !point.available()) continue;
       const dx = point.x - p.x,
         dz = point.z - p.z,
         distance = Math.hypot(dx, dz);
@@ -302,8 +263,11 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
       onExit();
       return;
     }
-    showNote(nearest.title, nearest.text);
-    onInteract?.();
+    // A room answers its own activities; a plain point shows its note.
+    const result = room.interact?.(nearest) ?? nearest;
+    if (result.night !== undefined) setNight(result.night);
+    if (result.title) showNote(result.title, result.text);
+    onInteract?.(result.sound);
   }
   async function captureMouse() {
     if (!active || paused) return;
@@ -385,12 +349,13 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
   $("#bakery-exit").onclick = onExit;
   $("#bakery-photo").onclick = () => setPhoto(!photo);
   $(".bakery-photo-return").onclick = () => setPhoto(false);
-  $("#bakery-light").onclick = () => {
-    night = !night;
-    bakery.setNight(night);
-    $("#bakery-light").textContent = night ? "Golden afternoon" : "After hours";
+  function setNight(value) {
+    night = room.night = value;
+    room.setNight(night);
+    $("#bakery-light").textContent = room.nightLabels[night ? 1 : 0];
     $("#bakery-light").setAttribute("aria-pressed", String(night));
-  };
+  }
+  $("#bakery-light").onclick = () => setNight(!night);
   panel.hidden = true;
   // Benchmark overrides for attributing render cost; empty in normal play.
   const overrides = {};
@@ -399,7 +364,19 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
     get active() {
       return active;
     },
-    enter() {
+    get room() {
+      return room?.id ?? null;
+    },
+    enter(id = "bakery") {
+      openRoom(id);
+      night = !!room.night;
+      $(".bakery-heading h1").textContent = room.title;
+      panel.setAttribute("aria-label", room.ariaLabel);
+      $(".bakery-touch").setAttribute("aria-label", room.touchLabel);
+      $("#bakery-menu").setAttribute("aria-label", room.pauseLabel);
+      $("#bakery-light").textContent = room.nightLabels[night ? 1 : 0];
+      $("#bakery-light").setAttribute("aria-pressed", String(night));
+      room.enter?.();
       active = true;
       paused = false;
       panel.hidden = false;
@@ -413,12 +390,13 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
       document.querySelector("#game").classList.add("in-bakery");
       canvas.setAttribute(
         "aria-label",
-        "Inside The Daily Loaf. WASD to walk, drag to look, arrow keys to turn, E to interact, Escape to pause.",
+        `${room.ariaLabel}. WASD to walk, drag to look, arrow keys to turn, E to interact, Escape to pause.`,
       );
       this.resize();
       canvas.focus({ preventScroll: true });
     },
     exit() {
+      room?.leave?.();
       active = false;
       releaseMouse();
       clearInput();
@@ -491,14 +469,16 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
       bloom.enabled = overrides.bloom ?? quality !== "performance";
       ao.resolutionScale = overrides.aoScale ?? 0.5;
       ao.setKernelSize(overrides.aoSamples ?? 12);
+      if (!room) return;
       const shadowSize =
         overrides.sunShadow ?? (quality === "high" ? 2048 : 1024);
-      if (bakery.sun.shadow.mapSize.x !== shadowSize) {
-        bakery.sun.shadow.mapSize.setScalar(shadowSize);
-        bakery.sun.shadow.map?.dispose();
-        bakery.sun.shadow.map = null;
+      if (room.sun.shadow.mapSize.x !== shadowSize) {
+        room.sun.shadow.mapSize.setScalar(shadowSize);
+        room.sun.shadow.map?.dispose();
+        room.sun.shadow.map = null;
       }
-      bakery.windowLight.castShadow = overrides.windowShadow ?? true;
+      if (room.windowLight)
+        room.windowLight.castShadow = overrides.windowShadow ?? true;
       for (const light of shadowLights)
         light.shadow.autoUpdate = overrides.shadowRefresh === 0;
       refreshShadows();
@@ -512,6 +492,9 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
       // The village sets its quality's full pixel ratio while the bakery is open.
       composer.setPixelRatio(overrides.pixelRatio ?? renderer.getPixelRatio());
       composer.setSize(innerWidth, innerHeight);
+    },
+    place(pose) {
+      walker?.place(pose);
     },
     tune(settings) {
       for (const [key, value] of Object.entries(settings))
@@ -557,23 +540,34 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
         // Reduced motion poses the cat and mobile at rest; capture that once.
         shadowMotion = motion;
         refreshShadows();
-      } else if (motion && shadowClock > (overrides.shadowRefresh ?? 0.125)) {
+      } else if (
+        motion &&
+        !room.staticShadows &&
+        shadowClock > (overrides.shadowRefresh ?? 0.125)
+      ) {
         shadowLights[shadowTurn].shadow.needsUpdate = true;
         shadowTurn = (shadowTurn + 1) % shadowLights.length;
         shadowClock = 0;
       }
-      bakery.update(time, motion);
-      bakery.scene.updateMatrixWorld();
-      renderer.toneMappingExposure = 1.05;
+      room.update(time, motion, { dt, walker, moved });
+      // Things that happen on their own (Bark bringing the ball back) speak too.
+      const note = room.takeNote?.();
+      if (note) {
+        if (note.title) showNote(note.title, note.text);
+        onInteract?.(note.sound);
+      }
+      room.scene.updateMatrixWorld();
+      renderer.toneMappingExposure = room.exposure ?? 1.05;
       renderer.info.reset();
       composer.render();
     },
     diagnostics: () => ({
       active,
+      room: room?.id ?? null,
       mode: "first-person",
-      position: { ...walker.position },
-      yaw: walker.yaw,
-      pitch: walker.pitch,
+      position: walker ? { ...walker.position } : null,
+      yaw: walker?.yaw,
+      pitch: walker?.pitch,
       nearest: nearest?.id || null,
       paused,
       night,
@@ -590,9 +584,10 @@ export function createInterior({ renderer, onExit, onStep, onInteract }) {
         aoWidth: ao.width,
         aoSamples: ao.kernel.length,
         bloom: bloom.enabled,
-        sunShadow: bakery.sun.shadow.mapSize.x,
-        shadowAutoUpdate: bakery.sun.shadow.autoUpdate,
+        sunShadow: room?.sun.shadow.mapSize.x,
+        shadowAutoUpdate: room?.sun.shadow.autoUpdate,
       },
+      ...room?.diagnostics?.(),
     }),
   };
 }

@@ -14,8 +14,9 @@ const oneOf = (list) => list[Math.floor(Math.random() * list.length)];
 
 /**
  * `session` reads the live tool, view and progress flags; `clickPath` is the
- * player's current route; `isIndoors()` is true while the bakery is open or
- * opening; `begin()` dismisses the intro.
+ * player's current route; `isIndoors()` is true while a room (the bakery or
+ * Rosewood) is open or opening; `enterInterior(id)` opens one; `begin()`
+ * dismisses the intro.
  */
 export function createInteractions({
   world,
@@ -27,7 +28,7 @@ export function createInteractions({
   clickPath,
   begin,
   isIndoors,
-  enterBakery,
+  enterInterior,
 }) {
   let nearest = null,
     // A neighbor, flower or landmark the player tapped: walk over, then interact on arrival.
@@ -104,8 +105,8 @@ export function createInteractions({
       return;
     }
     const id = nearest.data.id || nearest.data.type;
-    if (id === "bakery") {
-      enterBakery();
+    if (id === "bakery" || id === "home") {
+      enterInterior(id === "home" ? "rosewood" : "bakery");
       return;
     }
     if (id === "jetty") {
@@ -176,7 +177,9 @@ export function createInteractions({
           label:
             i.id === "bakery"
               ? "Enter The Daily Loaf"
-              : i.type === "stall"
+              : i.id === "home"
+                ? "Step inside Rosewood"
+                : i.type === "stall"
                 ? activities.stallLabel(i.stall, session.dusk)
                 : i.type === "wood-flower"
                   ? activities.flowerLabel(i.flower, session.dusk)

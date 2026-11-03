@@ -4,6 +4,7 @@
 import { createBushes } from "../bushes.js";
 import { createReeds } from "../reeds.js";
 import { allowsGrass, regionDeck } from "../regions/index.js";
+import { yardAllowsGrass } from "./rosewood-yard.js";
 import { createTrees } from "../trees.js";
 import { sampleWaterField } from "../water.js";
 import { terrainHeight } from "../world-layout.js";
@@ -154,7 +155,7 @@ export function buildPlants(
       for (let i = 0; i < count; i++) {
         mesh.getMatrixAt(i, dum.matrix);
         at.setFromMatrixPosition(dum.matrix);
-        if (!allowsGrass(at.x, at.z)) continue;
+        if (!allowsGrass(at.x, at.z) || !yardAllowsGrass(at.x, at.z)) continue;
         if (kept !== i) {
           mesh.setMatrixAt(kept, dum.matrix);
           if (colors) {
