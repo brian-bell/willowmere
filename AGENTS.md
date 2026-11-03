@@ -34,6 +34,6 @@ When the task calls for shipping, integrate locally and deploy in this order:
 2. Update local `main` from the remote: `git switch main`, then `git pull --ff-only origin main`.
 3. Merge the task branch into local `main` with `git merge --no-ff <task-branch>`. Resolve any conflicts locally and rerun affected checks.
 4. Push the merged `main` with `git push origin main`. Do not deploy if this push fails.
-5. Pushing `main` triggers Cloudflare's automatic build and deployment of that revision. Do not run `npm run deploy` for routine shipping. Wait for the deployment to finish, then check the live Worker at `https://willowmere.bellbm.workers.dev/`.
+5. Pushing `main` triggers Cloudflare's automatic build and deployment of that revision. Do not run `npm run deploy` for routine shipping. Wait for the deployment to finish, then check the live Worker at `https://willowmere.bellbm.workers.dev/`. The pushed commit should gain a "Workers Builds: willowmere" check run on GitHub within a few minutes; if none appears, Cloudflare skipped the push, so deploy that commit from the Cloudflare dashboard or push another commit to `main`.
 
 `npm run deploy` (builds, then runs `wrangler deploy`) remains a manual fallback when the automatic deployment fails or is unavailable; it needs Cloudflare authentication for Wrangler. If the live Worker does not update after a push, report that `main` is pushed but the site is still on the previous deployment, then check the Cloudflare build logs or surface the error. Never deploy a task branch.
