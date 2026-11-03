@@ -401,8 +401,12 @@ test("the old wood keeps the same budget as the marsh", async ({ page }) => {
       );
       return [
         "Old wood floor",
-        "Old wood trees (west): leaves",
-        "Old wood trees (east): leaves",
+        "Old wood trees (north-west): leaves",
+        "Old wood trees (middle-west): leaves",
+        "Old wood trees (south-west): leaves",
+        "Old wood trees (north-east): leaves",
+        "Old wood trees (middle-east): leaves",
+        "Old wood trees (south-east): leaves",
         "Great oak: leaves",
         "Old wood ferns",
         "Woodland flowers",

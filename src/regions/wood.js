@@ -12,7 +12,7 @@
 // new shader program.
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { chunkRandom } from "../world-layout.js";
-import { createKit, limb } from "./kit.js";
+import { createKit, limb, splitByChunk } from "./kit.js";
 import { crownShells } from "../trees.js";
 import {
   TREES,
@@ -64,27 +64,31 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
   };
   const leafMaterials = world.trees.materials.grounded(new T.Vector4(0, 0, -1e4, 0)),
     painted = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.88 });
-  // The trees in two stands, west and east of the clearing, each one job,
-  // one set of meshes and one level of detail; the great oak stands alone.
-  // Fewer stands draw fewer times: zoomed out, all of the wood is in view
-  // at once. Each tree keeps the seed it had in the six bands the wood
-  // first had, so its shape stays as drawn.
-  const stands = [];
+  // The trees in six stands, three bands each side of the clearing, each
+  // one job, one set of meshes and one level of detail; the great oak stands
+  // alone. Zoomed out, where the whole wood is in view, each stand costs
+  // three draws; but a stand culls only as a whole, and the village's views
+  // by its west edge would draw (and shadow) larger stands they never see.
+  // Each tree keeps the seed of its band and side, so regrouping the stands
+  // never changes its shape.
+  const STAND = (band, side) => `${band}-${side}`,
+    grouped = new Map();
   for (const [side, west] of [
     ["west", true],
     ["east", false],
-  ]) {
-    const trees = [];
+  ])
     for (const [band, from, to] of [
       ["north", -Infinity, -7],
       ["middle", -7, 7],
       ["south", 7, Infinity],
-    ])
+    ]) {
+      const name = STAND(band, side);
+      if (!grouped.has(name)) grouped.set(name, []);
       TREES.filter((t) => t.x < -35 === west && t.z >= from && t.z < to).forEach((tree, index) =>
-        trees.push({ ...tree, seed: [index, `${band}-${side}`.length * 7] }),
+        grouped.get(name).push({ ...tree, seed: [index, `${band}-${side}`.length * 7] }),
       );
-    stands.push({ name: side, trees });
-  }
+    }
+  const stands = [...grouped].map(([name, trees]) => ({ name, trees }));
   stands.push({
     name: "great oak",
     trees: [{ id: "great-oak", kind: "oak", x: W.oak.x, z: W.oak.z, wide: W.oak.scale, tall: 1.2, great: true }],
@@ -142,40 +146,61 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
         { id: "wood-signpost", name: "Fingerpost", x: W.signpost.x, z: W.signpost.z - 0.7, radius: 1.2 },
       );
     }),
-    job("wood ferns", -36, 2, () => ferns(T, range), ([mesh]) => addedDetail(mesh, true)),
-    job("wood mushrooms and fairy ring", W.ring.x, W.ring.z, () => mushrooms(T, range), (meshes) => {
-      const [toadstools, ring] = meshes;
-      addedDetail(toadstools, true);
-      // The ring glows at blue hour, like the village's lamps.
-      added([ring]);
-      world.interactables.push({
-        id: "fairy-ring",
-        name: "Fairy ring",
-        x: W.ring.x,
-        z: W.ring.z,
-        radius: W.ring.r + 0.9,
-      });
-    }),
-    job("wood flowers", -33, 2, () => flowers(T, range), (meshes) => {
-      const honeysuckle = meshes[2];
+    // The ferns, toadstools and flowers are split per chunk where they are
+    // built (the streamer adds what a job returns), so each part culls on
+    // its own.
+    job("wood ferns", -36, 2, () => splitByChunk(T, ferns(T, range)[0]), (meshes) => {
       for (const mesh of meshes) addedDetail(mesh, true);
-      const open = honeysuckle.userData.open;
-      world.animate(W.flowers.honeysuckle.x, W.flowers.honeysuckle.z, () => open(dusk()));
-      for (const flower of FLOWERS) {
-        const at = W.flowers[flower.id];
-        world.interactables.push({
-          id: `wood-${flower.id}`,
-          type: "wood-flower",
-          flower: flower.id,
-          name: flower.name,
-          x: at.x,
-          z: at.z,
-          radius: 1.4,
-        });
-      }
     }),
+    job(
+      "wood mushrooms and fairy ring",
+      W.ring.x,
+      W.ring.z,
+      () => {
+        const [toadstools, ring] = mushrooms(T, range);
+        return [ring, ...splitByChunk(T, toadstools)];
+      },
+      ([ring, ...toadstools]) => {
+        for (const part of toadstools) addedDetail(part, true);
+        // The ring glows at blue hour, like the village's lamps.
+        added([ring]);
+        world.interactables.push({
+          id: "fairy-ring",
+          name: "Fairy ring",
+          x: W.ring.x,
+          z: W.ring.z,
+          radius: W.ring.r + 0.9,
+        });
+      },
+    ),
+    job(
+      "wood flowers",
+      -33,
+      2,
+      () => {
+        const [stems, blooms, honeysuckle] = flowers(T, range);
+        return [honeysuckle, ...splitByChunk(T, stems), ...splitByChunk(T, blooms)];
+      },
+      ([honeysuckle, ...meshes]) => {
+        for (const mesh of [honeysuckle, ...meshes]) addedDetail(mesh, true);
+        const open = honeysuckle.userData.open;
+        world.animate(W.flowers.honeysuckle.x, W.flowers.honeysuckle.z, () => open(dusk()));
+        for (const flower of FLOWERS) {
+          const at = W.flowers[flower.id];
+          world.interactables.push({
+            id: `wood-${flower.id}`,
+            type: "wood-flower",
+            flower: flower.id,
+            name: flower.name,
+            x: at.x,
+            z: at.z,
+            radius: 1.4,
+          });
+        }
+      },
+    ),
     job("wood light shafts", W.clearing.x, W.clearing.z, () => shafts(T), ([mesh]) => {
-      added([mesh]);
+      added([mesh], { far: true });
       const shine = mesh.userData.shine;
       world.animate(W.clearing.x, W.clearing.z, (dt, t, clock) => shine(clock, dusk()));
     }),
@@ -1201,7 +1226,8 @@ void main(){float facing=abs(dot(normalize(vNormal),normalize(vView)));float end
   mesh.renderOrder = 2;
   mesh.userData.shine = (clock, dusk) => {
     const level = 1 - smooth(0.05, 0.55, dusk);
-    mesh.visible = level > 0.01;
+    // The material's flag, since the overview's zoom owns the mesh's.
+    material.visible = level > 0.01;
     // A slow breathing, as leaves overhead move across the sun.
     material.uniforms.strength.value = 0.1 * level * (0.85 + 0.15 * Math.sin(clock * 0.4));
   };
