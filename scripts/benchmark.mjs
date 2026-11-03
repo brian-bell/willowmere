@@ -42,7 +42,8 @@ for (const quality of ["high", "balanced", "performance"])
 // orchard hill from beside its bench, at the default height and at eye level
 // looking back over the village (phase 4's gate), the market square at the
 // default height and at eye level looking along the lane (phase 5's), and the
-// marsh from its boardwalk, at the default height and at eye level.
+// marsh from its boardwalk and the old wood from its clearing, each at the
+// default height and at eye level.
 configs.push(
   { name: "high, millpond", quality: "high", tune: {}, view: "millpond" },
   { name: "high, orchard", quality: "high", tune: {}, view: "orchard" },
@@ -51,6 +52,8 @@ configs.push(
   { name: "high, market, first person", quality: "high", tune: {}, view: "market-first-person" },
   { name: "high, marsh", quality: "high", tune: {}, view: "marsh" },
   { name: "high, marsh, first person", quality: "high", tune: {}, view: "marsh-first-person" },
+  { name: "high, wood", quality: "high", tune: {}, view: "wood" },
+  { name: "high, wood, first person", quality: "high", tune: {}, view: "wood-first-person" },
 );
 if (ablate) {
   for (const [name, tune] of Object.entries(ablations))
@@ -77,6 +80,7 @@ if (ablate) {
     { name: "high, orchard, height 30", quality: "high", tune: {}, view: "orchard-30" },
     { name: "high, market, height 30", quality: "high", tune: {}, view: "market-30" },
     { name: "high, marsh, height 30", quality: "high", tune: {}, view: "marsh-30" },
+    { name: "high, wood, height 30", quality: "high", tune: {}, view: "wood-30" },
     { name: "high, height 30", quality: "high", tune: {}, view: "height-30" },
     {
       name: "high, height 30, open-country grass hidden",
@@ -135,11 +139,13 @@ try {
   // jetty, the orchard views on the hill's path by the bench, facing the
   // village, the market views in the square, facing west along the lane past
   // the stalls and the tea room, the marsh views on the boardwalk, facing the
-  // hide across the mere, the rest at the spawn on the village green.
+  // hide across the mere, the wood views in its clearing, facing west past
+  // the fairy ring, the rest at the spawn on the village green.
   const MILLPOND = { x: 8.6, z: -25.8 },
     ORCHARD = { x: -21, z: -27.6, heading: 0.65 },
     MARKET = { x: 36.5, z: 3.2, heading: -1.75 },
     MARSH = { x: 7.8, z: 31.2, heading: 1.2 },
+    WOOD = { x: -35.5, z: 0, heading: -2 },
     SPAWN = { x: -2.8, z: 6.2 };
   let at = SPAWN;
   const setView = async (view) => {
@@ -151,7 +157,9 @@ try {
           ? MARKET
           : view.startsWith("marsh")
             ? MARSH
-            : SPAWN;
+            : view.startsWith("wood")
+              ? WOOD
+              : SPAWN;
     // Revisions without the hook stay at the spawn.
     if (place !== at && (await page.evaluate(() => !!window.__willowmere.moveTo))) {
       await page.evaluate(

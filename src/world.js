@@ -603,20 +603,23 @@ export function createWorld(T, scene) {
       brookPiece(4.75, crossingNorth),
       brookPiece(crossingSouth, MARSH.footbridge.minZ),
     ],
-    lane = regions.find((r) => r.id === "market").colliders(),
-    marsh = regions.find((r) => r.id === "marsh").colliders(),
-    laterSet = new Set([...crossing, ...lane, ...marsh]);
+    regionSets = regions.map((r) => [r.id, r.colliders?.() ?? []]),
+    // Regions that came after the village's scatter was settled (all but
+    // the millpond's and the orchard's).
+    laterSet = new Set([
+      ...crossing,
+      ...regionSets.filter(([id]) => id !== "millpond" && id !== "orchard").flatMap(([, set]) => set),
+    ]);
   colliders.push(
     brookPiece(footbridgeSouth, 1.25),
     ...crossing,
-    ...regions.flatMap((r) =>
-      r.id === "market" ? lane : r.id === "marsh" ? marsh : (r.colliders?.() ?? []),
-    ),
+    ...regionSets.flatMap(([, set]) => set),
   );
   // The village's grass scatter draws its random stream against the colliders
   // it always had: the brook in one piece south of the bridge, and no market
-  // lane or marsh, so every blade, and everything placed after them, stays
-  // where it was. Their footings clear their grass after the scatter instead.
+  // lane, marsh or wood, so every blade, and everything placed after them,
+  // stays where it was. Their footings clear their grass after the scatter
+  // instead.
   const scatterColliders = () => [
     ...colliders.filter((c) => !laterSet.has(c)),
     brookPiece(4.75, 21.25),

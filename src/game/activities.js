@@ -6,12 +6,21 @@ import { DELIVERY_THANKS, STALL_LINES, STALL_PROMPTS } from "../content/market.j
 import { STALLS, buyFromStall, deliverLoaf, finnDelivery, stallOffer } from "./market.js";
 import { BIRD_LINES, HIDE_QUIET, HIDE_SETTLE, WREN_DONE, WREN_TIPS } from "../content/marsh.js";
 import { birdToSeek, watchBirds as watchFromHide } from "./marsh.js";
+import {
+  FLOWER_AGAIN,
+  FLOWER_CLOSED,
+  FLOWER_LINES,
+  FLOWER_PROMPTS,
+  ROWAN_DONE,
+  ROWAN_TIPS,
+} from "../content/wood.js";
+import { flowerById, flowerOpen, flowerToSeek, pressFlower as pressInJournal } from "./wood.js";
 
 // What the player does and earns: the welcome quests, gathering and planting
 // flowers, fishing from the millpond's jetty, the orchard's fruit and honey,
 // which Finn buys, the market lane's bread deliveries and stalls, and
-// birdwatching from the marsh's hide. Each
-// changes the save, then updates the HUD, saves and chimes.
+// birdwatching from the marsh's hide and pressing the old wood's flowers.
+// Each changes the save, then updates the HUD, saves and chimes.
 
 // Wildflower bouquets to gather, by index into the save's `gathered` list.
 const GATHERING_SPOTS = [
@@ -346,6 +355,30 @@ export function createActivities({
     return bird ? WREN_TIPS[bird.id] : oneOf(WREN_DONE);
   }
 
+  // Pressing the old wood's flowers.
+  /** The prompt at a woodland flower's patch. */
+  function flowerLabel(id, dusk) {
+    const flower = flowerById(id);
+    if (!flowerOpen(flower, dusk)) return `${flower.name} · closed`;
+    if (state.pressed[id]) return `${flower.name} · pressed`;
+    return FLOWER_PROMPTS[id];
+  }
+  /** Presses a bloom into the journal: returns the line it answers with. */
+  function pressFlower(id, dusk) {
+    const result = pressInJournal(state, id, { dusk });
+    if (result.kind === "closed") return FLOWER_CLOSED[id];
+    if (result.kind === "again") return oneOf(FLOWER_AGAIN);
+    if (result.kind !== "pressed") return "";
+    if (motion()) effects.burst(player.position.x, player.position.y + 1, player.position.z);
+    reward(`${result.flower.name} pressed · +${result.petals} petals`);
+    return `${FLOWER_LINES[id]} A new page for the journal.`;
+  }
+  /** What Rowan says: a tip for a flower still to press, open at this hour if she can. */
+  function rowanLine(dusk) {
+    const flower = flowerToSeek(state, dusk);
+    return flower ? ROWAN_TIPS[flower.id] : oneOf(ROWAN_DONE);
+  }
+
   return {
     complete,
     flowerGroups,
@@ -371,6 +404,9 @@ export function createActivities({
     shop,
     watchBirds,
     wrenLine,
+    flowerLabel,
+    pressFlower,
+    rowanLine,
     get orchardReady() {
       return !!orchard;
     },

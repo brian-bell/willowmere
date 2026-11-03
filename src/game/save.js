@@ -3,6 +3,7 @@
 
 import { marketDefaults } from "./market.js";
 import { marshDefaults } from "./marsh.js";
+import { woodDefaults } from "./wood.js";
 
 export const STORAGE = "willowmere.save.v1";
 
@@ -23,6 +24,8 @@ export function defaultState() {
     ...marketDefaults(),
     // Birds spotted from the marsh's hide, and when the last watch was.
     ...marshDefaults(),
+    // Woodland flowers pressed in the old wood.
+    ...woodDefaults(),
     gathered: [],
     plants: [],
     started: false,

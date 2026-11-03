@@ -53,7 +53,7 @@ test("regions name the same village places as always, and the fields beyond", { 
     for (let z = -21; z <= 21; z += 0.5)
       expect(regionAt(x, z).name).toBe(legacy(x, z));
   for (const [x, z] of [
-    [-30, 0],
+    [-36, 30],
     [36, 25],
     [36, -25],
     [0, -30],
@@ -79,6 +79,15 @@ test("regions name the same village places as always, and the fields beyond", { 
     [30, 16],
   ])
     expect(regionAt(x, z).name).toBe("The market lane");
+  // West of the village, between the orchard hill and the south-west
+  // fields, stands the old wood.
+  for (const [x, z] of [
+    [-24.5, 0],
+    [-35, 0.6],
+    [-45, -20.5],
+    [-30, 20.5],
+  ])
+    expect(regionAt(x, z).name).toBe("The old wood");
 });
 
 test("chunk seeds are independent of build order", { tag: "@logic" }, () => {
@@ -98,7 +107,7 @@ test("chunk seeds are independent of build order", { tag: "@logic" }, () => {
   }
 });
 
-test("terrain is flat in the village and rises only at the millpond and orchard hill", { tag: "@logic" }, () => {
+test("terrain is flat in the village and rises only in the regions beyond it", { tag: "@logic" }, () => {
   // The marsh dips a little below the lawn (its brook and mere), and rises
   // only a few centimetres along its banks.
   for (const [x, z] of [
@@ -107,7 +116,7 @@ test("terrain is flat in the village and rises only at the millpond and orchard 
     [24, 21],
     [12.3, -4.7],
     [12, -21],
-    [-30, 10],
+    [-48, 10],
     [-47, -41],
     [35, 10],
     [100, -100],

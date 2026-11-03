@@ -37,12 +37,14 @@ import { millpondRegion } from "./millpond-layout.js";
 import { orchardRegion } from "./orchard-layout.js";
 import { marketRegion } from "./market-layout.js";
 import { marshRegion } from "./marsh-layout.js";
+import { woodRegion } from "./wood-layout.js";
 
 export const regions = [
   millpondRegion,
   orchardRegion,
   marketRegion,
   marshRegion,
+  woodRegion,
   // The open country: the label everywhere else, and its grass.
   {
     id: "fields",
