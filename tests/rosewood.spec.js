@@ -155,7 +155,7 @@ test("fetch, dig, feed the fish, fit a piece and nap", async ({ page }) => {
   await expect(page.locator("#bakery-interact")).toContainText("jigsaw");
   await page.keyboard.press("e");
   expect((await state()).rosewood.puzzle).toBe(1);
-  await stand(page, 3.0, 3.4, 5.4, 3.4, -0.5);
+  await stand(page, 4.6, 1.5, 4.9, 2.9, -0.5);
   await expect(page.locator("#bakery-interact")).toContainText("nap");
   await page.keyboard.press("e");
   expect((await page.evaluate(() => window.__willowmere.getInterior())).night).toBe(true);

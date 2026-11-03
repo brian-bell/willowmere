@@ -2215,8 +2215,9 @@ export function createRosewood({ state, save }) {
     { id: "dresser", x: W - 0.35, z: -2.7, y: 1.8, range: 2.0, label: "Look at the dresser" },
     {
       id: "nap",
-      x: W - 1.9,
-      z: 3.4,
+      // Near the bed's open side: Bark's own bed is at its foot.
+      x: W - 1.7,
+      z: 2.9,
       y: 1.2,
       range: 2.1,
       get label() {
