@@ -21,7 +21,7 @@ All art and audio are generated in code. `vite.config.js` splits Three.js into i
 | `shadows.js` | fitting the sun's shadow to the view |
 | `detail.js` | which levels of detail each zoom and distance draws, as pure thresholds |
 | `navigation.js` | collision and route finding |
-| `save.js` | the visit's progress in browser storage |
+| `save.js` | the visit's progress in browser storage: a versioned save, merged field by field into the defaults, with migrations for changed fields |
 | `hud.js` | toasts, the quest card, conversations and the journal |
 | `activities.js` | quests, flowers, fishing, the orchard harvest, the market's deliveries and stalls, birdwatching at the marsh's hide |
 | `market.js`, `marsh.js` | the market's trade and the hide's birdwatching rules, as pure decisions on the save's state |
@@ -57,7 +57,7 @@ A region with gameplay usually also adds pure rules in `src/game/<region>.js`, i
 
 ## Tests and the debug API
 
-`npm test` runs every Playwright spec in `tests/` against a Vite server it starts on port 5174. Tests tagged `@logic` import pure modules and never open a page; `npm run test:logic` runs only those, in parallel, in seconds. CI (`.github/workflows/ci.yml`) builds, runs the logic tier, and runs the one `@smoke` test in `tests/smoke.spec.js`, which suits software WebGL. Playwright uses `CHROME_PATH` when set, installed Chrome on macOS, or Playwright's Chromium (`npx playwright install chromium`).
+`npm test` runs every Playwright spec in `tests/` against a Vite server it starts on port 5174. Tests tagged `@logic` import pure modules and never open a page; `npm run test:logic` runs only those, in parallel, in seconds. `npm run typecheck` runs TypeScript over the JavaScript files that start with `// @ts-check`: the pure modules, where JSDoc types such as `SaveState` (`src/game/save.js`) and `Region` (`src/regions/index.js`) catch a misspelled field before it ships. Other files are not checked; add the line when a module is pure. CI (`.github/workflows/ci.yml`) builds, type-checks, runs the logic tier, and runs the one `@smoke` test in `tests/smoke.spec.js`, which suits software WebGL. Playwright uses `CHROME_PATH` when set, installed Chrome on macOS, or Playwright's Chromium (`npx playwright install chromium`).
 
 Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.js`). It reads state (`getState`, `getPlayer`, `getView`, `getFishing`, `getOrchard`, `getMarket`, `getMarsh`, `getChunks`, `getStreaming`, `getWater`, `getInterior`), moves the player (`moveTo`, `findPath`, `blocked`), reports rendering work (`getDiagnostics`), and overrides rendering for measurements (`tune`, `tuneInterior`, `setAdaptiveResolution`). `getSceneFingerprint()` hashes every object's transform, geometry, material and instances, so a refactor that must not change the world can compare it before and after, with frame-locked screenshots.
 

@@ -1,3 +1,4 @@
+// @ts-check
 // The orchard hill's shape: its ground, the path up it, where its fruit trees,
 // beehives, windmill and bench stand. Pure data and functions, loaded with the
 // village: the terrain, colliders, grass and region label need it before the

@@ -1,3 +1,4 @@
+// @ts-check
 import { groundRegionAt, regions } from "./regions/index.js";
 
 // One description of the map's extent, its chunk grid, its named regions and

@@ -1,7 +1,10 @@
+// @ts-check
 // The willow marsh's birdwatching, as pure decisions on the save's state: who
 // shows themselves at the bird hide, what a first sighting earns, and which
 // bird Wren tells the player to look out for. No three.js and no DOM, so the
 // logic tests run it in Node; activities.js shows the results.
+
+/** @typedef {import("./save.js").SaveState} SaveState */
 
 // The marsh's birds. Some keep to the afternoon, some only come out at blue
 // hour (the day toggle; there is no clock), the rest show at either.
@@ -32,6 +35,7 @@ export const birdAbout = (bird, dusk) => bird.when === "any" || (bird.when === "
  * returns a number in [0, 1). Returns { kind: "quiet" } while the reeds are
  * still settling after the last watch, else { kind: "seen", bird, first,
  * petals } with the sighting recorded and any petals paid.
+ * @param {SaveState} state
  */
 export function watchBirds(state, { dusk, now, roll }) {
   if (state.watched && now - state.watched < WATCH.restMs) return { kind: "quiet" };
@@ -50,6 +54,7 @@ export function watchBirds(state, { dusk, now, roll }) {
 /**
  * The bird Wren mentions: one not yet seen, about at this time of day if any
  * is, else one that keeps the other hours; null once every bird is seen.
+ * @param {SaveState} state
  */
 export function birdToSeek(state, dusk) {
   const unseen = BIRDS.filter((bird) => !state.birds[bird.id]);
