@@ -175,9 +175,11 @@ test("the open country streams in, and the player walks across chunk borders, wi
     await page.locator("#zoom-out").click();
   await page.waitForTimeout(2500);
   // Zoomed out this far, x = -30 is drawn at the screen's left, where the
-  // quest card can cover it: aim at the first spot along it the canvas shows.
+  // quest card can cover it: aim at the first open spot along it (the old
+  // wood's trees and Rowan's table stand on some) that the canvas shows.
   const target = await page.evaluate(() =>
     [3, 6, 9, 12, 0, -3]
+      .filter((z) => !window.__willowmere.blocked(-30, z, 0.3))
       .map((z) => window.__willowmere.project(-30, z))
       .find(({ x, y }) => document.elementFromPoint(x, y)?.id === "scene"),
   );
