@@ -12,10 +12,17 @@ const tune = (page, settings) =>
 test("tune toggles each outdoor override and null restores the defaults", async ({
   page,
 }) => {
+  test.setTimeout(900000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/?resolution=fixed");
   await page.waitForFunction(() => window.__willowmere?.getWater().frame > 10);
+  // Every comparison below is against the base frame, so the regions must have
+  // finished streaming in first: their trees join the leaf count and their
+  // pieces the draw calls.
+  await page.waitForFunction(() => !window.__willowmere.getStreaming().pending, null, {
+    timeout: 600000,
+  });
   // The default view draws every leaf; the loading view is zoomed out.
   await page.locator("#start").click();
   await expect

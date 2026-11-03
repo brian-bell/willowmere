@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { regions } from "../src/regions/index.js";
 
 const streaming = (page) =>
   page.evaluate(() => window.__willowmere.getStreaming());
@@ -17,10 +18,20 @@ test("the open country streams in around the village after startup", async ({
   await expect
     .poll(async () => streaming(page), { timeout: 600000 })
     .toMatchObject({ pending: 0 });
-  // The route grid, 16 grass patches (one per chunk around the village), the
-  // fishing float, the millpond's six pieces, the orchard hill's six and the
-  // market lane's seven (six pieces and its residents).
-  expect((await streaming(page)).finished).toBe(37);
+  // Every region in the registry with a builder loaded and queued its pieces,
+  // and every piece finished: theirs, plus the route grid and the fishing
+  // float that the game queues itself.
+  const done = await streaming(page);
+  expect(Object.keys(done.regions).sort()).toEqual(
+    regions.filter((region) => region.stream).map((region) => region.id).sort(),
+  );
+  for (const [id, jobs] of Object.entries(done.regions))
+    expect(jobs, id).toBeGreaterThan(0);
+  expect(done.finished).toBe(
+    2 + Object.values(done.regions).reduce((sum, jobs) => sum + jobs, 0),
+  );
+  // The open country's 16 grass patches, one per chunk around the village.
+  expect(done.regions.fields).toBe(16);
   const chunks = await page.evaluate(() => window.__willowmere.getChunks());
   const patches = chunks.flatMap((chunk) =>
     chunk.meshes
