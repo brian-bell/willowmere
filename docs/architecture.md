@@ -21,7 +21,7 @@ All art and audio are generated in code. `vite.config.js` splits Three.js into i
 | `shadows.js` | fitting the sun's shadow to the view |
 | `detail.js` | which levels of detail each zoom and distance draws, as pure thresholds |
 | `navigation.js` | collision and route finding |
-| `save.js` | the visit's progress in browser storage |
+| `save.js` | the visit's progress in browser storage: a versioned save, merged field by field into the defaults, with migrations for changed fields |
 | `hud.js` | toasts, the quest card, conversations and the journal |
 | `activities.js` | quests, flowers, fishing, the orchard harvest, the market's deliveries and stalls, birdwatching at the marsh's hide |
 | `market.js`, `marsh.js` | the market's trade and the hide's birdwatching rules, as pure decisions on the save's state |
