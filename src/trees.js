@@ -861,6 +861,7 @@ export function createTrees(placements, groundHeight = () => 0) {
       // Small things at the tree's foot, hidden along with the leaves.
       underneath: [details, litter].filter(Boolean),
       center: canopyBounds[lods.length].getCenter(new T.Vector3()),
+      far: 0.5,
       level: 0,
     });
   }
@@ -889,8 +890,9 @@ export function createTrees(placements, groundHeight = () => 0) {
     update: (elapsed) => {
       time.value = elapsed;
     },
-    // Level 0 draws every leaf. Level 1 draws every other leaf as the coarse
-    // blade, for canopies that cover few pixels. Level 2 (first person, far
+    // Level 0 draws every leaf. Level 1 draws every other leaf (or the
+    // share a streamed canopy asks for) as the coarse blade, for canopies
+    // that cover few pixels. Level 2 (first person, far
     // off) draws the tree's crown shells instead of its leaves, and nothing
     // at its foot. A function picks the level for each tree from its canopy
     // center.
@@ -901,7 +903,7 @@ export function createTrees(placements, groundHeight = () => 0) {
         const total = lod.mesh.instanceMatrix.count;
         if (!next !== !lod.level) {
           lod.mesh.geometry = next ? lod.coarse : lod.fine;
-          lod.mesh.count = next ? Math.ceil(total / 2) : total;
+          lod.mesh.count = next ? Math.ceil(total * lod.far) : total;
         }
         const crowned = (next === 2) !== (lod.level === 2);
         lod.level = next;
@@ -934,10 +936,11 @@ export function createTrees(placements, groundHeight = () => 0) {
     /**
      * Adds foliage that streamed in later (a region's trees) to the levels of
      * detail: `mesh` is its leaves, `fine` and `coarse` its two blades,
-     * `crown` its distant shells, `center` where its distance is measured.
+     * `crown` its distant shells, `center` where its distance is measured,
+     * `far` the share of its leaves (from the first) that level 1 draws.
      */
-    adopt({ mesh, fine, coarse, crown = null, underneath = [], center }) {
-      const lod = { mesh, fine, coarse, crown, underneath, center, level: 0 };
+    adopt({ mesh, fine, coarse, crown = null, underneath = [], center, far = 0.5 }) {
+      const lod = { mesh, fine, coarse, crown, underneath, center, far, level: 0 };
       lods.push(lod);
       foliage.push(mesh);
       show(lod);
@@ -977,9 +980,10 @@ export function createTrees(placements, groundHeight = () => 0) {
 
 /**
  * One tree's distant crown: a lumpy shell around each of its leaf clusters,
- * merged into one mesh. `stretch` lengthens the shells downward (willows).
+ * merged into one mesh. `stretch` lengthens the shells downward (willows);
+ * `rough` adds broader lumps (the shade inside a wood's crowns).
  */
-export function crownShells(clusters, stretch, material, shell) {
+export function crownShells(clusters, stretch, material, shell, rough = 0) {
   const parts = [],
     color = new T.Color();
   for (const { center, radius, color: base } of clusters) {
@@ -993,9 +997,17 @@ export function crownShells(clusters, stretch, material, shell) {
         z = position.getZ(i),
         // Lumps that depend only on the vertex's direction, so the shell
         // stays closed; the shells sit a little inside the leaves' reach.
-        lump = 0.86 + 0.12 * Math.sin(x * 5.1 + center.x) * Math.sin(y * 4.3 + z * 3.7 + center.z),
+        lump =
+          0.86 +
+          0.12 * Math.sin(x * 5.1 + center.x) * Math.sin(y * 4.3 + z * 3.7 + center.z) +
+          rough * Math.sin(x * 3.3 - z * 4.1 + center.z * 2.3) * Math.sin(y * 3.9 + x * 2.2 + center.x * 1.9),
         down = y < 0 ? stretch : 1;
-      normal.setXYZ(i, x, y, z);
+      if (rough) {
+        // A rough shell faces mostly up, so it takes the light evenly instead
+        // of shading round like a ball.
+        const n = Math.hypot(x * 0.35, y * 0.35 + 1, z * 0.35);
+        normal.setXYZ(i, (x * 0.35) / n, (y * 0.35 + 1) / n, (z * 0.35) / n);
+      } else normal.setXYZ(i, x, y, z);
       position.setXYZ(
         i,
         center.x + x * radius * lump * 1.05,
@@ -1004,6 +1016,9 @@ export function crownShells(clusters, stretch, material, shell) {
       );
       // Darker underneath, as the leaves' own shade would make it.
       color.copy(base).multiplyScalar(0.44 + 0.3 * (y * 0.5 + 0.5));
+      // Mottled, as the shade between leaf clumps is.
+      if (rough)
+        color.multiplyScalar(1 + rough * 2.2 * Math.sin(x * 8.3 + z * 2.9 + center.x * 3.1) * Math.sin(y * 7.1 - z * 6.7 + center.z * 2.7));
       color.toArray(colors, i * 3);
     }
     geometry.setAttribute("color", new T.BufferAttribute(colors, 3));

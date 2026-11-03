@@ -118,6 +118,10 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
               crown,
               underneath: [shells],
               center: leaves.boundingSphere.center.clone(),
+              // The coarse level keeps a quarter of a stand's leaves (half of
+              // the great oak's), so zoomed out the wood costs what it did
+              // with half as many leaves up close.
+              far: stand.name === "great oak" ? 0.5 : FAR_SHARE,
             });
             if (stand.name === "great oak")
               world.interactables.push({
@@ -343,8 +347,8 @@ const KINDS = {
     cluster: [1.05, 1.25],
     side: [0.75, 0.9],
     crown: 1.2,
-    perCluster: 30,
-    leafSize: [0.3, 0.4],
+    perCluster: 60,
+    leafSize: [0.33, 0.44],
   },
   beech: {
     leaves: ["#c08a3e", "#cf9d4c", "#b07438", "#d8b05c", "#a7883f"],
@@ -358,10 +362,68 @@ const KINDS = {
     cluster: [0.95, 1.1],
     side: [0.7, 0.85],
     crown: 1.1,
-    perCluster: 30,
-    leafSize: [0.28, 0.38],
+    perCluster: 60,
+    leafSize: [0.31, 0.42],
   },
 };
+
+// Each cluster's shell sits this deep inside its leaves (a fraction of its
+// radius), this dark beside them, this squat underneath and this lumpy. The
+// leaves reach down to LOWEST below the cluster's centre (the great oak's,
+// which walkers stand under, all the way round); below that the shell's
+// shade is the crown's underside.
+const SHELL = 0.56,
+  SHELL_TONE = 0.6,
+  SHELL_UNDER = 0.75,
+  SHELL_ROUGH = 0.16,
+  LOWEST = 0.72,
+  // The share of a stand's leaves the overview's coarse level draws.
+  FAR_SHARE = 0.25;
+
+/**
+ * A leaf lying on a crown where the outward normal is `n`: its face turned
+ * out, its tip drooping roughly downhill and lifted a little off the crown,
+ * so from above it shows its face rather than its edge.
+ */
+function shingle(T, n, rand) {
+  // Downhill on the crown: straight down, less its part along the normal.
+  const down = new T.Vector3(0, -1, 0).addScaledVector(n, n.y);
+  if (down.lengthSq() < 1e-6) down.set(1, 0, 0);
+  down.normalize();
+  const across = new T.Vector3().crossVectors(n, down),
+    spin = (rand() - 0.5) * 2.8,
+    lift = 0.2 + rand() * 0.55,
+    tip = down
+      .multiplyScalar(Math.cos(spin))
+      .addScaledVector(across, Math.sin(spin))
+      .multiplyScalar(Math.cos(lift))
+      .addScaledVector(n, Math.sin(lift))
+      .normalize(),
+    face = n.clone().addScaledVector(tip, -n.dot(tip)).normalize(),
+    side = new T.Vector3().crossVectors(face, tip),
+    roll = new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 0, 1), (rand() - 0.5) * 0.9);
+  return new T.Quaternion()
+    .setFromRotationMatrix(new T.Matrix4().makeBasis(side, face, tip))
+    .multiply(roll);
+}
+
+/**
+ * Reshapes a copy of the coarse blade, a rhombus, into a leaf: broadest a
+ * third of the way up and narrower, so lying face up it no longer reads as
+ * a square. Same triangles, about the same area once the wood scales it up.
+ */
+function kite(geometry) {
+  const position = geometry.attributes.position;
+  let tip = 0;
+  for (let i = 0; i < position.count; i++) tip = Math.max(tip, position.getZ(i));
+  for (let i = 0; i < position.count; i++) {
+    const z = position.getZ(i);
+    if (z > tip * 0.05 && z < tip * 0.95) position.setZ(i, tip * 0.36);
+    position.setX(i, position.getX(i) * 0.78);
+  }
+  geometry.computeVertexNormals();
+  return geometry;
+}
 
 // Paints the bark of the last limb pushed to `out`: the kind's own bark,
 // greening with moss low down and on its upper side.
@@ -396,8 +458,7 @@ function treeBuilder(T, world, stand, leafMaterials) {
     wood = [],
     shells = [],
     leaves = [],
-    crownClusters = [],
-    axis = new T.Vector3(0, 0, 1);
+    crownClusters = [];
   let next = 0;
   function* build(tree, order) {
     // A tree's place in its first band (see woodJobs), which seeds its shape.
@@ -496,38 +557,29 @@ function treeBuilder(T, world, stand, leafMaterials) {
         radius = cluster.radius * wide,
         baseColor = leafColors[(index + c) % leafColors.length],
         // The great oak, which walkers stand under, keeps the village trees'
-        // finer leaf; the rest of the wood draws the coarse blade, twice a
-        // fine leaf's area for half its triangles, so half as many cover a
-        // crown (see the leaves' mesh below).
+        // finer leaf; the rest of the wood draws the coarse blade shaped as a
+        // leaf (see kite), twice a fine leaf's area for half its triangles,
+        // so half as many cover a crown (see the leaves' mesh below).
         count = great ? 84 : Math.round(style.perCluster * (tree.young ? tree.scale + 0.15 : 1));
       crownClusters.push({ center, radius, color: baseColor });
-      // The shell is the crown's leafy mass, in the leaves' own colour (its
-      // underside shaded); the leaves stand out from its surface.
-      shells.push({ center, radius: radius * 0.8, color: baseColor.clone().multiplyScalar(1.3) });
-      // Leaves spread over the cluster's outer layer, pointing outward.
+      // The shell is the shade deep inside the cluster, well within the
+      // leaves and darker than them, as in the orchard: the leaves make the
+      // crown's surface, and the shell only shows through their gaps.
+      shells.push({ center, radius: radius * SHELL, color: baseColor.clone().multiplyScalar(SHELL_TONE) });
+      // Leaves lie over the cluster's outer layer like shingles, face out and
+      // tips drooping outward, so each shows its face to the sky and the
+      // camera above; most sit on the crown's top and flanks, which are seen.
       for (let j = 0; j < count; j++) {
-        const y = 1 - (2 * (j + 0.5)) / count,
+        const y = 1 - ((1 + (great ? 1 : LOWEST)) * (j + 0.5)) / count,
           ring = Math.sqrt(1 - y * y),
           a = j * 2.39996 + c * 0.7 + rotation,
-          direction = new T.Vector3(Math.cos(a) * ring, y * 0.8, Math.sin(a) * ring).normalize(),
-          depth = range(0.84, 1.08),
+          direction = new T.Vector3(Math.cos(a) * ring, y * 0.82, Math.sin(a) * ring).normalize(),
+          depth = range(0.68, 1.04),
           position = center
             .clone()
-            .add(
-              new T.Vector3(
-                direction.x * radius * depth,
-                direction.y * radius * 0.82 * depth,
-                direction.z * radius * depth,
-              ),
-            ),
-          out = direction
-            .clone()
-            .add(new T.Vector3(range(-0.6, 0.6), range(-0.2, 0.7), range(-0.6, 0.6)))
-            .normalize(),
-          quaternion = new T.Quaternion()
-            .setFromUnitVectors(axis, out)
-            .multiply(new T.Quaternion().setFromAxisAngle(axis, range(-1, 1))),
-          size = (great ? range(0.36, 0.48) : range(...style.leafSize)) * Math.sqrt(wide);
+            .add(new T.Vector3(direction.x, direction.y * 0.82, direction.z).multiplyScalar(radius * depth)),
+          quaternion = shingle(T, direction, rand);
+        const size = (great ? range(0.36, 0.48) : range(...style.leafSize)) * Math.sqrt(wide);
         leaves.push({
           position,
           quaternion,
@@ -546,7 +598,8 @@ function treeBuilder(T, world, stand, leafMaterials) {
   const shellShape = new T.IcosahedronGeometry(1, 1),
     shellParts = [],
     crownParts = [],
-    shape = (clusters) => crownShells(clusters, 1, materials.crown, shellShape).geometry;
+    shape = (clusters, stretch = 1, rough = 0) =>
+      crownShells(clusters, stretch, materials.crown, shellShape, rough).geometry;
   let building = null,
     shellsFrom = 0,
     crownsFrom = 0;
@@ -562,7 +615,9 @@ function treeBuilder(T, world, stand, leafMaterials) {
       if (building.next().done) {
         building = null;
         next++;
-        if (shells.length > shellsFrom) shellParts.push(shape(shells.slice(shellsFrom)));
+        // The shade inside is lumpier than a distant crown, and flatter
+        // underneath, so it never shows through the leaves as a ball.
+        if (shells.length > shellsFrom) shellParts.push(shape(shells.slice(shellsFrom), SHELL_UNDER, SHELL_ROUGH));
         if (crownClusters.length > crownsFrom) crownParts.push(shape(crownClusters.slice(crownsFrom)));
         shellsFrom = shells.length;
         crownsFrom = crownClusters.length;
@@ -579,12 +634,14 @@ function treeBuilder(T, world, stand, leafMaterials) {
     const shellMesh = new T.Mesh(merged(shellParts), materials.crown);
     shellMesh.name = `${name}: canopy shade`;
     shellMesh.castShadow = false;
-    const ordered = [...leaves.filter((_, i) => i % 2 === 0), ...leaves.filter((_, i) => i % 2)],
+    // Every fourth leaf first, then the rest of the even ones, then the odd:
+    // the overview's coarse level draws a leading share, evenly spread.
+    const ordered = [0, 2, 1, 3].flatMap((k) => leaves.filter((_, i) => i % 4 === k)),
       lift = new T.InstancedBufferAttribute(Float32Array.from(ordered, (l) => l.lift), 1),
       // Away from the great oak, even the nearest leaves are the coarse
       // blade; far off (level 1) half of them still show.
-      fine = (stand.name === "great oak" ? blades.fine : blades.coarse).clone(),
-      coarse = blades.coarse.clone();
+      fine = stand.name === "great oak" ? blades.fine.clone() : kite(blades.coarse.clone()),
+      coarse = kite(blades.coarse.clone());
     fine.setAttribute("groundLift", lift);
     coarse.setAttribute("groundLift", lift);
     const leafMesh = new T.InstancedMesh(fine, leafMaterials.leaf, ordered.length),
