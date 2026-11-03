@@ -7,6 +7,7 @@
 import { marketDefaults } from "./market.js";
 import { marshDefaults } from "./marsh.js";
 import { woodDefaults } from "./wood.js";
+import { allotmentDefaults, cropBasket } from "./allotments.js";
 
 // The key predates save versions; the version now lives inside the save.
 export const STORAGE = "willowmere.save.v1";
@@ -41,10 +42,11 @@ export function defaultState() {
     quests: { mabel: false, flower: false, plant: false },
     // Catches from the millpond, by species.
     fish: {},
-    // The orchard's fruit and honey: what is in the basket, what has been
-    // gathered all told, and when each tree was shaken and each hive opened.
-    basket: { apple: 0, pear: 0, honey: 0 },
-    harvested: { apple: 0, pear: 0, honey: 0 },
+    // The orchard's fruit and honey and the allotments' vegetables: what is
+    // in the basket, what has been gathered all told, and when each tree was
+    // shaken and each hive opened.
+    basket: { apple: 0, pear: 0, honey: 0, ...cropBasket() },
+    harvested: { apple: 0, pear: 0, honey: 0, ...cropBasket() },
     orchard: {},
     // Finn's bread deliveries and what the market stalls sold.
     ...marketDefaults(),
@@ -52,6 +54,8 @@ export function defaultState() {
     ...marshDefaults(),
     // Woodland flowers pressed in the old wood.
     ...woodDefaults(),
+    // The allotment plots rented, and what each has sown.
+    ...allotmentDefaults(),
     gathered: [],
     plants: [],
     started: false,

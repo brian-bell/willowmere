@@ -90,6 +90,25 @@ export const LANDMARK_LINES = {
     "A weathered fingerpost: “The Old Wood. Mind the roots, mind the fairies.”",
     "Below the arrow, smaller letters: “Bluebells in May. Rowan at the clearing most days.”",
   ],
+  "potting-shed": [
+    "Basil’s potting shed smells of tomato leaves, twine and creosote. A radio murmurs the shipping forecast inside.",
+    "Seed packets hang from a string along the window, each one labelled in careful pencil.",
+  ],
+  "water-butt": [
+    "The water butt is brimming with rain off the shed roof. Basil swears his beans prefer it.",
+  ],
+  compost: [
+    "Three bays: this year’s heap, last year’s, and the black crumbly stuff that’s ready to dig in.",
+  ],
+  "cold-frames": [
+    "Under the glass, rows of seedlings stretch toward the light. It’s as warm as a greenhouse in there.",
+  ],
+  scarecrow: [
+    "The scarecrow wears an old blue coat with patched elbows. A robin is perched on its hat.",
+  ],
+  "allotment-board": [
+    "WILLOWMERE ALLOTMENTS. Plots to let, apply to Basil. Spare marrows free to a good home.",
+  ],
 };
 
 // Any landmark without lines of its own.

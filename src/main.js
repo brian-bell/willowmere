@@ -847,7 +847,7 @@ function animate(now) {
   renderer.toneMappingExposure = THREE.MathUtils.lerp(1.05, 0.95, duskMix);
   effects.update(dt, motion);
   if (frame % 8 === 0) interactions.scan();
-  if (frame % 120 === 0) activities.updateOrchard();
+  if (frame % 120 === 0) activities.updateHarvests();
   for (const material of glowMaterials)
     material.emissiveIntensity = THREE.MathUtils.lerp(0.25, 2.0, duskMix);
   playerVisibility.update(camera, !photo && !firstPerson);

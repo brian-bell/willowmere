@@ -2,6 +2,7 @@
 import { FISH } from "../fishing.js";
 import { BIRDS } from "../game/marsh.js";
 import { FLOWERS } from "../game/wood.js";
+import { CROPS, PLOTS } from "../game/allotments.js";
 
 // The welcome quests, in the order the quest card lists them.
 export const QUESTS = ["mabel", "flower", "plant"];
@@ -11,7 +12,7 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 /**
  * The journal's entries as [title, text] rows, for a save's `state` and the
  * region id the player stands in. The millpond, orchard, market lane,
- * marsh and old wood entries appear once the player has been there or done something there.
+ * marsh, old wood and allotment entries appear once the player has been there or done something there.
  */
 export function journalEntries(state, here) {
   const rows = [
@@ -77,6 +78,17 @@ export function journalEntries(state, here) {
       pressed.length
         ? `You’ve pressed ${pressed.length} of ${FLOWERS.length} woodland flowers: ${pressed.map((flower) => flower.name.toLowerCase()).join(", ")}.${pressed.length < FLOWERS.length ? " Rowan, by the clearing, knows where the others grow." : ""}`
         : "Find the woodland flowers in the old wood, west of the meadow, and press one of each. Rowan, by the clearing, knows where they grow.",
+    ]);
+  const rented = PLOTS.filter((plot) => state.plots[plot.id]?.rented),
+    grown = Object.keys(CROPS).filter((crop) => state.harvested[crop]);
+  if (rented.length || here === "allotments")
+    rows.push([
+      "The allotments",
+      grown.length
+        ? `You’ve grown ${grown.map((crop) => plural(state.harvested[crop], CROPS[crop].one, CROPS[crop].many)).join(", ")} on ${plural(rented.length, "bed")} of your own. Finn buys every one.`
+        : rented.length
+          ? `You rent ${plural(rented.length, "bed")} of ${PLOTS.length} at the allotments. Sow, water, then wait for them to grow.`
+          : "Rent a bed at the allotments, south of the kitchen garden, and grow vegetables for Finn. Basil, by the shed, keeps the plots.",
     ]);
   return rows;
 }

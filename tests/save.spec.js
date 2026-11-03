@@ -38,7 +38,7 @@ test("a save from before versions gets plant ids and every default it lacks", { 
   expect(state.version).toBe(SAVE_VERSION);
   expect(state.coins).toBe(7);
   expect(state.seeds).toBe(5);
-  expect(state.basket).toEqual({ apple: 0, pear: 0, honey: 0 });
+  expect(state.basket).toEqual({ apple: 0, pear: 0, honey: 0, carrot: 0, lettuce: 0, bean: 0, pumpkin: 0 });
   // Quests the save never heard of start undone; its own keep their answer.
   expect(state.quests).toEqual({ mabel: true, flower: false, plant: false });
   expect(state.plants.map((p) => p.id)).toEqual([5, 4, 6]);
@@ -74,7 +74,7 @@ test("merging keeps saved records, and defaults replace values of the wrong kind
   expect(state.orchard).toEqual({ "tree-3": 1234 });
   expect(state.birds).toEqual({ heron: 1 });
   expect(state.coins).toBe(120);
-  expect(state.harvested).toEqual({ apple: 0, pear: 4, honey: 0 });
+  expect(state.harvested).toEqual({ ...defaultState().harvested, pear: 4 });
   expect(state.deliveries).toEqual({ carrying: [], made: 2, rounds: 0, last: 0 });
   expect(state.later).toEqual({ kept: true });
 });
