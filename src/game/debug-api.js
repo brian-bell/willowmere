@@ -98,7 +98,7 @@ export function createDebugApi(g) {
       crops: Object.fromEntries(
         ["carrots", "lettuces", "runner beans", "pumpkins"].map((many) => {
           const mesh = g.scene.getObjectByName(`Allotment ${many}`);
-          return [many, mesh ? mesh.visible : null];
+          return [many, mesh ? mesh.count > 0 : null];
         }),
       ),
       boards: g.scene.getObjectByName("Allotment to-let boards")?.count ?? null,

@@ -8,10 +8,11 @@
 // a time. Its shape and colliders live in allotments-layout.js, which loads
 // with the village.
 //
-// The structures and the neighbours' crops are two vertex-coloured meshes,
-// one each side of the main path; the player's crops are one instanced mesh
-// per bed that shows only while something grows there, and the beds' "to
-// let" boards one more. No textures and no new shader programs.
+// The structures are two vertex-coloured meshes, one each side of the main
+// path, and the neighbours' crops a third; the player's crops are one instanced mesh
+// per bed that draws only while something grows there, and the beds' "to
+// let" boards one more, both hidden when the overview zooms far out. No
+// textures and no new shader programs.
 import { chunkRandom } from "../world-layout.js";
 import { createKit } from "./kit.js";
 import { ALLOTMENTS as A, FENCE_RUNS, plotFront } from "./allotments-layout.js";
@@ -58,23 +59,26 @@ export function allotmentJobs(T, world, { life } = {}) {
       -17.5,
       29,
       () => {
-        const k = createKit(T, { segments: 6, sphereDetail: 0 });
+        const k = createKit(T, { segments: 6, sphereDetail: 0 }),
+          crops = k.layer();
         fence(k, (x) => x < A.path.x);
         for (const plot of A.neighbours) {
           bed(k, plot);
-          NEIGHBOUR_CROPS[plot.id](k, plot, range);
+          k.into(crops, () => NEIGHBOUR_CROPS[plot.id](k, plot, range));
         }
         scarecrow(k, A.scarecrow);
         coldFrames(k, A.coldFrames);
         noticeboard(k, A.noticeboard);
         barrow(k, A.barrow);
-        const mesh = k.mesh("Allotments (west)", material);
+        const meshes = [k.mesh("Allotments (west)", material), k.mesh("Allotment neighbours' crops", material, crops)];
         k.dispose();
-        return [mesh];
+        return meshes;
       },
-      (meshes) => {
-        // Zoomed far out, their shadows are a few pixels.
-        added(meshes, { fineShadow: true });
+      ([structures, crops]) => {
+        // Zoomed far out, their shadows are a few pixels, and the crops,
+        // like the player's, hide.
+        added([structures], { fineShadow: true });
+        added([crops], { far: true, fineShadow: true });
         world.interactables.push(
           { id: "scarecrow", name: "Scarecrow", x: A.scarecrow.x + 2.3, z: A.crossPath.z, radius: 1.1 },
           { id: "cold-frames", name: "Cold frames", x: A.coldFrames.x, z: A.coldFrames.z - 1.05, radius: 1.2 },
@@ -110,8 +114,9 @@ export function allotmentJobs(T, world, { life } = {}) {
       },
     ),
     job("allotment crops", -6.5, 28.6, () => beds.build(), (meshes) => {
-      // Zoomed far out, the crops' shadows are a pixel or two.
-      added(meshes, { fineShadow: true });
+      // Zoomed far out, the crops and boards are a pixel or two: they hide.
+      added(meshes, { far: true, fineShadow: true });
+      beds.start();
       for (const plot of A.plots) {
         const front = plotFront(plot);
         world.interactables.push({
@@ -612,7 +617,8 @@ function createBeds(T, material) {
     euler = new T.Euler(),
     scale = new T.Vector3();
   let shapes = null,
-    boards = null;
+    boards = null,
+    ready = false;
   const plots = A.plots;
   function place(mesh, plot, growth) {
     const { slots } = shapes[plot.crop],
@@ -631,23 +637,25 @@ function createBeds(T, material) {
     mesh.instanceMatrix.needsUpdate = true;
     mesh.userData.growth = growth;
   }
+  // A bed's board stands in its corner by the cross path.
+  const boardAt = (p, i) =>
+    matrix
+      .makeRotationY(0.12 * (i % 2 ? 1 : -1))
+      .setPosition(p.x - 1.3, A.soil, plotFront(p).z < p.z ? p.z - p.d / 2 + 0.25 : p.z + p.d / 2 - 0.25);
   function apply(id) {
     const plot = plots.find((p) => p.id === id),
       mesh = meshes.get(id),
       { stage, growth } = wanted.get(id) ?? { stage: "free", growth: 0 };
     if (!mesh) return;
+    // Hidden crops draw no instances; visibility belongs to the zoom detail.
     const showing = stage === "growing" || stage === "ripe";
-    mesh.visible = showing;
+    mesh.count = showing ? shapes[plot.crop].slots(plot).length : 0;
     const size = stage === "ripe" ? 1 : Math.round(growth * 40) / 40;
     if (showing && mesh.userData.growth !== size) place(mesh, plot, size);
     // The boards stand in the beds still to let.
     const free = plots.filter((p) => (wanted.get(p.id)?.stage ?? "free") === "free");
-    free.forEach((p, i) => {
-      matrix.makeRotationY(0.12 * (i % 2 ? 1 : -1)).setPosition(p.x - 1.3, A.soil, plotFront(p).z < p.z ? p.z - p.d / 2 + 0.25 : p.z + p.d / 2 - 0.25);
-      boards.setMatrixAt(i, matrix);
-    });
+    free.forEach((p, i) => boards.setMatrixAt(i, boardAt(p, i)));
     boards.count = free.length;
-    boards.visible = free.length > 0;
     boards.instanceMatrix.needsUpdate = true;
   }
   return {
@@ -662,7 +670,6 @@ function createBeds(T, material) {
         mesh.matrixAutoUpdate = false;
         // Bounds of the grown crop, which growing never leaves.
         place(mesh, plot, 1);
-        mesh.computeBoundingSphere();
         mesh.userData.dynamic = true;
         meshes.set(plot.id, mesh);
         built.push(mesh);
@@ -671,22 +678,24 @@ function createBeds(T, material) {
       boards.name = "Allotment to-let boards";
       boards.castShadow = boards.receiveShadow = true;
       boards.matrixAutoUpdate = false;
-      plots.forEach((p, i) => {
-        matrix.makeTranslation(p.x - 1.3, A.soil, p.z);
-        boards.setMatrixAt(i, matrix);
-      });
-      boards.computeBoundingSphere();
-      boards.boundingSphere.radius += 3;
+      plots.forEach((p, i) => boards.setMatrixAt(i, boardAt(p, i)));
       boards.userData.dynamic = true;
       built.push(boards);
-      for (const plot of plots) apply(plot.id);
       return built;
+    },
+    /**
+     * Shows each bed at its stage, once its meshes have joined their chunks
+     * (which size their bounds from every instance, grown).
+     */
+    start() {
+      ready = true;
+      for (const plot of plots) apply(plot.id);
     },
     show(id, stage, growth) {
       const before = wanted.get(id);
       if (before?.stage === stage && Math.abs(before.growth - growth) < 0.02) return;
       wanted.set(id, { stage, growth });
-      if (boards) apply(id);
+      if (ready) apply(id);
     },
   };
 }
