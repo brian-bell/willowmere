@@ -249,6 +249,31 @@ These tests assert rendering work and behavior instead of a machine-dependent FP
 
 Per-change measurements, each against the previous `main` (`1a2624c`) at the time, in the order the changes landed. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the current combined baseline.
 
+### Old wood (2026-11-03)
+
+Phase 5's third region. West of the wildflower meadow, from the village's edge to the map's rim and between the orchard hill and the south-west fields, a strip of woodland on a gently rolling floor (never more than about a metre, level in the clearing and flat at the village's edge): three earth trails, 64 oaks and amber beeches (16 of them young trees between the crowns), the great oak, a mossy clearing with a fairy ring whose mushrooms glow at blue hour, a hollow log, stumps and fallen branches, ferns, toadstools, a fingerpost, soft shafts of sunlight, and patches of seven woodland flowers that the player presses into the journal. Rowan, who forages here, joins at her stump table through `life.addResident`. The wood's shape, heights, trees, colliders and grass mask load with the village from `src/regions/wood-layout.js`; fourteen jobs stream in from `src/regions/wood.js` (the floor, six stands of trees and the great oak, the logs, stumps and Rowan's table, the ferns, the mushrooms and fairy ring, the flowers, the light shafts, and Rowan).
+
+- **Trees.** Built a limb per slice into one bark mesh, one shell mesh, one instanced leaf mesh and one distant-crown mesh per stand, each stand one level of detail. The shells are the crowns' leafy mass in the leaves' own colours (dark shells read as black balls through gaps), and every stand but the great oak draws the coarse blade even up close: twice a fine leaf's area for half its triangles, so half as many leaves cover a crown. All the wood's leaves come to 66k triangles; a first draft with fine blades added about 1M triangles at the wood's overview.
+- **Floor.** One 0.4 m grid with vertex-coloured moss, litter and trails, like the orchard's. The open country's grass gives out a few metres in from the meadow, since scattered blades read as spikes. Ferns, flowers and toadstools only take shadows.
+- **Light shafts.** Six open tubes along the sun's direction in one additive mesh, a small shader of their own, faded out by blue hour. The wood overview compiles 75–76 shader programs against `main`'s 71 there.
+- **The village.** Every region after the orchard's now stays out of the village scatter's colliders (`laterSet` in `src/world.js`), so the village's random stream is unchanged; its scene fingerprint matches `main`'s except the open country's grass, which gains the wood's notch.
+
+Counted in the cloud container (SwiftShader, so no timings) at 1200 × 750, high quality, `?resolution=fixed`, with the frame-locked probe, against `main` (`7e38f0f`):
+
+| View | `main` draws / triangles | Old wood draws / triangles |
+| --- | --- | --- |
+| Clearing (-35.5, 0), height 18 | 354 / 2.01M (empty field) | 502 / 2.44M |
+| Clearing, height 30 | 611 / 2.11M | 702 / 2.35M |
+| Trail by Rowan's table (-31.5, 2.5), height 18 | 475 / 2.17M | 605 / 2.57M |
+| Trail by Rowan's table, height 30 | 685 / 2.28M | 775 / 2.51M |
+| Village spawn (-2.8, 6.2), height 18 | 766 / 2.88M | 784 / 2.98M |
+| First person by Rowan's table (-30.4, 3.6), facing the clearing | 212 / 0.79M | 277 / 1.07M |
+| First person on the trail from the meadow (-24.6, 5.1) | 225 / 0.82M | 316 / 1.07M |
+| First person by the great oak (-35.8, -5.2) | 180 / 0.65M | 241 / 0.89M |
+| First person in the clearing at blue hour | 181 / 0.74M | 240 / 0.98M |
+
+`tests/performance.spec.js` holds the benchmark's wood viewpoint, the clearing (-35.5, 0), under 1,000 draws and 2.5M triangles at height 18 and at the zoom cap. `npm run benchmark` measures it as "high, wood" and "high, wood, first person"; `--ablate` adds the wood at height 30. Nearer the village the overview takes in the village's west side too and runs a little over 2.5M, as the village's south edge does since the marsh.
+
 ### Willow marsh (2026-11-02)
 
 Phase 5's second region. South of the village the brook runs on under a third footbridge into a shallow mere with two reedy islands, a boardwalk on stilts across its western shallows, a little bird hide with a turf roof on the south bank, a bench, four weeping willows, a heron that wades and strikes, lily pads, loosestrife and iris, and fireflies at blue hour. Wren, who watches birds by the bench, joins through `life.addResident`. The marsh's shape, heights, decks, colliders and grass mask load with the village from `src/regions/marsh-layout.js`; eleven jobs stream in from `src/regions/marsh.js` (the ground, the water, the crossings, the hide and bench, a job of willows on each bank, the reeds, the lilies and flowers, the heron, the fireflies, and Wren).

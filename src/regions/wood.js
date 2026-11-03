@@ -48,8 +48,17 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
   const rand = chunkRandom(-2, 0, 17),
     range = (a, b) => a + (b - a) * rand();
   const job = (key, x, z, step, added) => ({ key, x, z, step, added });
+  // The nearest water, the village's brook, lies 36 m off: none of the wood
+  // would show in its reflections.
   const added = (meshes) => {
-    for (const mesh of meshes) world.addStreamed(mesh);
+    for (const mesh of meshes) {
+      world.addStreamed(mesh);
+      world.water.excludeFromCaptures(mesh);
+    }
+  };
+  const addedDetail = (mesh) => {
+    world.addStreamed(mesh, { detail: true });
+    world.water.excludeFromCaptures(mesh);
   };
   const leafMaterials = world.trees.materials.grounded(new T.Vector4(0, 0, -1e4, 0)),
     painted = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.88 });
@@ -91,7 +100,6 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
             leaves.computeBoundingSphere();
             leaves.geometry = leaves.userData.fine;
             leaves.boundingSphere.radius += 0.14;
-            world.water.excludeFromCaptures(leaves, crown);
             world.trees.adopt({
               mesh: leaves,
               fine: leaves.userData.fine,
@@ -126,15 +134,12 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
         { id: "wood-signpost", name: "Fingerpost", x: W.signpost.x, z: W.signpost.z - 0.7, radius: 1.2 },
       );
     }),
-    job("wood ferns", -36, 2, () => ferns(T, range), ([mesh]) => {
-      world.addStreamed(mesh, { detail: true });
-      world.water.excludeFromCaptures(mesh);
-    }),
+    job("wood ferns", -36, 2, () => ferns(T, range), ([mesh]) => addedDetail(mesh)),
     job("wood mushrooms and fairy ring", W.ring.x, W.ring.z, () => mushrooms(T, range), (meshes) => {
       const [toadstools, ring] = meshes;
-      world.addStreamed(toadstools, { detail: true });
+      addedDetail(toadstools);
       // The ring glows at blue hour, like the village's lamps.
-      world.addStreamed(ring);
+      added([ring]);
       world.interactables.push({
         id: "fairy-ring",
         name: "Fairy ring",
@@ -144,10 +149,8 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
       });
     }),
     job("wood flowers", -33, 2, () => flowers(T, range), (meshes) => {
-      const [stems, blooms, honeysuckle] = meshes;
-      world.addStreamed(stems, { detail: true });
-      world.addStreamed(blooms, { detail: true });
-      world.addStreamed(honeysuckle, { detail: true });
+      const honeysuckle = meshes[2];
+      for (const mesh of meshes) addedDetail(mesh);
       const open = honeysuckle.userData.open;
       world.animate(W.flowers.honeysuckle.x, W.flowers.honeysuckle.z, () => open(dusk()));
       for (const flower of FLOWERS) {
@@ -164,7 +167,7 @@ export function woodJobs(T, world, { life, dusk = () => 0 } = {}) {
       }
     }),
     job("wood light shafts", W.clearing.x, W.clearing.z, () => shafts(T), ([mesh]) => {
-      world.addStreamed(mesh);
+      added([mesh]);
       const shine = mesh.userData.shine;
       world.animate(W.clearing.x, W.clearing.z, (dt, t, clock) => shine(clock, dusk()));
     }),
@@ -557,7 +560,9 @@ function treeBuilder(T, world, stand, leafMaterials) {
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
     }
-    woodMesh.castShadow = true;
+    // Under a closed canopy the trunks' shadows fall in the leaves' shade;
+    // only the great oak, which stands in the open, casts its own.
+    woodMesh.castShadow = stand.name === "great oak";
     return [woodMesh, shellMesh, leafMesh, crownMesh];
   };
 }
@@ -803,7 +808,7 @@ function fernGeometry(T) {
 
 /** Ferns and bracken over the floor, thickest under the trees. */
 function ferns(T, range) {
-  const count = 400,
+  const count = 340,
     mesh = new T.InstancedMesh(
       fernGeometry(T),
       new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: T.DoubleSide }),
