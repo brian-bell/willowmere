@@ -107,8 +107,8 @@ export function createInteractions({
       return;
     }
     const id = nearest.data.id || nearest.data.type;
-    if (id === "bakery" || id === "home") {
-      enterInterior(id === "home" ? "rosewood" : "bakery");
+    if (id === "bakery" || id === "home" || id === "heron") {
+      enterInterior(id === "home" ? "rosewood" : id);
       return;
     }
     if (id === "jetty") {
@@ -186,6 +186,8 @@ export function createInteractions({
               ? "Enter The Daily Loaf"
               : i.id === "home"
                 ? "Step inside Rosewood"
+                : i.id === "heron"
+                  ? "Step into The Drowsy Heron"
                 : i.type === "stall"
                 ? activities.stallLabel(i.stall, session.dusk)
                 : i.type === "wood-flower"

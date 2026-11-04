@@ -4,10 +4,11 @@ Where Willowmere's code lives, how the world beyond the village plugs in, and ho
 
 ## Entry points
 
-- `index.html` loads `src/main.js`, the game. `/?interior=bakery` starts inside the bakery, `/?interior=rosewood` inside Rosewood, your cottage.
+- `index.html` loads `src/main.js`, the game. `/?interior=bakery` starts inside the bakery, `/?interior=rosewood` inside Rosewood, your cottage, `/?interior=heron` inside The Drowsy Heron.
 - `water-study.html` loads `src/water-study.js`, a close-up view of the village water with diagnostics. It is part of the production build.
 - `tree-study.html` is a close-up page (its script is inline) for the tree models. It is part of the production build.
-- The settings dialog lists the studies: a button into the bakery interior and links to both study pages.
+- `pub-study.html` loads `src/pub-study.js`, the design study for The Drowsy Heron, the inn on the market square. It is part of the production build. See [The Drowsy Heron](#the-drowsy-heron).
+- The settings dialog lists the studies: a button into the bakery interior and links to the three study pages.
 
 All art and audio are generated in code. `vite.config.js` splits Three.js into its own chunk, and each region's builder loads with `import()`, so it gets a chunk of its own.
 
@@ -43,11 +44,11 @@ Game text lives in `src/content/` (journal, landmarks, neighbours, and one file 
 - Life: `src/life.js` (the traveler, residents and wildlife), `src/cats.js`, `src/fishing.js` (the millpond's cast and bite).
 - Presentation: `src/bloom.js` (quarter-resolution bloom), `src/effects.js` (gathering, planting and watering particles), `src/visibility.js` (the player's silhouette behind scenery), `src/audio.js` (synthesized ambience), `src/icons.js` and `src/style.css`.
 - Water: `src/water.js` and `src/water-shaders.js`, described in [Water](water.md).
-- The walkable rooms: `src/interior.js` and `src/interior.css` (camera, input, interactions, postprocessing, pause menu, entry and exit, shared by every room), `src/interior-movement.js` (grounded movement and furniture collision), `src/interior-kit.js` (the rooms' seeded random stream, materials, primitives and the bake that merges a dressed room by material), and one builder per room: `src/bakery.js` (The Daily Loaf) and `src/rosewood.js` (your cottage: hall, living room, bedroom, kitchen and back garden, and Bark). A room returns its scene, shadowing lights, walkable layout, the points E answers at, and `update`; it may add `interact(point)` for activities, `takeNote()` for things that happen on their own, `staticShadows` when nothing that moves casts a shadow, and `diagnostics()`. A new room is a builder plus one line in `ROOMS` in `src/interior.js` and in `INTERIOR_NAMES` in `src/main.js`; its words go in `src/content/<room>.js`.
+- The walkable rooms: `src/interior.js` and `src/interior.css` (camera, input, interactions, postprocessing, pause menu, entry and exit, shared by every room), `src/interior-movement.js` (grounded movement and furniture collision), `src/interior-ao.js` (the rooms' contact occlusion, which the pub's study also uses), `src/interior-kit.js` (the rooms' seeded random stream, materials, primitives and the bake that merges a dressed room by material), and one builder per room: `src/bakery.js` (The Daily Loaf), `src/rosewood.js` (your cottage: hall, living room, bedroom, kitchen and back garden, and Bark) and `src/pub/room.js` (The Drowsy Heron). A room returns its scene, shadowing lights, walkable layout, the points E answers at, and `update`; it may add `interact(point)` for activities, `takeNote()` for things that happen on their own, `staticShadows` when nothing that moves casts a shadow, and `diagnostics()`. A new room is a builder plus one line in `ROOMS` in `src/interior.js` and in `INTERIOR_NAMES` in `src/main.js`; its words go in `src/content/<room>.js`.
 
 ## Regions
 
-Each area beyond the village (the millpond, the orchard hill, the market lane, the willow marsh, the old wood, the allotments, and the open fields around them) is an entry in the registry, `src/regions/index.js`. The terrain field, the location label, the open country's grass and soil, walking and click heights, planting, colliders and streaming all loop that list, so a new region adds one line there instead of edits to the core files. The fields an entry may set are documented at the top of that file.
+Each area beyond the village (the millpond, the orchard hill, the inn, the market lane, the willow marsh, the old wood, the allotments, and the open fields around them) is an entry in the registry, `src/regions/index.js`. The terrain field, the location label, the open country's grass and soil, walking and click heights, planting, colliders and streaming all loop that list, so a new region adds one line there instead of edits to the core files. The fields an entry may set are documented at the top of that file.
 
 A region has two halves:
 
@@ -57,6 +58,22 @@ A region has two halves:
 Builders make their structures with the shared parts kit in `src/regions/kit.js` (painted boxes, posts, beams, rods and glass, merged into one vertex-coloured mesh plus one glass mesh) and their paths with `src/regions/lines.js`, rather than their own helpers. They register meshes with `world.addStreamed(mesh, { detail })`, animations with `world.animate(x, z, update)` and lamps with `world.addLamps`, seed their layout with `chunkRandom(cx, cz)` and seat placements on `terrainHeight(x, z)`. Trees on raised ground share the village trees' resources through `world.trees`, as `src/regions/orchard.js` shows. [Rendering performance](performance.md#checklist-for-changes) lists the rules that keep a streamed region cheap.
 
 A region with gameplay usually also adds pure rules in `src/game/<region>.js`, its words in `src/content/<region>.js`, a benchmark viewpoint in `scripts/benchmark.mjs` and a draw budget in `tests/performance.spec.js`.
+
+## The Drowsy Heron
+
+The inn is designed once, as one continuous building inside and out, in `src/pub/`, and that design appears three ways: whole in its study, as a walkable room, and as a lean outside on the map.
+
+- `layout.js` is the design on paper, with no three.js: dimensions, walls and their openings, every table and bed, the stair, the storeys' colliders and the walk's floor heights. The builders, the study's walk and the plan drawing all read it, so a table moved here moves everywhere. Set out from it, the plan is an E: a central range between two gabled wings, with the gallery (the front balcony) in the gap.
+- `parts.js` paints the materials to known sizes in metres and holds the shared parts: hewn timbers, walls pierced by openings, leaded lights, twisted chimney shafts. `createStorey` wraps the rooms' kit (`src/interior-kit.js`) for each of the building's three parts.
+- `exterior.js` builds the shell, the roof and the yard, `great-room.js` the ground floor, `loft.js` the sleeping loft and the roof's frame, and `props.js` the furniture they share. `index.js` assembles them into `ground`, `upper` and `roof` groups, which is what lets the study lift the roof and the loft away. `setting.js` is the sky, sun and lamps that the study and the room share.
+- `plan.js` draws the measured plans as SVG from `layout.js`.
+- `src/pub-study.js` is the page: views and their notes from `src/content/pub.js`, cutaways, the time of day, and walking with the interior walker (`src/interior-movement.js`), swapping colliders as the stair changes storey.
+
+The roof's pitches are chosen so its planes meet exactly: the wings' slopes run through the main slope, and the line where they cross is the valley. The wings' upper rooms have flat ceilings, so nothing of that junction shows indoors.
+
+On the map it is a region like any other. `src/regions/heron-layout.js` sets the design down north of the market square, at 0.82 scale among its neighbours, facing south as every building does so the overview's camera sees its front. `src/regions/heron.js` runs the same `exteriorSections` from `exterior.js` with lean parts and flat colours, a section per slice of the streamer, so the outside cannot drift from the design. Nothing inside is built there; its door (E) opens the room.
+
+The room is `src/pub/room.js`, one line in `ROOMS` like the others, with one addition to the room contract that any room may use: `eyeAt(walker)` says how high the eye stands, since the stair runs between storeys. The room swaps the walker's colliders as it climbs, and its points answer only on their own storey. It adds no save state: resting in a bed only changes the light of the visit.
 
 ## Tests and the debug API
 
@@ -77,4 +94,5 @@ Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.
 | `water` | the water solver, captures, refraction and fallbacks (see [Water](water.md#verification)) |
 | `interior` | the walkable bakery and its rendering settings |
 | `rosewood` | Rosewood's rules (logic), its front door, rooms, Bark's following, fetch, dig and the other activities, and its draw budget |
+| `pub` | The Drowsy Heron: that every room and bed can be walked to, the stair's climb and the site's footprint (logic), the study's views, cutaways, draw budget and walk, and the door, stairs, balcony and draw budget of the room in the game |
 | `performance`, `tune`, `resolution`, `shadows` | rendering budgets and the measurement hooks (see [Regression budgets](performance.md#regression-budgets)) |

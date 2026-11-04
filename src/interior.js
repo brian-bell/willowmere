@@ -1,56 +1,14 @@
 import * as T from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { SoftBloomPass, BloomOutputPass } from "./bloom.js";
+import { InteriorAO } from "./interior-ao.js";
 import { createBakery } from "./bakery.js";
 import { createRosewood } from "./rosewood.js";
+import { createHeronRoom } from "./pub/room.js";
 import { createInteriorWalker } from "./interior-movement.js";
 import "./interior.css";
-
-class InteriorAO extends SSAOPass {
-  // The blurred contact occlusion is soft, so half resolution keeps its look
-  // while quartering the normal pass, sampling and blur fill.
-  resolutionScale = 0.5;
-
-  setSize(width, height) {
-    super.setSize(
-      Math.max(1, Math.round(width * this.resolutionScale)),
-      Math.max(1, Math.round(height * this.resolutionScale)),
-    );
-  }
-
-  setKernelSize(size) {
-    if (this.kernel.length === size) return;
-    this.kernel.length = 0;
-    this._generateSampleKernel(size);
-    this.ssaoMaterial.defines.KERNEL_SIZE = size;
-    this.ssaoMaterial.needsUpdate = true;
-  }
-
-  render(renderer, ...args) {
-    // RenderPass already updated the shadows for this frame. The normal pass
-    // needs only geometry, so reuse those same shadow maps.
-    const autoUpdate = renderer.shadowMap.autoUpdate;
-    renderer.shadowMap.autoUpdate = false;
-    try {
-      super.render(renderer, ...args);
-    } finally {
-      renderer.shadowMap.autoUpdate = autoUpdate;
-    }
-  }
-
-  _overrideVisibility() {
-    super._overrideVisibility();
-    this.scene.traverse((object) => {
-      if (object.isMesh && object.visible && object.material.transparent) {
-        object.visible = false;
-        this._visibilityCache.push(object);
-      }
-    });
-  }
-}
 
 // The walkable interiors share one camera, input, postprocessing chain and
 // panel. Each room (the bakery, Rosewood) is built the first time it opens
@@ -59,6 +17,7 @@ class InteriorAO extends SSAOPass {
 const ROOMS = {
   bakery: () => createBakery(),
   rosewood: (progress) => createRosewood(progress),
+  heron: () => createHeronRoom(),
 };
 
 export function createInterior({
@@ -214,6 +173,8 @@ export function createInterior({
     $("#bakery-note").hidden = false;
     noteRemaining = 8;
   }
+  // A room with stairs says how high the eye stands; the rest stand level.
+  const eyeHeight = () => room.eyeAt?.(walker) ?? 2.45;
   function scanNearby() {
     const p = walker.position;
     let best = null,
@@ -223,7 +184,7 @@ export function createInterior({
       const dx = point.x - p.x,
         dz = point.z - p.z,
         distance = Math.hypot(dx, dz);
-      const dy = point.y - 2.45;
+      const dy = point.y - eyeHeight();
       const facing =
         ((-Math.sin(walker.yaw) * dx - Math.cos(walker.yaw) * dz) *
           Math.cos(walker.pitch) +
@@ -527,7 +488,7 @@ export function createInterior({
       const bobTarget =
         motion && moved > 0.0001 ? Math.sin(walker.distance * 8) * 0.016 : 0;
       bob = T.MathUtils.lerp(bob, bobTarget, 1 - Math.exp(-dt * 12));
-      camera.position.set(walker.position.x, 2.45 + bob, walker.position.z);
+      camera.position.set(walker.position.x, eyeHeight() + bob, walker.position.z);
       camera.rotation.set(walker.pitch, walker.yaw, 0, "YXZ");
       if (walker.distance - lastStepDistance > 0.75) {
         onStep?.();

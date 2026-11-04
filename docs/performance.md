@@ -243,10 +243,51 @@ These tests assert rendering work and behaviour instead of a machine-dependent F
 - **Lanterns.** `tests/routing.spec.js` checks that the lanterns keep a fixed pool of point lights with no new shader programs at dusk.
 - **Bakery.** `tests/interior.spec.js` checks that the bakery's shadow maps stay cached, that its AO runs at half the scene target's width, the MSAA and sun-map size for each quality, and median draw budgets of under 330 on high and under 180 on performance.
 - **Rosewood.** `tests/rosewood.spec.js` checks that Rosewood's shadow maps stay cached with a 2048 sun map on high, and median draws at the front door under 400 on high and under 250 on performance.
+- **The Drowsy Heron.** `tests/pub.spec.js` holds each of the study's views under 450 draws and 1.8M triangles and checks that blue hour compiles no new program. In the game it holds the inn's forecourt under 1,000 draws and 2.5M triangles at the default height and zoomed out, and its room at a median under 420 draws with its shadow maps cached.
 
 ## Change history
 
 Measurements recorded as each change landed, newest first, each against the `main` it was merged into. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the combined baseline. Entries counted in the cloud container ran on SwiftShader, so they give draw calls and triangles but no timings.
+
+### The Drowsy Heron on the map (2026-11-03)
+
+The inn joins the map north of the market square, and its door opens a walkable room with two storeys and a balcony. Its outside is `exteriorSections` from the study's own design, built lean in `src/regions/heron.js`: flat colours merged into one vertex-coloured structure and one of trim, about 2,350 two-face tiles (four triangles each) in one instanced mesh, the village's glass, and only the brick and herringbone painted, at 1024 and 512. Nothing inside is built. One job runs a section per slice, none over about 30 ms on this machine; each merges what it made, so the last merge joins only a few long pieces.
+
+- **Shadows.** Only the structure and the walls cast: the tiles and trim add nothing to the shadow pass, because the roof slabs and walls already throw the same shape.
+- **Zoomed far out.** The trim (every part under 1.6 m across, which is most studs, all balusters, cames and plants) and the tiles hide from height 30 (`far`), leaving the walls and bare roof slabs, about 10,000 triangles. Nothing there casts a shadow.
+- **The site.** It stands where the village's own views do not reach it: from the spawn, height 18 counts exactly what `main` does. A first site south of the square put its bounding sphere in that view, over the 3.2M budget, and showed the overview only its back, since the camera looks in from the south-east.
+- **The room.** Rendered by the same chain as the bakery. Its sun and fire shadow maps stay cached, and its seven point lights are fixed for the visit.
+
+`node scripts/world-fingerprint.mjs` against `main` (`154c295`) matches on the scene, animations, chunks, lamps, interactables and textures; only `colliders` and `ground` (the planting grid) differ, by the inn's own footing.
+
+Counted on an Apple M5 in headless Chrome at 1600 × 1000, high quality, `?resolution=fixed`, the most over the frames counted, against the same revision without the inn. The first three rows include a water reflection where one fell in the sample.
+
+| View | Before draws / triangles | With the inn draws / triangles |
+| --- | --- | --- |
+| Village spawn (−2.8, 6.2), height 18 | 996 / 3.119M | 996 / 3.119M |
+| Village spawn, height 39 | 1,079 / 2.638M | 1,080 / 2.636M |
+| Market square (36.5, 3.2), height 18 | 321 / 1.004M | 375 / 1.081M |
+| Forecourt (35, −8.2), height 18 | | 444 / 1.191M |
+| Room, inside the door | | 262 / 1.158M |
+| Room, by the hearth | | 294 / 1.096M |
+| Room, the loft | | 299 / 1.172M |
+
+Mean frame intervals uncapped, at device scale 1 and 2 (pixel ratio 1.25): forecourt 4.8 and 6.3 ms, inside the door 5.7 and 7.0 ms, by the hearth 4.8 and 6.1 ms. `npm run benchmark` measures it as "high, heron" and "high, heron, first person"; `--ablate` adds it at height 30.
+
+### The Drowsy Heron study (2026-11-03)
+
+A separate page (`/pub-study.html`), so the game's frame is unchanged: the only code the two share and this touched is the rooms' occlusion pass, moved as it was from `src/interior.js` to `src/interior-ao.js`. The building merges to about 250 meshes in three parts; its roof is about 5,800 clay tiles, in two instanced meshes (the main roofs and the kitchen). Its sun and fire shadow maps render only when the cutaway changes, and its seven point lights are a fixed set, so blue hour compiles nothing. Occlusion runs only while the eye is indoors or a cutaway is up.
+
+Apple M5, headless Chrome, 1600 × 1000 CSS pixels, uncapped, with the desktop app also on the GPU: mean frame interval over 2.5 s, at pixel ratio 1 and at device scale 2 (capped to 1.25, as the village is).
+
+| View | Draws / triangles | Scale 1 ms | Scale 2 ms |
+| --- | --- | --- | --- |
+| From the street | 289 / 0.66M | 10.7 | 13.5 |
+| The great room | 362 / 1.28M | 12.6 | 17.1 |
+| The bar | 231 / 1.20M | 11.4 | 16.0 |
+| The sleeping loft | 293 / 1.23M | 13.1 | 18.1 |
+
+The scale 1 column was taken at a pixel ratio of 1 and is unaffected by the cap; the triangles indoors are about twice the outdoor count because the occlusion pass draws the room again.
 
 ### Allotments (2026-11-03)
 

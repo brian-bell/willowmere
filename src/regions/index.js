@@ -37,6 +37,7 @@
 import { millpondRegion } from "./millpond-layout.js";
 import { orchardRegion } from "./orchard-layout.js";
 import { marketRegion } from "./market-layout.js";
+import { heronRegion } from "./heron-layout.js";
 import { marshRegion } from "./marsh-layout.js";
 import { woodRegion } from "./wood-layout.js";
 import { allotmentsRegion } from "./allotments-layout.js";
@@ -64,6 +65,8 @@ import { allotmentsRegion } from "./allotments-layout.js";
 export const regions = [
   millpondRegion,
   orchardRegion,
+  // Before the market, whose label it takes where the two overlap.
+  heronRegion,
   marketRegion,
   marshRegion,
   woodRegion,

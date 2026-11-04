@@ -15,7 +15,7 @@ npm ci
 npm run dev
 ```
 
-Open the address Vite prints. Two study pages sit beside the game: `/water-study.html` shows the river, millrace and fountain up close (orbit, switch lighting and quality, or tap the water to make ripples), and `/tree-study.html` shows the village's tree models. Both are linked from the game's settings, alongside a shortcut into the bakery.
+Open the address Vite prints. Three study pages sit beside the game: `/water-study.html` shows the river, millrace and fountain up close (orbit, switch lighting and quality, or tap the water to make ripples), `/tree-study.html` shows the village's tree models, and `/pub-study.html` is The Drowsy Heron, the galleried Tudor inn on the north side of the market square, which you can orbit, cut away, read in plan and walk through. All three are linked from the game's settings, alongside a shortcut into the bakery.
 
 ## Controls
 
