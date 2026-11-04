@@ -15,7 +15,15 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
  * marsh, old wood and allotment entries appear once the player has been there or done something there.
  */
 export function journalEntries(state, here) {
-  const rows = [
+  const rows = [];
+  // Once all three are done the quest card leaves the screen; the journal
+  // keeps the welcome.
+  if (QUESTS.every((quest) => state.quests[quest]))
+    rows.push([
+      "A warm welcome ✓",
+      "All three little things, done: you met Mabel, gathered wildflowers and planted something of your own. You belong here.",
+    ]);
+  rows.push(
     [
       "Meet the neighbors",
       state.quests.mabel
@@ -32,7 +40,7 @@ export function journalEntries(state, here) {
         ? `${state.plants.length} new patch${state.plants.length === 1 ? "" : "es"} of flowers make the village a little more yours.`
         : "Choose the seed pouch (3), find an open patch, and press E.",
     ],
-  ];
+  );
   const caught = FISH.filter((fish) => state.fish[fish.id]);
   if (caught.length || here === "millpond")
     rows.push([

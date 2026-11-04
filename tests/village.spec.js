@@ -144,8 +144,16 @@ test("welcome quest, interaction, garden, journal, photo mode and persistence", 
       .watered,
     "Watering grows planted flowers",
   );
+  // The finished welcome keeps its tick a moment, then moves to the journal.
+  assert(await page.locator(".quest-card").isVisible(), "Finished quest card lingers");
+  await page.locator(".quest-card").waitFor({ state: "hidden", timeout: 6000 });
   await page.locator("#journal-button").click();
   assert(await page.locator("#journal").isVisible(), "Journal opens");
+  assert(
+    (await page.locator("#journal-content .journal-entry b").first().textContent()) ===
+      "A warm welcome ✓",
+    "Journal keeps the finished welcome",
+  );
   await page.locator("#journal .close-modal").click();
   await page.locator("#settings").click();
   await page.locator("#day-select").selectOption("dusk");
@@ -167,6 +175,7 @@ test("welcome quest, interaction, garden, journal, photo mode and persistence", 
       state.plants[0].watered,
     "Quest and garden persist after reload",
   );
+  assert(await page.locator(".quest-card").isHidden(), "Finished quest card stays off screen after reload");
   await walk(12, 3);
   assert(
     (await page.evaluate(() => window.__willowmere.getDiagnostics()))

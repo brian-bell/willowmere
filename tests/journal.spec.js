@@ -29,3 +29,16 @@ test("the journal lists the welcome quests, then the millpond and orchard once v
     "You’ve gathered 1 apple, 0 pears and 2 jars of honey. Finn will buy what’s in your basket.",
   );
 });
+
+test("a finished welcome heads the journal", { tag: "@logic" }, () => {
+  const state = defaultState();
+  state.quests.mabel = state.quests.flower = true;
+  expect(titles(journalEntries(state, "green"))[0]).toBe("Meet the neighbors");
+  state.quests.plant = true;
+  expect(titles(journalEntries(state, "green"))).toEqual([
+    "A warm welcome ✓",
+    "Meet the neighbors",
+    "A pocketful of sunshine",
+    "Put down roots",
+  ]);
+});
