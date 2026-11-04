@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { showCameraControls } from "./camera-controls.js";
 
 const camera = (page) =>
   page.evaluate(() => window.__willowmere.getDiagnostics().camera);
@@ -10,6 +11,7 @@ test("yaw wraps, preserves the other view settings, and keeps movement aligned w
   await page.goto("/");
   await page.waitForFunction(() => window.__willowmere);
   await page.locator("#start").click();
+  await showCameraControls(page);
   await expect.poll(async () => (await camera(page)).viewHeight).toBeLessThan(18.02);
   const initial = await camera(page);
   await expect(page.locator("#yaw-reset")).toBeDisabled();
@@ -82,6 +84,7 @@ test("map tilt preserves heading and zoom, clamps at both limits, and resets", a
   await page.goto("/");
   await page.waitForFunction(() => window.__willowmere);
   await page.locator("#start").click();
+  await showCameraControls(page);
   await expect.poll(async () => (await camera(page)).viewHeight).toBeLessThan(18.1);
   const original = await camera(page);
   await expect(page.getByRole("button", { name: "Reset tilt", exact: true })).toBeDisabled();
@@ -124,6 +127,7 @@ test("pan controls move the view without moving the player and recenter independ
   await page.goto("/");
   await page.waitForFunction(() => window.__willowmere);
   await page.locator("#start").click();
+  await showCameraControls(page);
   await expect.poll(async () => (await camera(page)).viewHeight).toBeLessThan(18.02);
   await page.locator("#tilt-up").click();
   await page.waitForFunction(() => {
@@ -177,6 +181,7 @@ test("tilted map supports click-to-walk and fits mobile screens", async ({ page 
   await page.goto("/");
   await page.waitForFunction(() => window.__willowmere);
   await page.locator("#start").click();
+  await showCameraControls(page);
   // Verify ground picking at both ends of the tilt range.
   for (const [control, count, angle, destination] of [
     ["#tilt-up", 9, 75, { x: -3, z: 6.5 }],
@@ -228,6 +233,7 @@ test("map framing and first-person looking remain independent across view switch
   await page.goto("/");
   await page.waitForFunction(() => window.__willowmere);
   await page.locator("#start").click();
+  await showCameraControls(page);
   await page.locator("#yaw-right").click();
   await page.locator("#tilt-up").click();
   await page.locator("#pan-left").click();
@@ -251,4 +257,36 @@ test("map framing and first-person looking remain independent across view switch
   expect(returned.yaw).toBe(framing.yaw);
   expect(returned.targetTilt).toBe(framing.targetTilt);
   expect(returned.targetPan).toEqual(framing.targetPan);
+});
+
+test("desktop folds the camera controls behind a button that stays put", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.waitForFunction(() => window.__willowmere);
+  await page.locator("#start").click();
+  const toggle = page.locator("#camera-toggle");
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  for (const control of ["#view-toggle", "#zoom-in", "#tilt-up", "#yaw-left", "#pan-up"])
+    await expect(page.locator(control)).toBeHidden();
+  // The view shortcut still works with the controls folded away.
+  await page.keyboard.press("v");
+  await expect(page.locator("#view-toggle")).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("v");
+  await expect(page.locator("#view-toggle")).toHaveAttribute("aria-pressed", "false");
+
+  const folded = await toggle.boundingBox();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  for (const control of ["#view-toggle", "#zoom-in", "#tilt-up", "#yaw-left", "#pan-up"])
+    await expect(page.locator(control)).toBeVisible();
+  expect(await toggle.boundingBox()).toEqual(folded);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#zoom-in")).toBeHidden();
+
+  // Phones keep their own rail, without the desktop button.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(toggle).toBeHidden();
+  await expect(page.locator("#zoom-in")).toBeVisible();
 });

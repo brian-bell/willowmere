@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { showCameraControls } from "./camera-controls.js";
 import { regions, allowsGrass } from "../src/regions/index.js";
 import { patchBounds, GRASS_DENSITY } from "../src/regions/outskirts.js";
 
@@ -171,6 +172,7 @@ test("the open country streams in, and the player walks across chunk borders, wi
   // walk: from the village green west across the chunk borders at x = -8 and
   // x = -24 into the fields, zoomed out to the cap.
   await page.locator("#start").click();
+  await showCameraControls(page);
   while (!(await page.locator("#zoom-out").isDisabled()))
     await page.locator("#zoom-out").click();
   await page.waitForTimeout(2500);
