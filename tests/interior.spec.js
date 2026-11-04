@@ -39,6 +39,12 @@ async function walk(page, x, z) {
   }
   await page.waitForTimeout(170);
 }
+// The shortcut lives in the settings dialog, which closes as the room opens.
+async function visitBakery(page) {
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.getByRole("button", { name: "The bakery", exact: true }).click();
+  await expect(page.locator("#settings-dialog")).toBeHidden();
+}
 
 // Collision verification uses large steps and a rotated obstacle to catch
 // tunneling, and an actual route around the table to catch sticky sliding.
@@ -76,7 +82,7 @@ test("walk inside, collide with the workbench, meet residents, and leave through
     position: window.__willowmere.getPlayer(),
     state: window.__willowmere.getState(),
   }));
-  await page.getByRole("button", { name: "The bakery", exact: true }).click();
+  await visitBakery(page);
   await page.waitForFunction(() => window.__willowmere.getInterior().active);
   await expect(page).toHaveURL(/interior=bakery/);
   expect(
@@ -177,7 +183,7 @@ test("pause, photo, free look and returning visits do not leave stuck movement",
   await page
     .getByRole("button", { name: "Return to the village", exact: true })
     .click();
-  await page.getByRole("button", { name: "The bakery", exact: true }).click();
+  await visitBakery(page);
   await expect(page.locator("#bakery-view")).toBeVisible();
   expect(
     await page.evaluate(() => window.__willowmere.getInterior().position),

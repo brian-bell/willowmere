@@ -124,6 +124,12 @@ export function createOverviewCamera({ camera, isFirstPerson, onZoom }) {
       $("#zoom-in").onclick = () => setZoom(targetViewHeight - ZOOM_STEP);
       $("#zoom-out").onclick = () => setZoom(targetViewHeight + ZOOM_STEP);
       $("#zoom-reset").onclick = () => setZoom(DEFAULT_VIEW_HEIGHT);
+      // Desktop folds the whole panel behind this button (see style.css).
+      $("#camera-toggle").onclick = () => {
+        const shown = $(".view-controls").classList.toggle("camera-shown");
+        $("#camera-toggle").setAttribute("aria-expanded", String(shown));
+        $("#camera-toggle").title = shown ? "Hide camera controls" : "Show camera controls";
+      };
       // Small screens fold tilt, yaw and pan behind this button (see style.css).
       $("#camera-more").onclick = () => {
         const open = $(".view-controls").classList.toggle("camera-open");

@@ -394,6 +394,45 @@ button:active {
 #camera-more {
   display: none;
 }
+/* Desktop: the camera controls start folded behind #camera-toggle. Phones
+   keep their rail and tablets their full panel. */
+#camera-toggle {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) and (min-width: 761px) and (min-height: 501px) {
+  /* Hung under the top buttons rather than centred, so the toggle stays put
+     as the panel opens below it. */
+  .view-controls {
+    top: 92px;
+    transform: none;
+  }
+  #camera-toggle {
+    display: block;
+    grid-column: 1 / -1;
+    justify-self: end;
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid #fff9de88;
+    border-radius: 13px;
+    background: #f5efdee8;
+    box-shadow: 0 6px 20px #2e4b2f20;
+    backdrop-filter: blur(12px);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  #camera-toggle span {
+    display: inline-block;
+    margin-left: 2px;
+    font-size: 10px;
+    transition: transform 150ms;
+  }
+  .camera-shown #camera-toggle span {
+    transform: rotate(180deg);
+  }
+  .view-controls:not(.camera-shown) > :not(#camera-toggle) {
+    display: none;
+  }
+}
 .yaw-controls {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

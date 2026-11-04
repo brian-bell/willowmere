@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { showCameraControls } from "./camera-controls.js";
 
 const shadow = (page) =>
   page.evaluate(() => window.__willowmere.getDiagnostics().shadow);
@@ -16,6 +17,7 @@ test("sun shadows fit the view in whole texels and keep eye-level detail", async
   await page.goto("/");
   await page.waitForFunction(() => window.__willowmere);
   await page.locator("#start").click();
+  await showCameraControls(page);
   await expect
     .poll(async () =>
       page.evaluate(() => window.__willowmere.getDiagnostics().camera.viewHeight),
