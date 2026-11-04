@@ -249,7 +249,10 @@ function leaveInterior() {
   updateViewUI();
   resize();
 }
-$("#visit-bakery").onclick = () => enterInterior("bakery");
+$("#visit-bakery").onclick = () => {
+  $("#settings-dialog").close();
+  enterInterior("bakery");
+};
 $("#motion").checked = motion;
 function begin() {
   if (!started) overview.setZoom(DEFAULT_VIEW_HEIGHT);
