@@ -13,7 +13,9 @@ const $ = (s) => document.querySelector(s),
  */
 export function createHud({ canvas, state, onCapture }) {
   let toastTimeout,
-    dialogue = null;
+    dialogue = null,
+    welcomeDone,
+    retireTimeout;
   function toast(message) {
     $("#toast").textContent = message;
     $("#toast").classList.add("show");
@@ -21,7 +23,18 @@ export function createHud({ canvas, state, onCapture }) {
     toastTimeout = setTimeout(() => $("#toast").classList.remove("show"), 3600);
   }
   function updateUI() {
-    $("#game").classList.toggle("quest-complete", Object.values(state.quests).every(Boolean));
+    const complete = Object.values(state.quests).every(Boolean);
+    $("#game").classList.toggle("quest-complete", complete);
+    // A finished welcome leaves the screen for the journal. Finished just now,
+    // the card keeps its tick a moment first; a save that loads finished never
+    // shows it.
+    if (complete !== welcomeDone) {
+      const loading = welcomeDone === undefined;
+      welcomeDone = complete;
+      clearTimeout(retireTimeout);
+      if (!complete || loading) $(".quest-card").hidden = complete;
+      else retireTimeout = setTimeout(() => ($(".quest-card").hidden = true), 4000);
+    }
     for (const [key, done] of Object.entries(state.quests))
       $(`[data-quest="${key}"]`).classList.toggle("done", done);
     $("#quest-count").textContent =

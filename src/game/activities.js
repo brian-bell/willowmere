@@ -93,7 +93,7 @@ export function createActivities({
     updateUI();
     save();
     if (Object.values(state.quests).every(Boolean))
-      setTimeout(() => toast("A warm welcome, complete. You belong here. +25 petals"), 500);
+      setTimeout(() => toast("A warm welcome, complete. +25 petals. It’s kept in your journal now."), 500);
   }
 
   // Flowers: bouquets to gather, and the ones the player planted, by id.
