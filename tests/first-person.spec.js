@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { showCameraControls } from "./camera-controls.js";
 
 const view = (page) => page.evaluate(() => window.__willowmere.getView());
 const position = (page) => page.evaluate(() => window.__willowmere.getPlayer());
@@ -9,6 +10,7 @@ async function start(page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__willowmere);
   await page.locator("#start").click();
+  await showCameraControls(page);
   await page.locator("#view-toggle").click();
 }
 
