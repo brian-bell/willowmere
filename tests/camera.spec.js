@@ -280,7 +280,9 @@ test("desktop folds the camera controls behind a button that stays put", async (
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   for (const control of ["#view-toggle", "#zoom-in", "#tilt-up", "#yaw-left", "#pan-up"])
     await expect(page.locator(control)).toBeVisible();
-  expect(await toggle.boundingBox()).toEqual(folded);
+  // Buttons lift 2 px under the pointer, so measure with it elsewhere.
+  await page.mouse.move(640, 700);
+  await expect.poll(() => toggle.boundingBox()).toEqual(folded);
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator("#zoom-in")).toBeHidden();
