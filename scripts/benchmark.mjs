@@ -51,6 +51,8 @@ configs.push(
   { name: "high, orchard, first person", quality: "high", tune: {}, view: "orchard-first-person" },
   { name: "high, market", quality: "high", tune: {}, view: "market" },
   { name: "high, market, first person", quality: "high", tune: {}, view: "market-first-person" },
+  { name: "high, heron", quality: "high", tune: {}, view: "heron" },
+  { name: "high, heron, first person", quality: "high", tune: {}, view: "heron-first-person" },
   { name: "high, marsh", quality: "high", tune: {}, view: "marsh" },
   { name: "high, marsh, first person", quality: "high", tune: {}, view: "marsh-first-person" },
   { name: "high, wood", quality: "high", tune: {}, view: "wood" },
@@ -83,6 +85,7 @@ if (ablate) {
     { name: "high, millpond, water skipped", quality: "high", tune: { water: false }, view: "millpond" },
     { name: "high, orchard, height 30", quality: "high", tune: {}, view: "orchard-30" },
     { name: "high, market, height 30", quality: "high", tune: {}, view: "market-30" },
+    { name: "high, heron, height 30", quality: "high", tune: {}, view: "heron-30" },
     { name: "high, marsh, height 30", quality: "high", tune: {}, view: "marsh-30" },
     { name: "high, wood, height 30", quality: "high", tune: {}, view: "wood-30" },
     { name: "high, allotments, height 30", quality: "high", tune: {}, view: "allotments-30" },
@@ -143,13 +146,15 @@ try {
   // Where each view stands: the millpond views on its south bank, by the
   // jetty, the orchard views on the hill's path by the bench, facing the
   // village, the market views in the square, facing west along the lane past
-  // the stalls and the tea room, the marsh views on the boardwalk, facing the
+  // the stalls and the tea room, the inn's views on its forecourt, facing its
+  // door, the marsh views on the boardwalk, facing the
   // hide across the mere, the wood views in its clearing, facing west past
   // the fairy ring, the allotment views on the cross path by the east beds,
   // facing west along it, the rest at the spawn on the village green.
   const MILLPOND = { x: 8.6, z: -25.8 },
     ORCHARD = { x: -21, z: -27.6, heading: 0.65 },
     MARKET = { x: 36.5, z: 3.2, heading: -1.75 },
+    HERON = { x: 35, z: -8.2, heading: Math.PI },
     MARSH = { x: 7.8, z: 31.2, heading: 1.2 },
     WOOD = { x: -35.5, z: 0, heading: -2 },
     ALLOTMENTS = { x: -6.5, z: 28.6, heading: -1.5 },
@@ -162,6 +167,8 @@ try {
         ? ORCHARD
         : view.startsWith("market")
           ? MARKET
+          : view.startsWith("heron")
+            ? HERON
           : view.startsWith("marsh")
             ? MARSH
             : view.startsWith("wood")
