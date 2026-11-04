@@ -6,7 +6,8 @@ Where Willowmere's code lives, how the world beyond the village plugs in, and ho
 
 - `index.html` loads `src/main.js`, the game. `/?interior=bakery` starts inside the bakery, `/?interior=rosewood` inside Rosewood, your cottage.
 - `water-study.html` loads `src/water-study.js`, a close-up view of the village water with diagnostics. It is part of the production build.
-- `tree-study.html` is a development-only page (its script is inline) for the tree models. The build leaves it out.
+- `tree-study.html` is a close-up page (its script is inline) for the tree models. It is part of the production build.
+- The settings dialog lists the studies: a button into the bakery interior and links to both study pages.
 
 All art and audio are generated in code. `vite.config.js` splits Three.js into its own chunk, and each region's builder loads with `import()`, so it gets a chunk of its own.
 

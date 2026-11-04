@@ -146,7 +146,9 @@ test("free look, menus, photo, reload and bakery visits preserve a usable camera
   await page.keyboard.press("Escape");
   const village = await position(page);
   const villageView = await view(page);
+  await page.locator("#settings").click();
   await page.locator("#visit-bakery").click();
+  await expect(page.locator("#settings-dialog")).toBeHidden();
   await page.waitForFunction(() => window.__willowmere.getInterior().active);
   await page.locator("#bakery-menu").click();
   await page.locator("#bakery-exit").click();
