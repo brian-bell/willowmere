@@ -148,11 +148,16 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     clipCorner = new T.Vector4(),
     clipCorners = new Float64Array(24),
     clipBounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 },
-    refractionRects = [];
+    refractionRects = [],
+    mirrorClip = new T.Matrix4(),
+    reflectionRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
   // How far the water shader's refraction samples can land from a surface's
   // pixel, in normalized device coordinates: its largest offset is 0.014 of the
   // screen, or 0.028 here. The rest covers the sampler's filtering.
   const REFRACTION_REACH = 0.032;
+  // How far past a surface's bounds its reflection can sample, in normalized
+  // device coordinates: the shader's offset of 0.018 at a steep wave's slope of 1.5.
+  const REFLECTION_REACH = 0.06;
   let refractionResolved = 1;
   const clipPlane = new T.Plane(new T.Vector3(0, 1, 0), 0);
   const savedViewport = new T.Vector4(),
@@ -578,6 +583,8 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
         );
       }
     } else {
+      // A resized target has lost what the surface might sample outside its bounds.
+      if (body.reflection.width !== settings.reflection) body.reflectionReady = false;
       body.reflection.setSize(settings.reflection, settings.reflection);
     }
     const matrix = body.mesh.material.uniforms.uReflectionMatrix.value;
@@ -585,6 +592,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     matrix
       .multiply(mirror.projectionMatrix)
       .multiply(mirror.matrixWorldInverse);
+    limitReflection(camera, mirror, body);
     clipPlane.constant = -body.config.y + 0.015;
     renderer.clippingPlanes = [clipPlane];
     renderer.setRenderTarget(body.reflection);
@@ -594,6 +602,65 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     body.reflectionReady = true;
     body.mesh.material.uniforms.uReflectionReady.value = 1;
     lastCaptureCount++;
+  }
+
+  // A perspective mirror keeps the whole view's texture and texture matrix, but
+  // draws only the part of it where this surface lies: the same texels, from a
+  // frustum cropped to them, which culls most of the scene when the water is a
+  // sliver across the view. Orthographic views already crop, in captureReflection.
+  function limitReflection(camera, mirror, body) {
+    const target = body.reflection;
+    target.viewport.set(0, 0, target.width, target.height);
+    target.scissor.copy(target.viewport);
+    target.scissorTest = false;
+    if (camera.isOrthographicCamera || !body.reflectionReady) return;
+    const box = body.mesh.geometry.boundingBox;
+    mirrorClip
+      .multiplyMatrices(mirror.projectionMatrix, mirror.matrixWorldInverse)
+      .multiply(body.mesh.matrixWorld);
+    for (let i = 0; i < 8; i++) {
+      clipCorner
+        .set(
+          i & 1 ? box.max.x : box.min.x,
+          i & 2 ? box.max.y : box.min.y,
+          i & 4 ? box.max.z : box.min.z,
+          1,
+        )
+        .applyMatrix4(mirrorClip);
+      clipCorners[i * 3] = clipCorner.x;
+      clipCorners[i * 3 + 1] = clipCorner.y;
+      clipCorners[i * 3 + 2] = clipCorner.w;
+    }
+    const { width, height } = target;
+    if (
+      !clipBoxBounds(clipCorners, clipBounds) ||
+      !boundsToPixels(clipBounds, REFLECTION_REACH, width, height, reflectionRect)
+    )
+      return;
+    const { x0, y0, x1, y1 } = reflectionRect;
+    reflectionCrop.set(
+      width / (x1 - x0),
+      0,
+      0,
+      (width - x0 - x1) / (x1 - x0),
+      0,
+      height / (y1 - y0),
+      0,
+      (height - y0 - y1) / (y1 - y0),
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+    );
+    mirror.projectionMatrix.premultiply(reflectionCrop);
+    mirror.projectionMatrixInverse.copy(mirror.projectionMatrix).invert();
+    target.viewport.set(x0, y0, x1 - x0, y1 - y0);
+    target.scissor.copy(target.viewport);
+    target.scissorTest = true;
   }
 
   // The caller's main pass can supply refraction when its target has one RGBA or
@@ -883,6 +950,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
         maxStep: b.maxStep,
         reflectionReady: b.reflectionReady,
         reflectionSize: [b.reflection.width, b.reflection.height],
+        reflectionDrawn: [b.reflection.viewport.z, b.reflection.viewport.w],
         impulses: b.impulses.length,
         sources: b.sources.length,
         vertices: b.mesh.geometry.attributes.position.count,

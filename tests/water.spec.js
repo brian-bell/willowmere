@@ -273,3 +273,32 @@ test("excluded scenery stays out of captures and keeps its visibility", async ({
   expect(result.mainPass).toBe(1);
   expect(errors).toEqual([]);
 });
+
+test("first person's reflections draw only where each surface lies, in the same texture", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/?resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere);
+  await page.locator("#start").click();
+  await page.waitForFunction(() => !window.__willowmere.getStreaming().pending, null, {
+    timeout: 120000,
+  });
+  await page.locator("#camera-toggle").click();
+  await page.locator("#view-toggle").click();
+  // The market, looking west along the lane to the river in the distance.
+  await page.evaluate(() => window.__willowmere.moveTo(36.5, 3.2, -1.75));
+  await page.waitForFunction(() => !window.__willowmere.getStreaming().pending, null, {
+    timeout: 60000,
+  });
+  await expect
+    .poll(async () => {
+      const { bodies } = await page.evaluate(() => window.__willowmere.getWater());
+      const river = bodies.find((body) => body.id === "river");
+      return river.reflectionDrawn[1] / river.reflectionSize[1];
+    })
+    .toBeLessThan(0.5);
+  const { bodies } = await page.evaluate(() => window.__willowmere.getWater());
+  const river = bodies.find((body) => body.id === "river");
+  expect(river.reflectionSize[0]).toBe(river.reflectionSize[1]);
+});

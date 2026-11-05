@@ -3,6 +3,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { SoftBloomPass, BloomOutputPass } from "./bloom.js";
 import "./shader-chunks.js";
+import { useDepthShadowMaps } from "./shadow-maps.js";
 import { sceneTargetOptions } from "./scene-target.js";
 import "./style.css";
 import { applyIcons } from "./icons.js";
@@ -77,6 +78,7 @@ const scaler = createResolutionScaler({
 renderer.setPixelRatio(resolution.ceiling);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+useDepthShadowMaps(renderer);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.2;
