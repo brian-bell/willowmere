@@ -21,6 +21,7 @@ import {
   trailDistance,
   trailWeight,
   woodColliders,
+  woodFloor,
   woodGround,
   woodHeight,
 } from "./wood-layout.js";
@@ -254,8 +255,7 @@ function groundBuilder(T, world) {
   function colorAt(x, z) {
     const mottle =
       Math.sin(x * 0.9 + 0.4) * Math.sin(z * 1.1 - 1.3) + 0.5 * Math.sin(x * 2.3 + z * 1.7);
-    // The floor darkens away from the meadow.
-    color.copy(lawn).lerp(floor, smooth(W.ground.maxX - 0.4, W.ground.maxX - 5, x));
+    color.copy(floor);
     if (mottle > 0.3) color.lerp(dark, smooth(0.3, 1.2, mottle) * 0.6);
     // Leaf litter under each tree: amber under the beeches, brown under the oaks.
     for (const t of near(x, z, TREES, 2.6)) {
@@ -281,6 +281,8 @@ function groundBuilder(T, world) {
     const b = W.flowers.bluebell,
       dellAt = Math.hypot(x - b.x, z - b.z);
     if (dellAt < 3.4) color.lerp(dell, (1 - smooth(1.2, 3.4, dellAt)) * 0.7);
+    // The floor gives way to the fields' lawn along the wood's borders.
+    color.lerp(lawn, 1 - woodFloor(x, z));
     // The trails: bare earth down their middles, worn at their edges, fading
     // in from the meadow.
     const trail = trailWeight(x, z) * smooth(W.ground.maxX, W.ground.maxX - 0.6, x);
