@@ -23,8 +23,20 @@ export const ORCHARD = {
   // Ground the hill's own mesh covers; the open country's grass is cut away
   // over it. Its south edge meets the village's grass.
   ground: { minX: -46, maxX: -2, minZ: -40.6, maxZ: -20.8 },
-  // The windmill on the summit; its door faces the path, south-east.
-  windmill: { x: -25.4, z: -32.6, radius: 1.85 },
+  // The windmill on the summit: a tapering tower under a domed cap. Its door
+  // faces the path, south-east, and its sails the village. A bearing is an angle
+  // from +z toward +x. Its inside is src/windmill/, at a walkable scale.
+  windmill: {
+    x: -25.4,
+    z: -32.6,
+    radius: 1.85,
+    taper: 0.5,
+    height: 5.4,
+    capHeight: 1.35,
+    shaftRise: 0.55,
+    doorBearing: Math.atan2(0.72, 0.69),
+    shaftBearing: Math.atan2(0.52, 0.85),
+  },
   // The bench beside the path near the top, looking out over the village.
   bench: { x: -20, z: -29.4 },
   // The beehives on the sunny west slope.

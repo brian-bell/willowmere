@@ -53,6 +53,8 @@ The countryside streams in around the village once you start:
 
 Walk up to the bakery on cottage lane and press **E**, or use **The bakery** button, to step inside Finn's bakery in first person (or open `/?interior=bakery` directly). Walk with the same keys as first person outdoors. Look toward something and press **E** to greet Crumb the flour spirit, pet Cinnamon, warm your hands by the oven, admire the pastries, pause for tea or ring the counter bell. To leave, face the door at the entrance and press **E**.
 
+Walk up the orchard hill to the windmill's door and press **E** to step inside its tower (or open `/?interior=windmill`). Platforms wind up the wall with the mill's great wheels turning in the open well between them. Walk into a ladder and keep going to climb it, and turn round to come down. At the top you can lean on the brake and watch the sails sweep past the window.
+
 **Escape** opens the pause menu when the mouse is free, with **After hours** lighting, **Photo** and a return to the village. Your village position and progress are kept while you are inside.
 
 ## Saved progress
@@ -61,7 +63,7 @@ Progress, flowers, seeds, petals, your basket and your camera preference save to
 
 ## Scope
 
-Willowmere is a small playable prototype: a welcome quest, free exploration of the village and four regions around it, and one walkable interior. Other buildings have no interiors, and there is no long campaign or multiplayer.
+Willowmere is a small playable prototype: a welcome quest, free exploration of the village and the regions around it, and four walkable interiors: the bakery, Rosewood, The Drowsy Heron and the old windmill. Other buildings have no interiors, and there is no long campaign or multiplayer.
 
 ## Development
 

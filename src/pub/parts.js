@@ -12,7 +12,7 @@ function rng(seed) {
 }
 
 // A colour map and its bump map, drawn together, repeating every `metres`.
-function painted(size, metres, draw, { roughness = 0.9, bump = 0.02 } = {}) {
+export function painted(size, metres, draw, { roughness = 0.9, bump = 0.02 } = {}) {
   const make = () => {
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = size;
