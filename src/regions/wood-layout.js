@@ -140,6 +140,32 @@ export function woodHeight(x, z) {
   return Math.max(0, floor * fade);
 }
 
+// A slow wander in [-1, 1] that keeps the floor's border with the fields from
+// following the ground mesh's straight sides.
+const wander = (x, z) =>
+  0.5 * Math.sin(x * 0.43 + z * 0.19 + 0.9) +
+  0.3 * Math.sin(x * 0.21 - z * 0.47 + 2.3) +
+  0.2 * Math.sin(x * 0.97 + z * 0.83 - 1.1);
+
+/**
+ * How much of the wood's own floor shows at (x, z), its moss and litter
+ * rather than the fields' lawn: 0 at the ground mesh's edges, 1 within the
+ * wood. The border wanders between about 0.3 and 2.3 m in from each side,
+ * then the floor fades in over 4.6 m toward the meadow and 3.5 m to the north
+ * and south. To the west it runs on to the map's rim. The floor's colours and
+ * the grass's thinning share it.
+ */
+export function woodFloor(x, z) {
+  if (!inWoodGround(x, z)) return 0;
+  const g = W.ground,
+    inset = 1.3 + wander(x, z);
+  return (
+    smooth(inset, inset + 4.6, g.maxX - x) *
+    smooth(inset, inset + 3.5, z - g.minZ) *
+    smooth(inset, inset + 3.5, g.maxZ - z)
+  );
+}
+
 /** Height of the bare ground in the wood: the lawn level plus the floor's. */
 export const woodGround = (x, z) => W.lawn + woodHeight(x, z);
 
@@ -242,16 +268,16 @@ const hash = (x, z) => {
 
 /**
  * Where meadow grass may grow in the wood: off its trails and footings, and
- * only along its edge by the meadow.
+ * only along its borders with the fields.
  */
 export function woodGrass(x, z) {
   if (!inWoodGround(x, z)) return true;
   if (trailDistance(x, z, 1.5) < W.trailHalfWidth + 0.1) return false;
   for (const c of (footings ??= woodColliders()))
     if (Math.hypot(x - c.x, z - c.z) < c.r + 0.15) return false;
-  // Scattered blades read as spikes, so the grass gives out over a few
-  // metres instead: the wood's floor is moss and leaves.
-  return hash(x, z) < smooth(W.ground.maxX - 4.5, W.ground.maxX - 0.8, x);
+  // Scattered blades read as spikes, so the grass gives out over the band
+  // where the floor fades in instead: the wood's floor is moss and leaves.
+  return hash(x, z) < 1 - smooth(0.05, 0.9, woodFloor(x, z));
 }
 
 /** Where flowers may be planted in the wood: off the trails, footings and flower patches. */
