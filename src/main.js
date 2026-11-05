@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { SoftBloomPass, BloomOutputPass } from "./bloom.js";
+import "./shader-chunks.js";
+import { sceneTargetOptions } from "./scene-target.js";
 import "./style.css";
 import { applyIcons } from "./icons.js";
 applyIcons();
@@ -48,8 +50,10 @@ scene.fog = new THREE.Fog("#b5c2a0", FOG.overview.near, FOG.overview.far);
 scene.matrixWorldAutoUpdate = false;
 const renderer = new THREE.WebGLRenderer({
   canvas,
-  // The composer already renders into a multisampled target.
+  // The composer already renders into a multisampled target with its own
+  // depth, and only a full-screen pass reaches the canvas.
   antialias: false,
+  depth: false,
   powerPreference: "high-performance",
 });
 // Benchmark overrides for attributing render cost (window.__willowmere.tune);
@@ -124,7 +128,7 @@ const world = createWorld(THREE, scene),
   audio = createAudio();
 const sceneTarget = new THREE.WebGLRenderTarget(innerWidth, innerHeight, {
   samples: 4,
-  type: THREE.HalfFloatType,
+  ...sceneTargetOptions(renderer, 4),
 });
 const composer = new EffectComposer(renderer, sceneTarget);
 const scenePass = new RenderPass(scene, camera);
@@ -134,7 +138,7 @@ composer.addPass(bloom);
 composer.addPass(new BloomOutputPass(bloom));
 renderer.info.autoReset = false;
 // Everything beyond the village streams in after the first outdoor frames.
-const streamer = createStreamer(renderer, scene, { target: sceneTarget });
+const streamer = createStreamer(renderer, scene, { target: composer.readBuffer });
 let openCountryRequested = false;
 // Lit windows and lamp glass brighten at blue hour, streamed regions' too.
 const glowMaterials = world.glowMaterials;

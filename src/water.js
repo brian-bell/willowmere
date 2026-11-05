@@ -5,6 +5,7 @@ import {
   waterVertex,
   waterFragment,
 } from "./water-shaders.js";
+import { boundsToPixels, clipBoxBounds, mergeRects } from "./water-bounds.js";
 
 // `scale` sizes a body's own grid (addBody's `grid`, given for high quality).
 const QUALITY = {
@@ -143,7 +144,16 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
   simScene.add(quad);
   const frustum = new T.Frustum(),
     projectionView = new T.Matrix4(),
-    visibleBox = new T.Box3();
+    visibleBox = new T.Box3(),
+    clipCorner = new T.Vector4(),
+    clipCorners = new Float64Array(24),
+    clipBounds = { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+    refractionRects = [];
+  // How far the water shader's refraction samples can land from a surface's
+  // pixel, in normalized device coordinates: its largest offset is 0.014 of the
+  // screen, or 0.028 here. The rest covers the sampler's filtering.
+  const REFRACTION_REACH = 0.032;
+  let refractionResolved = 1;
   const clipPlane = new T.Plane(new T.Vector3(0, 1, 0), 0);
   const savedViewport = new T.Vector4(),
     savedScissor = new T.Vector4();
@@ -586,8 +596,8 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     lastCaptureCount++;
   }
 
-  // The caller's main pass can supply refraction when its target has a plain RGBA
-  // color attachment and a 24-bit depth buffer that blit into sceneTarget's formats.
+  // The caller's main pass can supply refraction when its target has one RGBA or
+  // 11-11-10 color attachment and a 24-bit depth buffer that blit into sceneTarget's formats.
   function canShare(renderer, target) {
     return (
       gpuSimulation &&
@@ -596,7 +606,8 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       !target.isWebGL3DRenderTarget &&
       !target.isWebGLArrayRenderTarget &&
       target.textures.length === 1 &&
-      target.texture.format === T.RGBAFormat &&
+      (target.texture.format === T.RGBAFormat ||
+        target.texture.type === T.UnsignedInt101111Type) &&
       !target.texture.generateMipmaps &&
       target.depthBuffer &&
       !target.stencilBuffer &&
@@ -610,8 +621,38 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     );
   }
 
+  // The screen rectangles the visible surfaces can refract from, in pixels of
+  // sceneTarget: each body's bounds, grown by how far the shader's refraction
+  // offset reaches, in `refractionRects`. Returns how many are in use.
+  function findRefractionRects(visible, width, height) {
+    let count = 0;
+    for (const body of visible) {
+      const box = body.mesh.geometry.boundingBox;
+      for (let i = 0; i < 8; i++) {
+        clipCorner
+          .set(
+            i & 1 ? box.max.x : box.min.x,
+            i & 2 ? box.max.y : box.min.y,
+            i & 4 ? box.max.z : box.min.z,
+            1,
+          )
+          .applyMatrix4(body.mesh.matrixWorld)
+          .applyMatrix4(projectionView);
+        clipCorners[i * 3] = clipCorner.x;
+        clipCorners[i * 3 + 1] = clipCorner.y;
+        clipCorners[i * 3 + 2] = clipCorner.w;
+      }
+      if (!clipBoxBounds(clipCorners, clipBounds)) continue;
+      const rect = (refractionRects[count] ??= { x0: 0, y0: 0, x1: 0, y1: 0 });
+      if (boundsToPixels(clipBounds, REFRACTION_REACH, width, height, rect)) count++;
+    }
+    return mergeRects(refractionRects, count);
+  }
+
   // Runs as the first visible surface is drawn into the armed target: every opaque
-  // object is already rasterized, so one blit resolves its color and depth.
+  // object is already rasterized, so a blit of the surfaces' parts of the screen
+  // resolves their color and depth. Resolving is a large share of the water's cost,
+  // and nothing samples sceneTarget outside these rectangles.
   function resolveSharedScene(renderer, _scene, camera) {
     if (
       !shared ||
@@ -625,6 +666,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     const read =
       source.__webglMultisampledFramebuffer || source.__webglFramebuffer;
     const draw = renderer.properties.get(sceneTarget).__webglFramebuffer;
+    const { visible } = shared;
     shared = null;
     if (!read || !draw) return;
     refractionSource = "main pass";
@@ -632,25 +674,34 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     if (scissor) state.setScissorTest(false);
     state.bindFramebuffer(gl.READ_FRAMEBUFFER, read);
     state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, draw);
-    gl.blitFramebuffer(
-      0,
-      0,
-      sceneTarget.width,
-      sceneTarget.height,
-      0,
-      0,
-      sceneTarget.width,
-      sceneTarget.height,
-      gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT,
-      gl.NEAREST,
-    );
+    const { width, height } = sceneTarget,
+      count = findRefractionRects(visible, width, height);
+    let resolved = 0;
+    for (let i = 0; i < count; i++) {
+      const { x0, y0, x1, y1 } = refractionRects[i];
+      gl.blitFramebuffer(
+        x0,
+        y0,
+        x1,
+        y1,
+        x0,
+        y0,
+        x1,
+        y1,
+        gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT,
+        gl.NEAREST,
+      );
+      resolved += (x1 - x0) * (y1 - y0);
+    }
+    refractionResolved = resolved / (width * height);
     state.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
     state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, read);
     if (scissor) state.setScissorTest(true);
   }
 
-  function setSceneTarget(renderer, width, height, type) {
+  function setSceneTarget(renderer, width, height, format, type) {
     if (sceneTarget.texture.type !== type) {
+      sceneTarget.texture.format = format;
       sceneTarget.texture.type = type;
       sceneTarget.dispose();
     }
@@ -731,8 +782,8 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
         // truncates fractional composer sizes, so the blit rectangles match.
         width = Math.floor(target.width);
         height = Math.floor(target.height);
-        setSceneTarget(renderer, width, height, target.texture.type);
-        shared = { target, camera };
+        setSceneTarget(renderer, width, height, target.texture.format, target.texture.type);
+        shared = { target, camera, visible };
         // Confirmed by resolveSharedScene once the caller's pass draws a surface.
         refractionSource = "unresolved";
       } else {
@@ -743,6 +794,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
           renderer,
           width,
           height,
+          T.RGBAFormat,
           gpuSimulation ? T.HalfFloatType : T.UnsignedByteType,
         );
         renderer.setRenderTarget(sceneTarget);
@@ -823,6 +875,8 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       frame: renderFrame,
       refraction: [sceneTarget.width, sceneTarget.height],
       refractionSource,
+      // The share of the screen the last main-pass resolve covered.
+      refractionResolved,
       bodies: bodies.map((b) => ({
         id: b.config.id,
         resolution: [...b.resolution],

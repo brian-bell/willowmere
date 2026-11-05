@@ -133,3 +133,63 @@ test("lamps share a fixed pool of point lights", async ({ page }) => {
   expect(after.pointLights).toBe(before.pool);
   expect(after.programs).toBe(before.programs);
 });
+
+test("a lantern lights the ground in its reach at blue hour, and only there", async ({ page }) => {
+  await page.goto("/?resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere);
+  await page.locator("#start").click();
+  // The lamp west of the fountain. Its lantern reaches 4 m from 2.4 m up. How
+  // much brighter the ground under it is than the ground out of its reach,
+  // which also depends on what each is made of, so it counts only against the
+  // same ground by day.
+  const contrast = () =>
+    page.evaluate(
+      ([lampX, lampZ]) =>
+        new Promise((resolve) =>
+          // Runs after the game's own callback, while the canvas still holds its frame.
+          requestAnimationFrame(() => {
+            const game = window.__willowmere,
+              canvas = document.querySelector("#scene"),
+              gl = canvas.getContext("webgl2"),
+              scale = canvas.width / canvas.clientWidth,
+              patch = new Uint8Array(4 * 9 * 9);
+            const brightness = (x, z) => {
+              const point = game.project(x, z);
+              gl.readPixels(
+                Math.round(point.x * scale) - 4,
+                canvas.height - Math.round(point.y * scale) - 4,
+                9,
+                9,
+                gl.RGBA,
+                gl.UNSIGNED_BYTE,
+                patch,
+              );
+              let sum = 0;
+              for (let i = 0; i < patch.length; i += 4) sum += patch[i] + patch[i + 1] + patch[i + 2];
+              return sum / (3 * 81);
+            };
+            const ring = (radius) =>
+              Array.from({ length: 8 }, (_, i) =>
+                brightness(
+                  lampX + Math.cos((i * Math.PI) / 4) * radius,
+                  lampZ + Math.sin((i * Math.PI) / 4) * radius,
+                ),
+              ).sort((a, b) => a - b)[4];
+            resolve(ring(0.9) / ring(5.5));
+          }),
+        ),
+      [-4, -1],
+    );
+  // The view settles on the player first.
+  await page.waitForTimeout(1500);
+  const day = await contrast();
+  await page.evaluate(() => {
+    const select = document.querySelector("#day-select");
+    select.value = "dusk";
+    select.dispatchEvent(new Event("change"));
+  });
+  // The light eases in over a few seconds.
+  await page.waitForTimeout(4000);
+  const dusk = await contrast();
+  expect(dusk / day).toBeGreaterThan(1.5);
+});
