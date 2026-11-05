@@ -201,8 +201,8 @@ let tool = "hand",
   day = "day";
 let interior = null,
   interiorLoading = false;
-// The bakery, Rosewood and the inn open as walkable rooms (src/interior.js).
-const INTERIOR_NAMES = { bakery: "The bakery", rosewood: "Rosewood", heron: "The Drowsy Heron" };
+// The bakery, Rosewood, the inn and the B&B open as walkable rooms (src/interior.js).
+const INTERIOR_NAMES = { bakery: "The bakery", rosewood: "Rosewood", heron: "The Drowsy Heron", thistledown: "Thistledown" };
 async function enterInterior(room = "bakery") {
   if (interiorLoading || interior?.active || !INTERIOR_NAMES[room]) return;
   interiorLoading = true;

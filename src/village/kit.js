@@ -142,7 +142,7 @@ export function createVillageKit(T, scene, { water, colliders, interactables, an
     );
     return o;
   }
-  function label(text, color = "#4d5745") {
+  function label(text, color = "#4d5745", size = 55) {
     const c = document.createElement("canvas");
     c.width = 512;
     c.height = 128;
@@ -155,7 +155,7 @@ export function createVillageKit(T, scene, { water, colliders, interactables, an
     q.fillStyle = color;
     q.textAlign = "center";
     q.textBaseline = "middle";
-    q.font = "bold 55px Georgia";
+    q.font = `bold ${size}px Georgia`;
     q.fillText(text, 256, 67);
     const tx = new T.CanvasTexture(c);
     tx.colorSpace = T.SRGBColorSpace;

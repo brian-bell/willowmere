@@ -1,10 +1,12 @@
 import { chromium } from "@playwright/test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 
-// Measures the bakery interior against a running dev or preview server.
+// Measures a walkable room against a running dev or preview server: the bakery
+// unless BENCHMARK_ROOM names another (rosewood, heron, thistledown).
 // Usage: node scripts/benchmark-interior.mjs <label> [--ablate]
 const url = process.env.BENCHMARK_URL || "http://127.0.0.1:5173";
 const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const room = process.env.BENCHMARK_ROOM || "bakery";
 const label = process.argv[2] || "latest";
 const ablate = process.argv.includes("--ablate");
 if (!/^[a-zA-Z0-9_-]+$/.test(label))
@@ -61,7 +63,7 @@ try {
             });
         });
     });
-    await page.goto(`${url}/?interior=bakery&resolution=fixed`);
+    await page.goto(`${url}/?interior=${room}&resolution=fixed`);
     await page.waitForFunction(
       () => window.__willowmere?.getInterior().active,
       null,

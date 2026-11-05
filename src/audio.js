@@ -181,6 +181,37 @@ export function createAudio() {
           "triangle",
         );
     },
+    // Thistledown's bells, birds, cat, piano and pipes.
+    bell() {
+      for (const at of [0, 0.02]) tone(1975 + at * 800, context.currentTime + at, 0.9, 0.06);
+      tone(2960, context.currentTime, 0.5, 0.025);
+    },
+    tick() {
+      for (let i = 0; i < 4; i++) tone(i % 2 ? 620 : 840, context.currentTime + i * 0.5, 0.05, 0.05, "triangle");
+    },
+    tweet() {
+      for (let i = 0; i < 8; i++) {
+        const now = context.currentTime + i * 0.12;
+        tone(2200 + ((i * 370) % 900), now, 0.1, 0.03);
+      }
+    },
+    purr() {
+      for (let i = 0; i < 14; i++) tone(42 + (i % 2) * 6, context.currentTime + i * 0.11, 0.1, 0.09, "sawtooth");
+    },
+    piano() {
+      // The top note is flat, as promised.
+      [261.63, 329.63, 392, 523.25 * 0.97, 392, 329.63].forEach((note, i) => {
+        tone(note, context.currentTime + i * 0.28, 0.9, 0.07, "triangle");
+        tone(note * 2, context.currentTime + i * 0.28, 0.4, 0.015);
+      });
+    },
+    water() {
+      for (let i = 0; i < 16; i++) tone(240 + Math.random() * 900, context.currentTime + i * 0.05, 0.06, 0.012);
+    },
+    flush() {
+      tone(90, context.currentTime, 0.2, 0.08, "square");
+      for (let i = 0; i < 26; i++) tone(120 + Math.random() * 500, context.currentTime + 0.7 + i * 0.07, 0.1, 0.018);
+    },
     "music:on"() {
       stopMusic();
       playWaltz();

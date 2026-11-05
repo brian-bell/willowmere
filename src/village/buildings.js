@@ -144,7 +144,7 @@ export function buildBuildings(kit, { contact }) {
       bed: ["daisies", blooms.white],
       side: [-1.75, 0.65], // Clear of the water barrel by the door.
     },
-    cottage: {
+    thistledown: {
       pots: [
         ["geranium", blooms.coral],
         ["daisies", blooms.marigold],
@@ -383,9 +383,13 @@ export function buildBuildings(kit, { contact }) {
       wallBed(scheme, 0, 0, length, sideBed, [[mid, 0.75]]);
       colliders.push({ x: x + w / 2 + 0.31, z: z + mid, w: 0.46, d: length });
     }
-    if (sign) {
-      box(darkWood, 0, 2.66, dz + 0.12, 2, 0.12, 0.12, p);
-      box(label(sign), 0, 2.67, dz + 0.205, 1.78, 0.46, 0.07, p);
+    box(darkWood, 0, 2.66, dz + 0.12, 2, 0.12, 0.12, p);
+    box(label(sign), 0, 2.67, dz + 0.205, 1.78, 0.46, 0.07, p);
+    // The B&B says so, on a board hung from its canopy.
+    if (id === "thistledown") {
+      for (const xx of [-0.4, 0.4]) box(darkWood, xx, 2.0, d / 2 + 1.04, 0.02, 0.2, 0.02, p);
+      box(darkWood, 0, 1.82, d / 2 + 1.04, 1.24, 0.27, 0.05, p);
+      box(label("BED & BREAKFAST", "#5b3a2c", 44), 0, 1.82, d / 2 + 1.07, 1.14, 0.2, 0.02, p);
     }
     // Entrance canopy, supported on carved posts.
     roof(0, d / 2 + 0.62, 1.85, 1.05, 2.15, 0.35, ro, p);
@@ -402,7 +406,7 @@ export function buildBuildings(kit, { contact }) {
     colliders.push({ x, z, w: w + 0.15, d: d + 0.2 });
     interactables.push({
       id,
-      name: sign || "Rosewood Cottage",
+      name: sign,
       type: id,
       x,
       z: z + d / 2 + 1.1,
@@ -413,7 +417,7 @@ export function buildBuildings(kit, { contact }) {
   house(-7, -6, 5.5, 4.3, 3.25, roofBlue, "ROSEWOOD", "home");
   house(1.2, -8.4, 4.8, 4.2, 3, roofRust, "THE DAILY LOAF", "bakery");
   house(17, -7, 4.4, 4.4, 3.5, roofBlue, "WILLOW MILL", "mill");
-  house(-15, -3, 4, 3.6, 2.7, roofRust, "", "cottage");
+  house(-15, -3, 4, 3.6, 2.7, roofRust, "THISTLEDOWN", "thistledown");
   // Bakery's flour store has a lower shed roof and working delivery hatch.
   box(stone, 4.33, 0.18, -8.2, 1.6, 0.3, 3.15);
   box(ivory, 4.3, 1.13, -8.2, 1.6, 1.85, 3.1);

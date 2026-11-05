@@ -232,6 +232,16 @@ Rosewood (`src/rosewood.js`) goes through the same chain and settings as the bak
 
 Counted in the cloud container (SwiftShader, 1000 × 625 CSS pixels, high): 299 draws and about 0.4M triangles at the front door looking down the hall, 196 draws and 0.29M in the living room by the aquarium, 344 draws and 0.51M from the kitchen looking out into the garden, and 91 draws by Bark's kennel. The bakery's entrance view is 285. Its exterior adds the kitchen extension and the back garden to the village: behind Rosewood at height 18, 813 draws and 2.47M triangles against `main`'s 792 and 2.50M (the meadow grass under the extension and patio is cleared). The bakery itself is unchanged by sharing its helpers (`src/interior-kit.js`): 275 draws and 1,161,370 triangles before and after at the same view.
 
+### Thistledown interior
+
+Thistledown (`src/thistledown/room.js`) goes through the same chain and settings as the other rooms, and is the largest of them: two floors, eight furnished rooms and a garden. The sun is its only shadow caster, rendered once when the room opens and after a resize or quality change (`staticShadows`), and nothing that moves casts into it. Three things keep it cheap:
+
+- **Rooms draw only from where they can be seen.** Each furnished room is its own merged group, and `SEEN_FROM` in `layout.js` lists which others show through its doors, hatch and stairwell. Each floor's walls hide the same way. The frame the sun's map renders, everything is shown so all of it casts: `room.update` checks `sun.shadow.needsUpdate`. A new doorway or sight line has to be added to that list, or a room pops in as you reach it.
+- **Flat colours share materials.** `paintFlat` in `src/interior-kit.js` folds every flat-coloured mesh into one vertex-coloured material per finish, so its hundreds of colours bake into a handful of draws. Every small picture, label and notice is a rectangle of one 2048 px sheet (`createSheet`), and `fuse` in `parts.js` makes each moving figure a single draw.
+- **The lamps are a fixed pool of seven.** The hall, back hall and landing lights stay put; the other four move between floors at the stair's halfway point, dimmed there, so neither the hour nor the floor compiles a program.
+
+`node scripts/benchmark-interior.mjs <label>` measures it with `BENCHMARK_ROOM=thistledown`. Counted on high at 1280 × 800 CSS pixels: 398 draws and 0.45M triangles at the front door looking down the hall, its costliest view; 184 to 233 draws in the breakfast room, kitchen and sitting room; 315 on the stairs; 122 to 271 upstairs.
+
 ## Regression budgets
 
 These tests assert rendering work and behaviour instead of a machine-dependent FPS threshold. The village diagnostics expose `drawCalls`, `triangles`, `geometries`, `textures`, and `shadow` (`mapSize` and light-space `bounds`); water diagnostics include each pool's `reflectionSize`.
@@ -249,10 +259,27 @@ These tests assert rendering work and behaviour instead of a machine-dependent F
 - **Bakery.** `tests/interior.spec.js` checks that the bakery's shadow maps stay cached, that its AO runs at half the scene target's width, the MSAA and sun-map size for each quality, and median draw budgets of under 330 on high and under 180 on performance.
 - **Rosewood.** `tests/rosewood.spec.js` checks that Rosewood's shadow maps stay cached with a 2048 sun map on high, and median draws at the front door under 400 on high and under 250 on performance.
 - **The Drowsy Heron.** `tests/pub.spec.js` holds each of the study's views under 450 draws and 1.8M triangles and checks that blue hour compiles no new program. In the game it holds the inn's forecourt under 1,000 draws and 2.5M triangles at the default height and zoomed out, and its room at a median under 420 draws with its shadow maps cached.
+- **Thistledown.** `tests/thistledown.spec.js` holds its front door at a median under 420 draws and 0.5M triangles on high and under 250 draws on performance, with its shadow maps cached and a 2048 sun map on high, and checks that a room out of sight stops drawing.
 
 ## Change history
 
 Measurements recorded as each change landed, newest first, each against the `main` it was merged into. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the combined baseline. Entries counted in the cloud container ran on SwiftShader, so they give draw calls and triangles but no timings.
+
+### Thistledown, the village's bed & breakfast (2026-11-04)
+
+A new room, so the other rooms are untouched. Frame means on an Apple M5 at the front door, three interleaved rounds each, against Rosewood at its front door in the same session:
+
+| | Thistledown 1x | Rosewood 1x | Thistledown 2x | Rosewood 2x |
+| --- | --- | --- | --- | --- |
+| High | 7.86 ms | 11.06 ms | 8.25 ms | 8.21 ms |
+| Balanced | 6.72 ms | 10.70 ms | 7.35 ms | 8.79 ms |
+| Performance | 5.47 ms | 8.65 ms | 4.04 ms | 10.98 ms |
+| Draws, high | 398 | 318 | 398 | 318 |
+| Triangles, high | 0.44M | 0.51M | 0.44M | 0.51M |
+
+Take these as the shape rather than exact figures: these runs are noisy, and Rosewood's performance row at 2x is slower than its high row. Opening the room from the village took 2.6 to 2.7 s against 4.0 to 5.0 s for Rosewood and 2.8 to 4.2 s for the bakery, on the dev server.
+
+Outside, the cottage gains its sign and a board at the door: two label materials and two objects in `scripts/world-fingerprint.mjs`, whose colliders, lamps and ground hashes match `main`. No random stream moved.
 
 ### Cheaper fragments and a compact scene target (2026-11-04)
 

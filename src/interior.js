@@ -8,6 +8,7 @@ import { sceneTargetOptions } from "./scene-target.js";
 import { createBakery } from "./bakery.js";
 import { createRosewood } from "./rosewood.js";
 import { createHeronRoom } from "./pub/room.js";
+import { createThistledownRoom } from "./thistledown/room.js";
 import { createInteriorWalker } from "./interior-movement.js";
 import "./interior.css";
 
@@ -19,6 +20,7 @@ const ROOMS = {
   bakery: () => createBakery(),
   rosewood: (progress) => createRosewood(progress),
   heron: () => createHeronRoom(),
+  thistledown: () => createThistledownRoom(),
 };
 
 export function createInterior({
