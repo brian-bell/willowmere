@@ -137,6 +137,8 @@ try {
   // Fixed resolution keeps each quality at its own pixel ratio.
   await page.goto(new URL("/?resolution=fixed", url).href);
   await page.locator("#start").click();
+  // The view and zoom controls below fold behind this on desktop.
+  await page.locator("#camera-toggle").click();
   await page.waitForTimeout(2500);
   const gpu = await page.evaluate(() => {
     const gl = document.querySelector("canvas").getContext("webgl2");
