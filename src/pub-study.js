@@ -1,5 +1,6 @@
 import * as T from "three";
 import "./shader-chunks.js";
+import { useDepthShadowMaps } from "./shadow-maps.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
@@ -25,6 +26,7 @@ renderer.toneMapping = T.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.02;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = T.PCFSoftShadowMap;
+useDepthShadowMaps(renderer);
 renderer.domElement.setAttribute(
   "aria-label",
   "Interactive 3D model of a Tudor pub. Drag to rotate and scroll to zoom.",

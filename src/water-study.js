@@ -1,5 +1,6 @@
 import * as T from "three";
 import "./shader-chunks.js";
+import { useDepthShadowMaps } from "./shadow-maps.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createWorld } from "./world.js";
 
@@ -17,6 +18,7 @@ renderer.toneMapping = T.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = T.PCFSoftShadowMap;
+useDepthShadowMaps(renderer);
 document.body.prepend(renderer.domElement);
 const camera = new T.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 150);
 const controls = new OrbitControls(camera, renderer.domElement);

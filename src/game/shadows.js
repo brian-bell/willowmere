@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { WORLD, terrainField, terrainHeight, terrainMaxIn } from "../world-layout.js";
 import { CAMERA_HEADING } from "./overview-camera.js";
+import { casterReachesView, viewWedge } from "./caster-reach.js";
 
 // Eye-level views resolve finer shadow texels than the village overview.
 export const SHADOW_MAP_SIZES = {
@@ -34,7 +35,11 @@ export function createSunShadow({ sun, overviewCamera, firstPersonCamera }) {
     // First person fits the shadow to a village-sized box of ground around the
     // eye, reaching this far ahead of it, so eye-level detail keeps the
     // 4096 map's density on a map of any size, and turning only shifts it.
-    FIRST_PERSON_SHADOW_AHEAD = 10;
+    FIRST_PERSON_SHADOW_AHEAD = 10,
+    // How much wider than the view a caster counts as reaching it, in radians,
+    // and how far behind the eye the wedge starts, in metres.
+    CASTER_MARGIN = 0.05,
+    CASTER_BACK = 0.5;
   const shadowLight = sun.position.clone().sub(sun.target.position).normalize(),
     shadowPoint = new THREE.Vector3(),
     shadowRay = new THREE.Vector3(),
@@ -49,6 +54,54 @@ export function createSunShadow({ sun, overviewCamera, firstPersonCamera }) {
     worldShadow = new THREE.Box2(),
     shadowStep = [10, 10];
   let shadowYaw = null;
+  // The sun's map draws only what can cast into the view (src/game/caster-reach.js).
+  const viewFrustum = new THREE.Frustum(),
+    viewMatrix = new THREE.Matrix4(),
+    casterPlanes = [],
+    casterFrustum = sun.shadow.getFrustum(),
+    inMap = casterFrustum.intersectsSphere.bind(casterFrustum),
+    cornerRay = new THREE.Vector3(),
+    forward = { x: 0, z: 0 },
+    cornerRays = [0, 1, 2, 3].map(() => ({ x: 0, z: 0 }));
+  casterFrustum.intersectsSphere = (sphere) =>
+    inMap(sphere) &&
+    casterReachesView(sphere.center, sphere.radius, shadowLight, SHADOW_FLOOR, casterPlanes);
+  function setPlane(i, plane) {
+    const to = (casterPlanes[i] ??= [0, 0, 0, 0]);
+    to[0] = plane.normal.x;
+    to[1] = plane.normal.y;
+    to[2] = plane.normal.z;
+    to[3] = plane.constant;
+  }
+  function fitCasters(firstPerson, yaw) {
+    if (firstPerson) {
+      const eye = firstPersonCamera.position;
+      forward.x = -Math.sin(yaw);
+      forward.z = -Math.cos(yaw);
+      for (let i = 0; i < 4; i++) {
+        cornerRay
+          .set(i & 1 ? 1 : -1, i & 2 ? 1 : -1, 0.5)
+          .unproject(firstPersonCamera)
+          .sub(eye);
+        cornerRays[i].x = cornerRay.x;
+        cornerRays[i].z = cornerRay.z;
+      }
+      casterPlanes.length = 0;
+      casterPlanes.push(...viewWedge(eye, forward, cornerRays, CASTER_MARGIN, CASTER_BACK));
+      return;
+    }
+    // Reflections look up the screen, beyond the top edge, so that one stays open.
+    viewFrustum.setFromProjectionMatrix(
+      viewMatrix.multiplyMatrices(
+        overviewCamera.projectionMatrix,
+        overviewCamera.matrixWorldInverse,
+      ),
+    );
+    casterPlanes.length = 3;
+    setPlane(0, viewFrustum.planes[0]);
+    setPlane(1, viewFrustum.planes[1]);
+    setPlane(2, viewFrustum.planes[2]);
+  }
   // The depth range spans the world's receivers along the light, with a metre spare.
   {
     let near = Infinity,
@@ -118,6 +171,7 @@ export function createSunShadow({ sun, overviewCamera, firstPersonCamera }) {
   }
   function fit({ firstPerson, yaw, targetYaw }) {
     if (shadowYaw !== targetYaw) roll(targetYaw);
+    fitCasters(firstPerson, yaw);
     if (firstPerson) {
       // A village-sized box centred a little ahead of the eye, raised to the
       // ground the eye stands on.
@@ -214,6 +268,7 @@ export function createSunShadow({ sun, overviewCamera, firstPersonCamera }) {
     setMapSize,
     diagnostics: () => ({
       mapSize: sun.shadow.mapSize.x,
+      depthOnly: !!sun.shadow.map?.texture.isDepthTexture,
       // The village's light-space extent, which shadow sizes are fractions of.
       reference: villageShadow.getSize(new THREE.Vector2()).toArray(),
       bounds: [shadowCamera.left, shadowCamera.right, shadowCamera.bottom, shadowCamera.top],
