@@ -10,15 +10,17 @@ test("character batches retain detailed geometry and moving joints", { tag: "@lo
     triangles = 0;
   scene.traverse((object) => {
     if (!object.isMesh) return;
-    meshes++;
-    triangles += object.geometry.index.count / 3;
     for (const attribute of Object.values(object.geometry.attributes))
       expect(attribute.array.every(Number.isFinite)).toBe(true);
+    // Zoomed-far copies wait hidden, and draw instead of the rest.
+    if (!object.visible) return;
+    meshes++;
+    triangles += object.geometry.index.count / 3;
   });
   expect(meshes).toBeLessThan(165);
   // Batching reduces submissions, not the character models' detail.
-  expect(triangles).toBeGreaterThan(60000);
-  expect(triangles).toBeLessThan(70000);
+  expect(triangles).toBeGreaterThan(65000);
+  expect(triangles).toBeLessThan(80000);
   scene.updateMatrixWorld(true);
   const parts = [];
   life.player.traverse((object) => {

@@ -1,5 +1,6 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createCat } from "./cats.js";
+import { animatePerson, createPeople } from "./people/index.js";
 
 /**
  * Hand-built inhabitants and wildlife. Coordinates are in the village's X/Z
@@ -15,11 +16,16 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
   };
   let casters = null,
     castsShadows = true;
+  // The plain colours batchParts may bake into vertex colours.
+  const palette = new Set();
   const materials = new Map();
   const mat = (color, roughness = 0.86) => {
     const key = `${color}:${roughness}`;
-    if (!materials.has(key))
-      materials.set(key, new THREE.MeshStandardMaterial({ color, roughness }));
+    if (!materials.has(key)) {
+      const material = new THREE.MeshStandardMaterial({ color, roughness });
+      materials.set(key, material);
+      palette.add(material);
+    }
     return materials.get(key);
   };
   const geometry = {
@@ -45,10 +51,6 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     depthWrite: false,
   });
   const shadowGeo = new THREE.CircleGeometry(1, 24);
-  // Every person shares these few fixed shapes rather than building their own.
-  const coatGeo = new THREE.CylinderGeometry(0.19, 0.255, 0.54, 14),
-    smileGeo = new THREE.TorusGeometry(0.026, 0.005, 4, 8, Math.PI),
-    hatCrownGeo = new THREE.CylinderGeometry(0.153, 0.193, 0.19, 18);
   const shadow = (parent, sx, sz) => {
     const s = new THREE.Mesh(shadowGeo, shadowMat);
     s.rotation.x = -Math.PI / 2;
@@ -57,266 +59,19 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     parent.add(s);
     return s;
   };
-  function person({
-    coat,
-    skin = 0xe9b38e,
-    hair = 0x5b3930,
-    hat = true,
-    pack = false,
-    apron = false,
-    flowers = false,
-    size = 1,
-  }) {
-    const root = new THREE.Group(),
-      body = new THREE.Group();
-    if (apron) body.scale.x = 1.09;
-    root.add(body);
-    root.scale.setScalar(size);
-    shadow(root, 0.4, 0.25);
-    const hips = new THREE.Group();
-    hips.position.y = 0.58;
-    body.add(hips);
-    const legs = [],
-      arms = [];
-    for (const side of [-1, 1]) {
-      const leg = new THREE.Group();
-      leg.position.set(side * 0.115, 0, 0);
-      hips.add(leg);
-      m(leg, "cylinder", 0x4e5b59, 0, -0.19, 0, 0.073, 0.36, 0.08);
-      m(leg, "cylinder", 0x634a38, 0, -0.385, 0.01, 0.078, 0.14, 0.089);
-      sphere(leg, 0x543f34, 0, -0.44, 0.045, 0.085, 0.085, 0.15);
-      m(leg, "box", 0x382f28, 0, -0.491, 0.045, 0.17, 0.032, 0.265);
-      legs.push(leg);
-    }
-    const torso = new THREE.Mesh(coatGeo, mat(coat));
-    torso.position.y = 0.87;
-    torso.castShadow = true;
-    body.add(torso);
-    sphere(body, coat, 0, 1.08, 0, 0.226, 0.145, 0.165);
-    // Folded collar, central seam, and small wooden buttons are readable at close zoom.
-    const collarLeft = m(
-      body,
-      "box",
-      0xe9d9b7,
-      -0.075,
-      1.105,
-      0.158,
-      0.092,
-      0.11,
-      0.029,
-    );
-    collarLeft.rotation.z = -0.4;
-    const collarRight = m(
-      body,
-      "box",
-      0xe9d9b7,
-      0.075,
-      1.105,
-      0.158,
-      0.092,
-      0.11,
-      0.029,
-    );
-    collarRight.rotation.z = 0.4;
-    m(body, "box", 0x735344, 0, 0.86, 0.216, 0.012, 0.37, 0.016);
-    for (let i = 0; i < (apron ? 0 : 3); i++)
-      sphere(body, 0xddbf80, 0.03, 0.96 - i * 0.115, 0.23, 0.018, 0.018, 0.013);
-    for (const side of [-1, 1]) {
-      const arm = new THREE.Group();
-      arm.position.set(side * 0.245, 1.055, 0);
-      body.add(arm);
-      sphere(arm, coat, side * 0.018, -0.125, 0, 0.079, 0.185, 0.085);
-      m(
-        arm,
-        "cylinder",
-        0xdcc8a5,
-        side * 0.024,
-        -0.259,
-        0.003,
-        0.07,
-        0.052,
-        0.072,
-      );
-      sphere(arm, skin, side * 0.024, -0.3, 0.01, 0.068, 0.078, 0.065);
-      arms.push(arm);
-    }
-    m(body, "cylinder", skin, 0, 1.165, 0, 0.072, 0.14, 0.078);
-    // Rounded sculptural face with the features deliberately clear of the hair cap.
-    sphere(body, skin, 0, 1.345, 0.008, 0.184, 0.208, 0.171);
-    sphere(body, hair, 0, 1.392, -0.049, 0.196, 0.196, 0.151);
-    for (const side of [-1, 1]) {
-      sphere(body, skin, side * 0.173, 1.333, 0.022, 0.036, 0.057, 0.04);
-      sphere(body, 0x302f2a, side * 0.065, 1.352, 0.163, 0.019, 0.025, 0.012);
-      sphere(body, 0xd9957c, side * 0.099, 1.301, 0.149, 0.035, 0.018, 0.014);
-      sphere(body, hair, side * 0.15, 1.427, 0.058, 0.062, 0.105, 0.091);
-    }
-    sphere(body, skin, 0, 1.313, 0.18, 0.027, 0.03, 0.031);
-    const smile = new THREE.Mesh(smileGeo, mat(0x9e6553));
-    smile.rotation.z = Math.PI;
-    smile.position.set(0, 1.28, 0.164);
-    body.add(smile);
-    if (hat) {
-      m(body, "cylinder", 0xf1dfab, 0, 1.51, -0.015, 0.313, 0.043, 0.255);
-      const crown = new THREE.Mesh(hatCrownGeo, mat(0xe7d29b));
-      crown.position.set(0, 1.616, -0.02);
-      crown.castShadow = true;
-      body.add(crown);
-      m(
-        body,
-        "cylinder",
-        pack ? 0x365c62 : 0x7e6654,
-        0,
-        1.555,
-        -0.02,
-        0.191,
-        0.035,
-        0.191,
-      );
-      sphere(
-        body,
-        pack ? 0x365c62 : 0xa46552,
-        -0.185,
-        1.565,
-        0.045,
-        0.053,
-        0.036,
-        0.024,
-      );
-      sphere(
-        body,
-        pack ? 0x365c62 : 0xa46552,
-        -0.187,
-        1.565,
-        -0.013,
-        0.053,
-        0.036,
-        0.024,
-      );
-    } else if (apron) {
-      m(body, "cylinder", 0xf4ebd7, 0, 1.5, -0.012, 0.197, 0.068, 0.192);
-      sphere(body, 0xf5ecd9, 0, 1.575, -0.015, 0.213, 0.125, 0.183);
-    } else {
-      sphere(body, hair, 0, 1.54, -0.033, 0.148, 0.078, 0.122);
-    }
-    let scarf = null;
-    if (pack) {
-      // The traveler’s deep teal scarf and hat band remain distinct at village zoom.
-      m(body, "cylinder", 0x406d70, 0, 1.173, 0.012, 0.105, 0.061, 0.107);
-      scarf = new THREE.Group();
-      scarf.position.set(-0.085, 1.15, 0.175);
-      body.add(scarf);
-      const scarfTail = m(
-        scarf,
-        "box",
-        0x406d70,
-        -0.018,
-        -0.105,
-        0.018,
-        0.078,
-        0.235,
-        0.028,
-      );
-      scarfTail.rotation.z = -0.13;
-      m(scarf, "box", 0xd6b472, -0.031, -0.209, 0.035, 0.071, 0.017, 0.008);
-      sphere(body, 0x766645, 0, 0.943, -0.235, 0.18, 0.23, 0.105);
-      m(body, "box", 0xa79060, 0, 1.06, -0.315, 0.285, 0.07, 0.035);
-      m(body, "box", 0xcbb482, 0, 0.906, -0.342, 0.18, 0.14, 0.025);
-      m(body, "box", 0x604b35, 0, 1.017, -0.35, 0.04, 0.12, 0.023);
-      for (const s of [-1, 1]) {
-        const strap = m(
-          body,
-          "box",
-          0x806f49,
-          s * 0.151,
-          0.973,
-          0.172,
-          0.036,
-          0.255,
-          0.026,
-        );
-        strap.rotation.z = s * 0.1;
-      }
-      const roll = m(
-        body,
-        "cylinder",
-        0x9caa89,
-        0,
-        1.162,
-        -0.245,
-        0.078,
-        0.38,
-        0.078,
-      );
-      roll.rotation.z = Math.PI / 2;
-    }
-    if (apron) {
-      m(body, "box", 0xeaddbd, 0, 0.813, 0.245, 0.29, 0.38, 0.022);
-      m(body, "box", 0xf5e6c9, 0, 0.987, 0.227, 0.18, 0.21, 0.025);
-      m(body, "box", 0xc8b68f, 0, 0.77, 0.267, 0.15, 0.1, 0.018);
-    }
-    if (flowers) {
-      // Florist carries an arrangement wrapped in parchment.
-      const bouquet = new THREE.Group();
-      bouquet.position.set(-0.065, -0.28, 0.055);
-      bouquet.rotation.z = -0.25;
-      arms[0].add(bouquet);
-      for (let i = 0; i < 6; i++) {
-        const a = i * 2.4,
-          x = Math.cos(a) * 0.083,
-          z = Math.sin(a) * 0.065,
-          y = 0.14 + (i % 3) * 0.045;
-        m(
-          bouquet,
-          "cylinder",
-          0x657f42,
-          x * 0.5,
-          y / 2,
-          z * 0.5,
-          0.012,
-          y,
-          0.012,
-        );
-        for (let p = 0; p < 5; p++)
-          sphere(
-            bouquet,
-            i % 2 ? 0xe4ba57 : 0xd68187,
-            x + Math.cos(p * 1.256) * 0.027,
-            y,
-            z + Math.sin(p * 1.256) * 0.027,
-            0.035,
-            0.022,
-            0.035,
-          );
-        sphere(bouquet, 0xefcf72, x, y + 0.008, z, 0.019, 0.02, 0.019);
-      }
-    }
-    const head = new THREE.Group();
-    head.position.y = 1.3;
-    for (const child of [...body.children]) {
-      if (child.position.y >= 1.2) {
-        body.remove(child);
-        child.position.y -= 1.3;
-        head.add(child);
-      }
-    }
-    head.scale.setScalar(1.17);
-    body.add(head);
-    return {
-      root,
-      body,
-      legs,
-      arms,
-      scarf,
-      head,
-      armPose: flowers ? [-0.48, -0.04] : apron ? [-0.14, 0.05] : [0, 0],
-      seed: Math.random() * 6.28,
-    };
-  }
+  const person = createPeople(THREE, mat, shadow);
   const traveler = person({
     coat: 0xb84f35,
     hair: 0x624031,
+    belt: true,
+    hat: "straw",
+    ribbon: 0x365c62,
+    feather: 0xc9a24f,
+    neck: "scarf",
+    neckColor: 0x406d70,
     pack: true,
     size: 1.12,
+    walks: true,
   });
   const player = traveler.root;
   player.name = "Traveler";
@@ -330,8 +85,17 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       coat: 0x81966d,
       hair: 0x79533d,
       skin: 0xe4b594,
-      flowers: true,
-      hat: true,
+      garment: "dress",
+      apron: "half",
+      apronColor: 0xe6d9b8,
+      collar: "round",
+      hat: "sunhat",
+      hairStyle: "plait",
+      carry: { right: "bouquet" },
+      armPose: [
+        [-0.42, -1.05],
+        [0, -0.16],
+      ],
       size: 0.94,
       dialogue: [
         "Every flower has its own little way of saying hello.",
@@ -347,8 +111,21 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       coat: 0x708d91,
       hair: 0x824b2e,
       skin: 0xc88e65,
-      apron: true,
-      hat: false,
+      garment: "shirt",
+      rolled: true,
+      apron: "bib",
+      flour: true,
+      stout: 1.09,
+      trousers: 0x6b6255,
+      hat: "toque",
+      beard: "short",
+      neck: "kerchief",
+      neckColor: 0xb5584a,
+      carry: { left: "loaf" },
+      armPose: [
+        [-0.05, -0.14],
+        [-0.3, -1.35],
+      ],
       size: 1.04,
       dialogue: [
         "The first loaf is always for whoever follows the smell.",
@@ -364,7 +141,22 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       coat: 0xc49c58,
       hair: 0x493c32,
       skin: 0xbc8768,
-      hat: true,
+      garment: "smock",
+      rolled: true,
+      trousers: 0x6b5a48,
+      patches: 0x8a7350,
+      hat: "straw",
+      straw: 0xdcc78c,
+      ribbon: 0x6b4f3a,
+      hatTilt: 0.06,
+      hairStyle: "wavy",
+      neck: "kerchief",
+      neckColor: 0x8c4a3c,
+      carry: { left: "can" },
+      armPose: [
+        [0, -0.12],
+        [-0.05, -0.12],
+      ],
       size: 0.96,
       dialogue: [
         "Listen — even the leaves have something to say.",
@@ -387,34 +179,31 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     coat: 0xc77b9a,
     hair: 0x613e2c,
     skin: 0xe8b591,
-    hat: false,
+    garment: "dress",
+    short: true,
+    apron: "bib",
+    apronColor: 0xf6edda,
+    collar: "round",
+    collarColor: 0xfdf6e6,
+    puffed: true,
+    trousers: 0xe9dfcc,
+    boots: 0x7a4a3a,
+    bootStyle: "shoe",
+    hairStyle: "pigtails",
+    freckles: true,
     size: 0.8,
+    walks: true,
+    armPose: [
+      [0, -0.12],
+      [-0.45, -0.25],
+    ],
   });
   girl.root.name = "Lily";
   addFigure(girl.root);
-  const skirt = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.22, 0.34, 0.32, 18),
-    mat(0xc77b9a),
-  );
-  skirt.position.y = 0.69;
-  skirt.castShadow = true;
-  girl.body.add(skirt);
-  // Soft pigtails and small cream bows give her a different silhouette from the adults.
-  const pigtails = [];
-  for (const side of [-1, 1]) {
-    const hair = new THREE.Group();
-    hair.position.set(side * 0.18, 0.06, -0.04);
-    girl.head.add(hair);
-    sphere(hair, 0x613e2c, side * 0.035, -0.015, -0.025, 0.075, 0.115, 0.075);
-    sphere(hair, 0x613e2c, side * 0.055, -0.1, -0.01, 0.06, 0.075, 0.06);
-    for (const z of [-0.035, 0.035])
-      sphere(hair, 0xf8dfad, side * 0.05, 0.035, z, 0.035, 0.04, 0.042);
-    pigtails.push(hair);
-  }
-  girl.armPose[1] = -0.45;
+  const { pigtails } = girl;
   const leashHand = new THREE.Object3D();
-  leashHand.position.set(0.024, -0.3, 0.02);
-  girl.arms[1].add(leashHand);
+  leashHand.position.set(0, -0.06, 0.012);
+  girl.hands[1].add(leashHand);
 
   const puppy = new THREE.Group(),
     puppyBody = new THREE.Group();
@@ -731,8 +520,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
 
   // Bake only rigid siblings from our plain-color palette. The groups remain
   // independent joints, so gait, ears, tails, scarf and leash anchors still move.
-  const palette = new Set(materials.values()),
-    batchMaterials = new Map();
+  const batchMaterials = new Map();
   function batchParts(group) {
     const batches = new Map();
     for (const child of [...group.children]) {
@@ -753,15 +541,21 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
         batchMaterials.set(key, material);
       }
       const parts = meshes.map((mesh) => {
-        const part = mesh.geometry.clone().applyMatrix4(mesh.matrix);
+        const part = new THREE.BufferGeometry()
+          .copy(mesh.geometry)
+          .applyMatrix4(mesh.matrix);
         const colors = new Float32Array(part.attributes.position.count * 3);
-        const { r, g, b } = mesh.material.color;
+        const { r, g, b } = mesh.material.color,
+          tone = part.attributes.tone;
         for (let i = 0; i < colors.length; i += 3) {
-          colors[i] = r;
-          colors[i + 1] = g;
-          colors[i + 2] = b;
+          const k = tone ? tone.getX(i / 3) : 1;
+          colors[i] = r * k;
+          colors[i + 1] = g * k;
+          colors[i + 2] = b * k;
         }
         part.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+        part.deleteAttribute("tone");
+        part.deleteAttribute("uv");
         return part;
       });
       const geometry = mergeGeometries(parts);
@@ -774,13 +568,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       group.add(mesh);
     }
   }
-  for (const root of [
-    player,
-    ...residents.map((npc) => npc.group),
-    girl.root,
-    puppy,
-    ...cats.map((cat) => cat.root),
-  ])
+  for (const root of [player, girl.root, puppy, ...cats.map((cat) => cat.root)])
     batchParts(root);
 
   let velocityX = 0,
@@ -791,22 +579,6 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
   function setPlayerMotion(vx, vz) {
     velocityX = vx;
     velocityZ = vz;
-  }
-  function animatePerson(figure, phase, blend, time) {
-    figure.body.position.y =
-      Math.abs(Math.sin(phase)) * 0.052 * blend +
-      Math.sin(time * 1.6 + figure.seed) * 0.008;
-    figure.legs[0].rotation.x = Math.sin(phase) * 0.48 * blend;
-    figure.legs[1].rotation.x = -Math.sin(phase) * 0.48 * blend;
-    figure.arms[0].rotation.x =
-      figure.armPose[0] -
-      Math.sin(phase) * 0.32 * blend +
-      Math.sin(time * 1.4 + figure.seed) * 0.025;
-    figure.arms[1].rotation.x =
-      figure.armPose[1] + Math.sin(phase) * 0.32 * blend;
-    figure.body.rotation.z = Math.sin(phase) * 0.022 * blend;
-    if (figure.scarf)
-      figure.scarf.rotation.x = Math.sin(phase + 0.4) * 0.11 * blend;
   }
   function update(dt, time, moving, animateWorld = true) {
     if (animateWorld) animationTime += dt;
@@ -828,6 +600,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     for (const npc of residents) {
       animatePerson(npc.figure, 0, 0, time);
       const distance = npc.group.position.distanceTo(player.position);
+      let glance = 0;
       if (distance < 3.4) {
         const desired = Math.atan2(
           player.position.x - npc.x,
@@ -838,7 +611,10 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
           Math.cos(desired - npc.group.rotation.y),
         );
         npc.group.rotation.y += angle * (1 - Math.exp(-dt * 2));
+        // The head turns first, and the shoulders catch it up.
+        glance = Math.max(-0.75, Math.min(0.75, angle));
       }
+      npc.figure.lookY += (glance - npc.figure.lookY) * (1 - Math.exp(-dt * 5));
     }
     butterflies.forEach(({ root, wings, x, z, seed }) => {
       const t = time * 0.55 + seed;
@@ -940,23 +716,34 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       wings[1].rotation.z = -wings[0].rotation.z;
     });
   }
-  // The regions' residents stand still but for a breath, so zoomed far out,
-  // where they are a few pixels tall, each draws as one merged copy of its
-  // body in its resting pose instead of a couple of dozen jointed batches.
-  // Their contact shadows stay. The copy rebuilds round parts with fewer
-  // segments and leaves out the smallest (eyes, spectacles), which are under a
-  // pixel there.
+  // Residents stand still but for a breath, so zoomed far out, where they are a
+  // few pixels tall, each draws as one merged copy of its body in its resting
+  // pose instead of its jointed batches. Their contact shadows stay. The copy
+  // rebuilds round parts with fewer segments and leaves out the smallest (eyes,
+  // buttons, spectacles), which are under a pixel there.
   const farFigures = [],
     farMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 }),
     farPartScale = new THREE.Vector3();
-  function coarsePart(geometry) {
-    const p = geometry.parameters;
-    if (geometry.attributes.color || !p) return geometry.clone();
+  function coarsePart(geometry, size) {
+    const p = geometry.parameters,
+      small = size < 0.12;
+    if (geometry.type === "LatheGeometry") {
+      const rows = p.points.length,
+        points = p.points.filter(
+          (_, i) => rows < 6 || i % 2 === 0 || i === rows - 1,
+        );
+      return new THREE.LatheGeometry(
+        points,
+        Math.min(p.segments, 8),
+        p.phiStart,
+        p.phiLength,
+      );
+    }
     if (geometry.type === "SphereGeometry")
       return new THREE.SphereGeometry(
         p.radius,
-        Math.min(p.widthSegments, 8),
-        Math.min(p.heightSegments, 5),
+        Math.min(p.widthSegments, small ? 6 : 8),
+        Math.min(p.heightSegments, small ? 4 : 5),
         p.phiStart,
         p.phiLength,
         p.thetaStart,
@@ -967,13 +754,13 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
         p.radiusTop,
         p.radiusBottom,
         p.height,
-        Math.min(p.radialSegments, 8),
+        Math.min(p.radialSegments, small ? 6 : 8),
         1,
         p.openEnded,
         p.thetaStart,
         p.thetaLength,
       );
-    return geometry.clone();
+    return new THREE.BufferGeometry().copy(geometry);
   }
   function farFigure(figure) {
     const { body } = figure,
@@ -985,8 +772,15 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       if (!o.isMesh || o.material.transparent) return;
       if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
       o.getWorldScale(farPartScale);
-      if (o.geometry.boundingSphere.radius * Math.max(farPartScale.x, farPartScale.y, farPartScale.z) < 0.04) return;
-      const part = coarsePart(o.geometry).applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, o.matrixWorld));
+      const size = o.geometry.boundingSphere.radius * Math.max(farPartScale.x, farPartScale.y, farPartScale.z);
+      if (size < 0.04) return;
+      // Trim laid round a body is a thin ring, however wide the ring is.
+      if (o.geometry.type === "LatheGeometry") {
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        const { min, max } = o.geometry.boundingBox;
+        if ((max.y - min.y) * farPartScale.y < 0.09) return;
+      }
+      const part = coarsePart(o.geometry, size).applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, o.matrixWorld));
       for (const name of Object.keys(part.attributes))
         if (!["position", "normal", "color"].includes(name)) part.deleteAttribute(name);
       if (!part.attributes.color) {
@@ -995,7 +789,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
         for (let i = 0; i < colors.length; i += 3) colors.set([r, g, b], i);
         part.setAttribute("color", new THREE.BufferAttribute(colors, 3));
       }
-      parts.push(part.index ? part.toNonIndexed() : part);
+      parts.push(part);
     });
     const proxy = new THREE.Mesh(mergeGeometries(parts), farMaterial);
     parts.forEach((part) => part.dispose());
@@ -1014,7 +808,24 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
       proxy.visible = far;
     }
   }
-  const npcs = [...residents.map(({ figure, ...npc }) => npc), lily];
+  /** Cuts a resident's far copy from its parts, then merges them. */
+  function finishResident(npc) {
+    farFigures.push(farFigure(npc.figure));
+    batchParts(npc.group);
+  }
+  residents.forEach(finishResident);
+  const npcs = [
+    ...residents.map(({ id, name, x, z, facing, dialogue, group }) => ({
+      id,
+      name,
+      x,
+      z,
+      facing,
+      dialogue,
+      group,
+    })),
+    lily,
+  ];
   return {
     player,
     npcs,
@@ -1023,8 +834,7 @@ export function createLife(THREE, scene, groundHeight = () => 0) {
     /** Adds a resident who streamed in with their region (the market lane's). */
     addResident(def) {
       const npc = resident(def);
-      batchParts(npc.group);
-      farFigures.push(farFigure(npc.figure));
+      finishResident(npc);
       showFarFigures(!castsShadows);
       residents.push(npc);
       const { figure, ...entry } = npc;
