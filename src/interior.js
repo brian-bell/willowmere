@@ -8,17 +8,19 @@ import { sceneTargetOptions } from "./scene-target.js";
 import { createBakery } from "./bakery.js";
 import { createRosewood } from "./rosewood.js";
 import { createHeronRoom } from "./pub/room.js";
+import { createPostOffice } from "./post-office/room.js";
 import { createInteriorWalker } from "./interior-movement.js";
 import "./interior.css";
 
 // The walkable interiors share one camera, input, postprocessing chain and
-// panel. Each room (the bakery, Rosewood) is built the first time it opens
+// panel. Each room (the bakery, Rosewood, the inn, the post office) is built the first time it opens
 // and supplies its scene, lights, walkable layout, the points E answers at,
 // and its own animation; `state` and `save` are the visit's progress.
 const ROOMS = {
   bakery: () => createBakery(),
   rosewood: (progress) => createRosewood(progress),
   heron: () => createHeronRoom(),
+  "post-office": (progress) => createPostOffice(progress),
 };
 
 export function createInterior({

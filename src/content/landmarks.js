@@ -46,10 +46,6 @@ export const LANDMARK_LINES = {
     "The smell of toasted teacakes drifts out every time the door swings.",
     "A chalkboard by the door: “Today, rosehip & ginger. Always, a seat by the window.”",
   ],
-  "post-office": [
-    "Parcels wait on the shelf in neat brown-paper rows, each tied with string.",
-    "A notice in the window: “Last post Thursday. Stamps, string and conversation within.”",
-  ],
   "post-box": [
     "You lift the flap and peer in. Someone has posted a letter with a pressed daisy tucked in the envelope.",
     "The pillar box is warm from the sun, and very red, and very proud of it.",

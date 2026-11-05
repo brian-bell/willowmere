@@ -181,6 +181,77 @@ export function createAudio() {
           "triangle",
         );
     },
+    // The post office.
+    ding() {
+      tone(1760, context.currentTime, 0.9, 0.07);
+      tone(2637, context.currentTime, 0.5, 0.03);
+    },
+    shopbell() {
+      for (let i = 0; i < 7; i++)
+        tone(1568 + (i % 2) * 196, context.currentTime + i * 0.13, 0.42, 0.05 * (1 - i / 9));
+    },
+    clink() {
+      tone(2093, context.currentTime, 0.18, 0.04);
+      tone(3136, context.currentTime + 0.05, 0.12, 0.025);
+    },
+    thump() {
+      tone(110, context.currentTime, 0.16, 0.11, "triangle");
+      tone(68, context.currentTime, 0.1, 0.09);
+    },
+    click() {
+      tone(1200, context.currentTime, 0.03, 0.04, "square");
+    },
+    tick() {
+      tone(1900, context.currentTime, 0.022, 0.007, "triangle");
+    },
+    coo() {
+      const now = context.currentTime;
+      for (const [at, from, to] of [[0, 330, 410], [0.32, 410, 300], [0.8, 340, 280]]) {
+        const o = context.createOscillator(),
+          g = context.createGain();
+        o.frequency.setValueAtTime(from, now + at);
+        o.frequency.exponentialRampToValueAtTime(to, now + at + 0.3);
+        g.gain.setValueAtTime(0.0001, now + at);
+        g.gain.linearRampToValueAtTime(0.05, now + at + 0.07);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.34);
+        o.connect(g);
+        g.connect(master);
+        o.start(now + at);
+        o.stop(now + at + 0.36);
+      }
+    },
+    morse() {
+      [0, 0.14, 0.28, 0.56, 0.84, 0.98, 1.26, 1.54].forEach((at) =>
+        tone(1400, context.currentTime + at, 0.05, 0.03, "square"),
+      );
+    },
+    ring() {
+      for (const at of [0, 0.3, 1.5, 1.8])
+        for (let i = 0; i < 6; i++)
+          tone(i % 2 ? 950 : 1120, context.currentTime + at + i * 0.04, 0.05, 0.02, "triangle");
+    },
+    whirr() {
+      for (let i = 0; i < 9; i++)
+        tone(760 + i * 12, context.currentTime + i * (0.1 + i * 0.012), 0.05, 0.016, "triangle");
+    },
+    scratch() {
+      for (let i = 0; i < 12; i++)
+        tone(2400 + Math.random() * 1600, context.currentTime + i * 0.07, 0.03, 0.006, "sawtooth");
+    },
+    static() {
+      for (let i = 0; i < 26; i++)
+        tone(600 + Math.random() * 2400, context.currentTime + i * 0.05, 0.05, 0.008, "sawtooth");
+    },
+    buzz() {
+      tone(220, context.currentTime, 0.28, 0.03, "square");
+      tone(330, context.currentTime + 0.32, 0.18, 0.025, "square");
+    },
+    bicycle() {
+      for (const at of [0, 0.18]) {
+        tone(2349, context.currentTime + at, 0.32, 0.06);
+        tone(3136, context.currentTime + at, 0.22, 0.025);
+      }
+    },
     "music:on"() {
       stopMusic();
       playWaltz();

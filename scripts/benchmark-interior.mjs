@@ -1,9 +1,11 @@
 import { chromium } from "@playwright/test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 
-// Measures the bakery interior against a running dev or preview server.
+// Measures a walkable room against a running dev or preview server: the bakery,
+// unless BENCHMARK_ROOM names another (rosewood, heron, post-office).
 // Usage: node scripts/benchmark-interior.mjs <label> [--ablate]
 const url = process.env.BENCHMARK_URL || "http://127.0.0.1:5173";
+const room = process.env.BENCHMARK_ROOM || "bakery";
 const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const label = process.argv[2] || "latest";
 const ablate = process.argv.includes("--ablate");
@@ -35,7 +37,7 @@ const browser = await chromium.launch({
     process.env.CHROME_PATH || (existsSync(chrome) ? chrome : undefined),
   args: ["--disable-frame-rate-limit", "--disable-gpu-vsync"],
 });
-const report = { url, browser: browser.version(), label, scales: {} };
+const report = { url, room, browser: browser.version(), label, scales: {} };
 try {
   for (const deviceScaleFactor of scales) {
     const page = await browser.newPage({
@@ -61,7 +63,7 @@ try {
             });
         });
     });
-    await page.goto(`${url}/?interior=bakery&resolution=fixed`);
+    await page.goto(`${url}/?interior=${room}&resolution=fixed`);
     await page.waitForFunction(
       () => window.__willowmere?.getInterior().active,
       null,
