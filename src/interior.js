@@ -8,6 +8,7 @@ import { sceneTargetOptions } from "./scene-target.js";
 import { createBakery } from "./bakery.js";
 import { createRosewood } from "./rosewood.js";
 import { createHeronRoom } from "./pub/room.js";
+import { createWindmillRoom } from "./windmill/room.js";
 import { createInteriorWalker } from "./interior-movement.js";
 import "./interior.css";
 
@@ -19,6 +20,7 @@ const ROOMS = {
   bakery: () => createBakery(),
   rosewood: (progress) => createRosewood(progress),
   heron: () => createHeronRoom(),
+  windmill: () => createWindmillRoom(),
 };
 
 export function createInterior({
@@ -460,6 +462,7 @@ export function createInterior({
     },
     place(pose) {
       walker?.place(pose);
+      room?.place?.(pose);
     },
     tune(settings) {
       for (const [key, value] of Object.entries(settings))
@@ -540,6 +543,7 @@ export function createInterior({
       pointerLocked: document.pointerLockElement === canvas,
       drawCalls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
+      programs: renderer.info.programs?.length ?? 0,
       render: {
         pixelRatio: composer._pixelRatio,
         width: composer.renderTarget1.width,

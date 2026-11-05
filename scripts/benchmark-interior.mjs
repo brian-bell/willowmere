@@ -1,7 +1,9 @@
 import { chromium } from "@playwright/test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 
-// Measures the bakery interior against a running dev or preview server.
+// Measures a walkable room, the bakery unless BENCHMARK_ROOM names another,
+// against a running dev or preview server. BENCHMARK_POSE stands the visitor
+// somewhere other than the door, as JSON for placeInterior.
 // Usage: node scripts/benchmark-interior.mjs <label> [--ablate]
 const url = process.env.BENCHMARK_URL || "http://127.0.0.1:5173";
 const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
@@ -9,6 +11,8 @@ const label = process.argv[2] || "latest";
 const ablate = process.argv.includes("--ablate");
 if (!/^[a-zA-Z0-9_-]+$/.test(label))
   throw Error("Use a simple filename for the report label.");
+const room = process.env.BENCHMARK_ROOM || "bakery";
+const pose = process.env.BENCHMARK_POSE && JSON.parse(process.env.BENCHMARK_POSE);
 const scales = (process.env.BENCHMARK_SCALES || "1,2").split(",").map(Number);
 const rounds = Number(process.env.BENCHMARK_ROUNDS || 4);
 // Ablations on high: undo one optimization, or change or remove one feature.
@@ -61,12 +65,14 @@ try {
             });
         });
     });
-    await page.goto(`${url}/?interior=bakery&resolution=fixed`);
+    await page.goto(`${url}/?interior=${room}&resolution=fixed`);
     await page.waitForFunction(
       () => window.__willowmere?.getInterior().active,
       null,
       { timeout: 30000 },
     );
+    if (pose)
+      await page.evaluate((p) => window.__willowmere.placeInterior(p), pose);
     await page.waitForTimeout(2500);
     const gpuName = await page.evaluate(() => {
       const gl = document.querySelector("canvas").getContext("webgl2");

@@ -29,12 +29,6 @@ export const LANDMARK_LINES = {
   garden: [
     "Good things grow slowly. Choose your seeds, find a little space, and begin.",
   ],
-  windmill: [
-    "The sails creak round, slow and patient. Somewhere inside, a millstone hums.",
-    "A chalk mark by the door counts the summers: more than anyone can read.",
-    "From the doorstep you can see every chimney in the village, and the millpond shining.",
-    "The stones are warm from the afternoon. Bees drift past on their way to the clover.",
-  ],
   "hilltop-bench": [
     "You sit a while. The village looks like a quilt from here, stitched together by paths.",
     "Smoke curls from the bakery’s chimney. Finn must be baking again.",

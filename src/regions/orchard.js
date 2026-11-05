@@ -12,6 +12,7 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { chunkRandom } from "../world-layout.js";
 import { createKit, limb } from "./kit.js";
+import { outsideWindows } from "../windmill/layout.js";
 import { crownShells } from "../trees.js";
 import {
   FRUIT_TREES,
@@ -681,12 +682,12 @@ function structures(T, range) {
   let floor = Infinity;
   for (let a = 0; a < TAU; a += TAU / 12)
     floor = Math.min(floor, orchardGround(w.x + Math.cos(a) * w.radius, w.z + Math.sin(a) * w.radius));
-  const towerHeight = 5.4,
+  const towerHeight = w.height,
     capBase = floor + towerHeight,
     profile = [];
   for (let y = -0.7; y <= towerHeight + 1e-6; y += 0.3) {
     const t = Math.max(0, y) / towerHeight;
-    profile.push(new T.Vector2(w.radius - 0.5 * t + (y < 0.3 ? 0.06 : 0), y));
+    profile.push(new T.Vector2(w.radius - w.taper * t + (y < 0.3 ? 0.06 : 0), y));
   }
   const tower = new T.LatheGeometry(profile, 20);
   tower.translate(w.x, floor, w.z);
@@ -707,22 +708,23 @@ function structures(T, range) {
     tower.setAttribute("color", new T.BufferAttribute(colors, 3));
     k.piece(tower);
   }
-  const radiusAt = (y) => w.radius - 0.5 * (y / towerHeight);
+  const radiusAt = (y) => w.radius - w.taper * (y / towerHeight);
   // A string course under the cap.
   add(unitCylinder, "#b9b19c", w.x, capBase - 0.1, w.z, radiusAt(towerHeight) + 0.07, 0.16, radiusAt(towerHeight) + 0.07);
   // The cap: an ogee dome of tarred boards, with a finial.
   const capProfile = [];
   for (let i = 0; i <= 8; i++) {
     const t = i / 8;
-    capProfile.push(new T.Vector2((radiusAt(towerHeight) + 0.12) * Math.cos(t * Math.PI * 0.5) ** 0.8, t * 1.35));
+    capProfile.push(new T.Vector2((radiusAt(towerHeight) + 0.12) * Math.cos(t * Math.PI * 0.5) ** 0.8, t * w.capHeight));
   }
   const cap = new T.LatheGeometry(capProfile, 20);
   cap.translate(w.x, capBase, w.z);
   k.piece(cap, "#5b4a3c");
-  add(unitCylinder, darkWood, w.x, capBase + 1.45, w.z, 0.05, 0.3, 0.05);
-  // Door and windows face the path's end; the sails face the village.
-  const doorAngle = Math.atan2(0.72, 0.69),
-    shaft = new T.Vector3(0.52, 0, 0.85).normalize(),
+  add(unitCylinder, darkWood, w.x, capBase + w.capHeight + 0.1, w.z, 0.05, 0.3, 0.05);
+  // The door faces the path's end, the sails the village, and the windows are
+  // the ones the inside looks out of (src/windmill/layout.js).
+  const doorAngle = w.doorBearing,
+    shaft = new T.Vector3(Math.sin(w.shaftBearing), 0, Math.cos(w.shaftBearing)),
     face = (angle, y, build, out = 0) => {
       const r = radiusAt(y) + out;
       placed(w.x + Math.sin(angle) * r, floor + y, w.z + Math.cos(angle) * r, angle, build);
@@ -733,24 +735,20 @@ function structures(T, range) {
     box("#b9b19c", 0, 1.74, 0.02, 1.12, 0.18, 0.2);
     box("#a59f8c", 0, 0.06, 0.32, 1.1, 0.12, 0.5);
   }, 0.07);
-  for (const [angle, y] of [
-    [doorAngle + 0.55, 2.55],
-    [doorAngle - 1.4, 3.75],
-    [doorAngle + 2.4, 2.9],
-  ])
-    face(angle, y, () => {
+  for (const [angle, y] of outsideWindows())
+    face(doorAngle + angle, y, () => {
       box(darkWood, 0, 0, 0, 0.5, 0.66, 0.1);
       box("#f3d896", 0, 0, 0.04, 0.36, 0.52, 0.04);
       box("#b9b19c", 0, -0.38, 0.06, 0.62, 0.08, 0.14);
     });
   // The windshaft and hub, out of the cap toward the sails.
-  const hub = new T.Vector3(w.x, capBase + 0.55, w.z).addScaledVector(shaft, radiusAt(towerHeight) + 0.55);
+  const hub = new T.Vector3(w.x, capBase + w.shaftRise, w.z).addScaledVector(shaft, radiusAt(towerHeight) + 0.55);
   {
     const length = radiusAt(towerHeight) + 0.6,
       geometry = unitCylinder.clone().rotateX(Math.PI / 2);
     geometry.applyMatrix4(
       matrix.compose(
-        new T.Vector3(w.x, capBase + 0.55, w.z).addScaledVector(shaft, length / 2),
+        new T.Vector3(w.x, capBase + w.shaftRise, w.z).addScaledVector(shaft, length / 2),
         quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), shaft),
         scale.set(0.13, 0.13, length),
       ),

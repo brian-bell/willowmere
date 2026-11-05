@@ -171,6 +171,22 @@ export function createAudio() {
           0.03,
         );
     },
+    // A long wooden groan: the windmill's brake biting or letting go.
+    creak() {
+      const now = context.currentTime,
+        o = context.createOscillator(),
+        g = context.createGain();
+      o.type = "sawtooth";
+      o.frequency.setValueAtTime(92, now);
+      o.frequency.linearRampToValueAtTime(58, now + 1.1);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(0.028, now + 0.18);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 1.25);
+      o.connect(g);
+      g.connect(master);
+      o.start(now);
+      o.stop(now + 1.3);
+    },
     dig() {
       for (let i = 0; i < 5; i++)
         tone(

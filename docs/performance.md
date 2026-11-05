@@ -188,7 +188,7 @@ Start `npm run dev`, then run:
 BENCHMARK_URL=http://127.0.0.1:5173 node scripts/benchmark-interior.mjs label --ablate
 ```
 
-The script opens `/?interior=bakery&resolution=fixed` at 1600 × 1000 CSS pixels, at device scale 1 and then 2 (`BENCHMARK_SCALES` overrides this). Chrome is launched with `--disable-frame-rate-limit --disable-gpu-vsync`, so frame intervals show throughput above 60 FPS. The view stays at the entrance, facing the counter and the room. Each configuration settles for 0.8 seconds and records 2 seconds. Four rounds (`BENCHMARK_ROUNDS`) cycle through all configurations, so drift is spread across them. It reports the mean and p95 frame interval, callback CPU time, draw calls, and triangles, and saves `output/interior-label.json`. `--ablate` adds rows on high that undo one optimization or change or remove one feature. Revisions without `tuneInterior` can still run the three presets.
+The script opens `/?interior=bakery&resolution=fixed` at 1600 × 1000 CSS pixels, at device scale 1 and then 2 (`BENCHMARK_SCALES` overrides this). Chrome is launched with `--disable-frame-rate-limit --disable-gpu-vsync`, so frame intervals show throughput above 60 FPS. The view stays at the entrance, facing the counter and the room. Each configuration settles for 0.8 seconds and records 2 seconds. Four rounds (`BENCHMARK_ROUNDS`) cycle through all configurations, so drift is spread across them. It reports the mean and p95 frame interval, callback CPU time, draw calls, and triangles, and saves `output/interior-label.json`. `--ablate` adds rows on high that undo one optimization or change or remove one feature. Revisions without `tuneInterior` can still run the three presets. `BENCHMARK_ROOM` measures another room, and `BENCHMARK_POSE` stands the visitor somewhere other than the door, as JSON for `placeInterior`.
 
 The callback CPU time tracks the frame interval because the driver blocks on the queued GPU work, so it does not measure JavaScript cost. Headless Chrome paces uncapped frames unevenly, so p95 values are high even for fast configurations; compare means. GPU timer queries (`EXT_disjoint_timer_query_webgl2`) are available on ANGLE Metal, but they returned elapsed times longer than the frame interval, so the script does not use them.
 
@@ -249,10 +249,23 @@ These tests assert rendering work and behaviour instead of a machine-dependent F
 - **Bakery.** `tests/interior.spec.js` checks that the bakery's shadow maps stay cached, that its AO runs at half the scene target's width, the MSAA and sun-map size for each quality, and median draw budgets of under 330 on high and under 180 on performance.
 - **Rosewood.** `tests/rosewood.spec.js` checks that Rosewood's shadow maps stay cached with a 2048 sun map on high, and median draws at the front door under 400 on high and under 250 on performance.
 - **The Drowsy Heron.** `tests/pub.spec.js` holds each of the study's views under 450 draws and 1.8M triangles and checks that blue hour compiles no new program. In the game it holds the inn's forecourt under 1,000 draws and 2.5M triangles at the default height and zoomed out, and its room at a median under 420 draws with its shadow maps cached.
+- **The old windmill.** `tests/windmill.spec.js` holds the room at a median under 120 draws and under 0.6M triangles looking up the well and out of the top window, and checks that its sun map stays cached and that evening compiles no new program.
 
 ## Change history
 
 Measurements recorded as each change landed, newest first, each against the `main` it was merged into. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the combined baseline. Entries counted in the cloud container ran on SwiftShader, so they give draw calls and triangles but no timings.
+
+### The old windmill (2026-11-04)
+
+The windmill's door opens a walkable tower with five levels joined by four ladders. It is rendered by the same chain as the other rooms. All its static parts merge to one mesh per material (stone, timber, iron, sacking, glass, lantern glass), which with the tally's slate and the spare stone's face makes eight draws per pass however much of the tower is in view, and each moving train of the machinery is one more. Nothing that moves casts into the sun's map, which renders once. Its six lanterns are a fixed set whose strength changes with the light. Its shafts of sun and flour dust are one additive draw each, skipped by the occlusion pass. Outside, the hill's one merged mesh gains three windows, about 110 triangles and no draws.
+
+Measured on an Apple M5 at 1600 × 1000 CSS pixels with `BENCHMARK_ROUNDS=3` and a shared dev server:
+
+| High, device scale 2 | Frame ms | Draws | Triangles |
+| --- | --- | --- | --- |
+| Windmill, inside the door | 9.1 | 48 | 313k |
+| Windmill, looking up the well | 10.8 | 66 | 342k |
+| Bakery, inside the door, same session | 16.7 | 286 | 1.23M |
 
 ### Cheaper fragments and a compact scene target (2026-11-04)
 
