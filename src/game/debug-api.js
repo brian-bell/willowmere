@@ -194,6 +194,8 @@ export function createDebugApi(g) {
           width: composer.renderTarget1.width,
           height: composer.renderTarget1.height,
           samples: composer.renderTarget1.samples,
+          format:
+            composer.renderTarget1.texture.type === THREE.HalfFloatType ? "RGBA16F" : "R11F_G11F_B10F",
           bloom: g.bloom.enabled,
           shadowUpdate: g.sun.shadow.autoUpdate,
           water: overrides.water ?? true,

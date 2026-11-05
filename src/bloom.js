@@ -214,6 +214,9 @@ export class SoftBloomPass extends Pass {
 export class BloomOutputPass extends OutputPass {
   constructor(bloom) {
     super();
+    // The last pass; swapping would only make the scene draw into the
+    // composer's second multisampled target every other frame.
+    this.needsSwap = false;
     this.bloom = bloom;
     this.none = new THREE.DataTexture(new Uint8Array(4), 1, 1);
     this.none.needsUpdate = true;

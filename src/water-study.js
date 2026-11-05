@@ -1,4 +1,5 @@
 import * as T from "three";
+import "./shader-chunks.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createWorld } from "./world.js";
 

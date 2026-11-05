@@ -94,6 +94,9 @@ test("every village pool shares the model across quality, lighting and paused mo
   expect(initial.simulation).toBe("GPU RGBA16F");
   // Refraction comes from the composer's own scene pass, not a second scene render.
   expect(initial.refractionSource).toBe("main pass");
+  // It resolves the parts of the screen the surfaces cover, not the whole frame.
+  expect(initial.refractionResolved).toBeGreaterThan(0);
+  expect(initial.refractionResolved).toBeLessThan(1);
   for (const body of initial.bodies.filter((b) =>
     b.id.startsWith("fountain"),
   )) {

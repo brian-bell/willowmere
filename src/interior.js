@@ -4,6 +4,7 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { SoftBloomPass, BloomOutputPass } from "./bloom.js";
 import { InteriorAO } from "./interior-ao.js";
+import { sceneTargetOptions } from "./scene-target.js";
 import { createBakery } from "./bakery.js";
 import { createRosewood } from "./rosewood.js";
 import { createHeronRoom } from "./pub/room.js";
@@ -73,7 +74,7 @@ export function createInterior({
   }
   const renderTarget = new T.WebGLRenderTarget(innerWidth, innerHeight, {
     samples: 2,
-    type: T.HalfFloatType,
+    ...sceneTargetOptions(renderer, 4),
   });
   const composer = new EffectComposer(renderer, renderTarget);
   const renderPass = new RenderPass(new T.Scene(), camera);
