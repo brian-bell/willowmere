@@ -32,6 +32,9 @@ test("Lily and Pip stay together on their walk and pause with reduced motion", {
       assert.ok(position.z > 1.5);
       assert.ok(position.z < 4.5);
     }
+    // The leash leaves from Lily's hand, not from somewhere she has walked past.
+    const held = leash.children[0].position;
+    assert.ok(Math.hypot(held.x - lily.group.position.x, held.z - lily.group.position.z) < 0.45);
     for (const segment of leash.children) {
       assert.ok(segment.position.y > 0.2);
       assert.ok(Number.isFinite(segment.quaternion.w));

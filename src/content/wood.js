@@ -14,7 +14,15 @@ export const WOOD_RESIDENTS = [
     coat: 0x7a5a3a,
     hair: 0x3b2a1e,
     skin: 0xc99273,
-    hat: true,
+    garment: "dress",
+    cape: 0x5f6b45,
+    hat: "felt",
+    hairStyle: "loose",
+    carry: { left: "basket" },
+    armPose: [
+      [0, -0.12],
+      [-0.22, -1.4],
+    ],
     size: 0.92,
     dialogue: [
       "Mind the fairy ring, now. Step inside it and you might not come out until next Tuesday.",
