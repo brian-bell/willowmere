@@ -4,7 +4,7 @@ Where Willowmere's code lives, how the world beyond the village plugs in, and ho
 
 ## Entry points
 
-- `index.html` loads `src/main.js`, the game. `/?interior=bakery` starts inside the bakery, `/?interior=rosewood` inside Rosewood, your cottage, `/?interior=heron` inside The Drowsy Heron, `/?interior=windmill` at the foot of the old windmill.
+- `index.html` loads `src/main.js`, the game. `/?interior=bakery` starts inside the bakery, `/?interior=rosewood` inside Rosewood, your cottage, `/?interior=heron` inside The Drowsy Heron, `/?interior=windmill` at the foot of the old windmill, `/?interior=post-office` inside the post office.
 - `water-study.html` loads `src/water-study.js`, a close-up view of the village water with diagnostics. It is part of the production build.
 - `tree-study.html` is a close-up page (its script is inline) for the tree models. It is part of the production build.
 - `pub-study.html` loads `src/pub-study.js`, the design study for The Drowsy Heron, the inn on the market square. It is part of the production build. See [The Drowsy Heron](#the-drowsy-heron).
@@ -44,7 +44,7 @@ Game text lives in `src/content/` (journal, landmarks, neighbours, and one file 
 - Life: `src/life.js` (the traveler, residents and wildlife), `src/cats.js`, `src/fishing.js` (the millpond's cast and bite).
 - Presentation: `src/bloom.js` (quarter-resolution bloom), `src/scene-target.js` (the format of the target a scene draws into), `src/shader-chunks.js` (cheaper versions of Three's lighting chunks, imported by each entry point), `src/effects.js` (gathering, planting and watering particles), `src/visibility.js` (the player's silhouette behind scenery), `src/audio.js` (synthesized ambience), `src/icons.js` and `src/style.css`.
 - Water: `src/water.js`, `src/water-shaders.js` and `src/water-bounds.js` (the parts of the screen refraction resolves), described in [Water](water.md).
-- The walkable rooms: `src/interior.js` and `src/interior.css` (camera, input, interactions, postprocessing, pause menu, entry and exit, shared by every room), `src/interior-movement.js` (grounded movement, furniture collision and keeping to a ladder), `src/interior-ao.js` (the rooms' contact occlusion, which the pub's study also uses), `src/interior-kit.js` (the rooms' seeded random stream, materials, primitives and the bake that merges a dressed room by material), and one builder per room: `src/bakery.js` (The Daily Loaf), `src/rosewood.js` (your cottage: hall, living room, bedroom, kitchen and back garden, and Bark), `src/pub/room.js` (The Drowsy Heron) and `src/windmill/room.js` (the old windmill). A room returns its scene, shadowing lights, walkable layout, the points E answers at, and `update`; it may add `interact(point)` for activities, `takeNote()` for things that happen on their own, `staticShadows` when nothing that moves casts a shadow, and `diagnostics()`. A new room is a builder plus one line in `ROOMS` in `src/interior.js` and in `INTERIOR_NAMES` in `src/main.js`; its words go in `src/content/<room>.js`.
+- The walkable rooms: `src/interior.js` and `src/interior.css` (camera, input, interactions, postprocessing, pause menu, entry and exit, shared by every room), `src/interior-movement.js` (grounded movement, furniture collision and keeping to a ladder), `src/interior-ao.js` (the rooms' contact occlusion, which the pub's study also uses), `src/interior-kit.js` (the rooms' seeded random stream, materials, primitives and the bake that merges a dressed room by material), and one builder per room: `src/bakery.js` (The Daily Loaf), `src/rosewood.js` (your cottage: hall, living room, bedroom, kitchen and back garden, and Bark), `src/pub/room.js` (The Drowsy Heron), `src/windmill/room.js` (the old windmill) and `src/post-office/room.js` (the post office). A room returns its scene, shadowing lights, walkable layout, the points E answers at, and `update`; it may add `interact(point)` for activities, `takeNote()` for things that happen on their own, `staticShadows` when nothing that moves casts a shadow, and `diagnostics()`. A new room is a builder plus one line in `ROOMS` in `src/interior.js` and in `INTERIOR_NAMES` in `src/main.js`; its words go in `src/content/<room>.js`.
 
 ## Regions
 
@@ -88,6 +88,17 @@ A level is a floor or a ladder. `levelAt` moves a walker onto a ladder when it w
 
 Moving the walker along a curved wall or a turned box needed one general change: when neither axis alone is free, it now slides along the surface by the part of the push that goes that way, and walking straight at a surface still stops dead.
 
+## The post office
+
+The room behind the green door on the market lane, built in `src/post-office/`. Its plan is pure data, as the inn's is, so `@logic` tests walk the same floor the builders dress.
+
+- `layout.js` is the plan, with no three.js: the three spaces (public hall, sorting office, back room), every opening, where each fitting stands and the colliders round it. `FIXTURES` gives the point each thing answers at, read by the builders and by the words in `src/content/post-office.js`, so the two cannot drift. Its door and big window are on the same sides as outside, and the chimney breast is under the roof's stack.
+- `parts.js` adds to the rooms' kit what a room of many small parts needs: sharp boxes at 12 triangles, rods between points, boxes textured in metres so a wall's pieces line up, and `mergeGroup`, which merges a moving group's parts, since the room's bake leaves moving things alone.
+- `surfaces.js` paints the repeating surfaces and colours, and a shared 2048 atlas that holds every sign, notice, label, stamp and postcard, so a hundred pieces of lettering cost one material. Pieces are collected first and packed tallest first when it is painted. `district-map.js` draws the framed map from the regions' own layouts, so a lane that moves on the map moves on the wall too.
+- `shell.js` builds the fabric, with real openings that the sun comes through, and the painted views out of each window. `counter.js`, `sorting.js`, `hall.js` and `back-room.js` dress one space each and return what moves. `room.js` puts them together with the lamps and the sun, and answers E.
+
+It adds no save state. `state` is read once on entering, to put Bram's loaf on his side table once you have delivered one. Everything that moves stays out of the bake and the shadow map, so its one sun map is drawn on opening and kept.
+
 ## Tests and the debug API
 
 `npm test` runs every Playwright spec in `tests/` against a Vite server it starts on port 5174. Tests tagged `@logic` import pure modules and never open a page; `npm run test:logic` runs only those, in parallel, in seconds. `npm run typecheck` runs TypeScript over the JavaScript files that start with `// @ts-check`: the pure modules, where JSDoc types such as `SaveState` (`src/game/save.js`) and `Region` (`src/regions/index.js`) catch a misspelled field before it ships. Other files are not checked; add the line when a module is pure. CI (`.github/workflows/ci.yml`) builds, type-checks, runs the logic tier, and runs the one `@smoke` test in `tests/smoke.spec.js`, which suits software WebGL. Playwright uses `CHROME_PATH` when set, installed Chrome on macOS, or Playwright's Chromium (`npx playwright install chromium`).
@@ -107,6 +118,7 @@ Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.
 | `water` | the water solver, captures, refraction and fallbacks (see [Water](water.md#verification)) |
 | `interior` | the walkable bakery and its rendering settings |
 | `rosewood` | Rosewood's rules (logic), its front door, rooms, Bark's following, fetch, dig and the other activities, and its draw budget |
+| `post-office` | the post office: that every fitting can be walked to and answers from where a visitor can stand, its words and signs (logic), its door on the lane, its activities, the loaf and its draw budget |
 | `pub` | The Drowsy Heron: that every room and bed can be walked to, the stair's climb and the site's footprint (logic), the study's views, cutaways, draw budget and walk, and the door, stairs, balcony and draw budget of the room in the game |
 | `windmill` | the old windmill: climbing every ladder up and down, reaching every floor and everything E answers to, staying out of the well, headroom and the windows' match with the outside (logic), and the door, the keys up all four ladders, the brake, the window seat and its draw budget in the game |
 | `performance`, `tune`, `resolution`, `shadows` | rendering budgets and the measurement hooks (see [Regression budgets](performance.md#regression-budgets)) |

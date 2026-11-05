@@ -14,9 +14,9 @@ const oneOf = (list) => list[Math.floor(Math.random() * list.length)];
 
 /**
  * `session` reads the live tool, view and progress flags; `clickPath` is the
- * player's current route; `isIndoors()` is true while a room (the bakery or
- * Rosewood) is open or opening; `enterInterior(id)` opens one; `begin()`
- * dismisses the intro.
+ * player's current route; `isIndoors()` is true while a room (the bakery,
+ * Rosewood, the inn, the windmill or the post office) is open or opening;
+ * `enterInterior(id)` opens one; `begin()` dismisses the intro.
  */
 export function createInteractions({
   world,
@@ -107,7 +107,7 @@ export function createInteractions({
       return;
     }
     const id = nearest.data.id || nearest.data.type;
-    if (id === "bakery" || id === "home" || id === "heron" || id === "windmill") {
+    if (id === "bakery" || id === "home" || id === "heron" || id === "windmill" || id === "post-office") {
       enterInterior(id === "home" ? "rosewood" : id);
       return;
     }
@@ -190,6 +190,8 @@ export function createInteractions({
                   ? "Step into The Drowsy Heron"
                 : i.id === "windmill"
                   ? "Step inside the old windmill"
+                : i.id === "post-office"
+                  ? "Step into the post office"
                 : i.type === "stall"
                 ? activities.stallLabel(i.stall, session.dusk)
                 : i.type === "wood-flower"

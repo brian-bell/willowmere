@@ -45,7 +45,7 @@ The countryside streams in around the village once you start:
 
 - **The millpond**, north past the mill: cast from the jetty and press when the float dips. Each kind of fish you meet goes in the journal.
 - **The orchard hill**, north-west: shake the apple and pear trees and open the hives to fill your basket. Finn buys fruit and honey.
-- **The market lane**, east over the brook: carry Finn's loaves to Hazel at the Copper Kettle and Bram at the post office, and shop the stalls for seeds and keepsakes in the golden afternoon.
+- **The market lane**, east over the brook: carry Finn's loaves to Hazel at the Copper Kettle and Bram at the post office, and shop the stalls for seeds and keepsakes in the golden afternoon. The post office's green door opens onto a room of its own.
 - **The willow marsh**, south along the brook: walk the boardwalk, meet Wren, and watch from the bird hide. Some birds only come out at blue hour.
 - **The old wood**, west past the wildflower meadow: follow the trails under the oaks and beeches, meet Rowan by the clearing's fairy ring, and press a woodland flower from each patch into your journal. The anemones close at blue hour, and the honeysuckle opens only then.
 
@@ -57,13 +57,17 @@ Walk up the orchard hill to the windmill's door and press **E** to step inside i
 
 **Escape** opens the pause menu when the mouse is free, with **After hours** lighting, **Photo** and a return to the village. Your village position and progress are kept while you are inside.
 
+## Inside the post office
+
+Press **E** at the green door on the market lane (or open `/?interior=post-office`). A bell on a spring announces you to nobody: Bram is out on the lane, and the card on the counter says he'll be back in five minutes. In the public hall, try box 21, spin the postcard rack, find yourself on the district map and read the notice board. Then go through the raised flap, where the date stamp lands a real postmark on an envelope and Second Class, the pigeon, has pigeonholed himself. The door marked Private leads to the parcel shelves, the village's telephone exchange, the wireless, the red bicycle, and Bram's armchair by the stove, where the loaf you delivered is waiting on the side table. **Lamps lit** in the pause menu brings on the evening.
+
 ## Saved progress
 
 Progress, flowers, seeds, petals, your basket and your camera preference save to this browser on this device. Clearing browser data removes the save, different origins keep separate saves, and private browsing may not save at all.
 
 ## Scope
 
-Willowmere is a small playable prototype: a welcome quest, free exploration of the village and the regions around it, and four walkable interiors: the bakery, Rosewood, The Drowsy Heron and the old windmill. Other buildings have no interiors, and there is no long campaign or multiplayer.
+Willowmere is a small playable prototype: a welcome quest, free exploration of the village and the regions around it, and five walkable interiors: the bakery, Rosewood, The Drowsy Heron, the old windmill and the post office. Other buildings have no interiors, and there is no long campaign or multiplayer.
 
 ## Development
 

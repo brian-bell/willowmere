@@ -85,7 +85,7 @@ export function marketJobs(T, world, { life } = {}) {
           {
             id: "post-office",
             name: "Post office",
-            x: M.postOffice.x,
+            x: M.postOffice.x + POST_DOOR_X,
             z: M.postOffice.z + M.postOffice.d / 2 + 0.6,
             radius: 1.2,
           },
@@ -468,6 +468,8 @@ function teaRoom(T, range) {
   return k;
 }
 
+// The door stands east of the middle, as it does from inside (src/post-office/).
+const POST_DOOR_X = 0.7;
 const postSignAt = () => ({
   x: M.postOffice.x,
   y: M.postOffice.h - 0.3,
@@ -495,15 +497,20 @@ function postOffice(T) {
       pitch: 1.1,
     });
     k.box("#a8705a", -1.3, p.h + 1.05, -0.5, 0.45, 1.2, 0.45);
-    k.box("#4f6b56", 0.7, 0.98, front + 0.02, 0.9, 1.6, 0.08);
-    k.box(trim, 0.7, 1.84, front + 0.04, 1.1, 0.1, 0.1);
-    k.box("#d8b25a", 0.95, 0.98, front + 0.08, 0.06, 0.06, 0.04);
-    k.box("#a8a294", 0.7, 0.08, front + 0.3, 1.2, 0.12, 0.45);
+    k.box("#4f6b56", POST_DOOR_X, 0.98, front + 0.02, 0.9, 1.6, 0.08);
+    k.box(trim, POST_DOOR_X, 1.84, front + 0.04, 1.1, 0.1, 0.1);
+    k.box("#d8b25a", POST_DOOR_X + 0.25, 0.98, front + 0.08, 0.06, 0.06, 0.04);
+    k.box("#a8a294", POST_DOOR_X, 0.08, front + 0.3, 1.2, 0.12, 0.45);
     frontWindow(k, -1.0, 1.35, front, 1.3, 0.9, trim);
     k.box("#6c8f5c", -1.0, 0.8, front + 0.2, 1.35, 0.18, 0.22);
     for (let i = 0; i < 5; i++) k.ball(["#e6c35a", "#e7a2a2", "#f1ece0"][i % 3], -1.5 + i * 0.25, 0.94, front + 0.22, 0.07);
     for (const x of [-p.w / 2, p.w / 2])
       k.glazed(() => k.box("#ffcf73", x + (x < 0 ? -0.02 : 0.02), 1.35, 0, 0.05, 0.7, 0.75));
+    // The back room's window, in the rear wall.
+    k.glazed(() => k.box("#ffcf73", 1.3, 1.4, -front - 0.02, 0.85, 0.7, 0.05));
+    k.box(trim, 1.3, 1.8, -front - 0.05, 1.01, 0.08, 0.08);
+    k.box(trim, 1.3, 0.99, -front - 0.08, 1.09, 0.07, 0.16);
+    for (const x of [0.83, 1.77]) k.box(trim, x, 1.4, -front - 0.05, 0.08, 0.78, 0.08);
     // A bench under the window, and parcels by the door.
     k.box("#7f6145", -1.0, 0.44, front + 0.62, 1.5, 0.06, 0.36);
     k.box("#7f6145", -1.0, 0.7, front + 0.46, 1.5, 0.3, 0.05);

@@ -188,7 +188,7 @@ Start `npm run dev`, then run:
 BENCHMARK_URL=http://127.0.0.1:5173 node scripts/benchmark-interior.mjs label --ablate
 ```
 
-The script opens `/?interior=bakery&resolution=fixed` at 1600 × 1000 CSS pixels, at device scale 1 and then 2 (`BENCHMARK_SCALES` overrides this). Chrome is launched with `--disable-frame-rate-limit --disable-gpu-vsync`, so frame intervals show throughput above 60 FPS. The view stays at the entrance, facing the counter and the room. Each configuration settles for 0.8 seconds and records 2 seconds. Four rounds (`BENCHMARK_ROUNDS`) cycle through all configurations, so drift is spread across them. It reports the mean and p95 frame interval, callback CPU time, draw calls, and triangles, and saves `output/interior-label.json`. `--ablate` adds rows on high that undo one optimization or change or remove one feature. Revisions without `tuneInterior` can still run the three presets. `BENCHMARK_ROOM` measures another room, and `BENCHMARK_POSE` stands the visitor somewhere other than the door, as JSON for `placeInterior`.
+The script opens `/?interior=bakery&resolution=fixed` at 1600 × 1000 CSS pixels, at device scale 1 and then 2 (`BENCHMARK_SCALES` overrides this). `BENCHMARK_ROOM` picks another room (`rosewood`, `heron`, `windmill` or `post-office`), and `BENCHMARK_POSE` stands the visitor somewhere other than the door, as JSON for `placeInterior`. Chrome is launched with `--disable-frame-rate-limit --disable-gpu-vsync`, so frame intervals show throughput above 60 FPS. The view stays at the entrance, facing the counter and the room. Each configuration settles for 0.8 seconds and records 2 seconds. Four rounds (`BENCHMARK_ROUNDS`) cycle through all configurations, so drift is spread across them. It reports the mean and p95 frame interval, callback CPU time, draw calls, and triangles, and saves `output/interior-label.json`. `--ablate` adds rows on high that undo one optimization or change or remove one feature. Revisions without `tuneInterior` can still run the three presets. `BENCHMARK_ROOM` measures another room, and `BENCHMARK_POSE` stands the visitor somewhere other than the door, as JSON for `placeInterior`.
 
 The callback CPU time tracks the frame interval because the driver blocks on the queued GPU work, so it does not measure JavaScript cost. Headless Chrome paces uncapped frames unevenly, so p95 values are high even for fast configurations; compare means. GPU timer queries (`EXT_disjoint_timer_query_webgl2`) are available on ANGLE Metal, but they returned elapsed times longer than the frame interval, so the script does not use them.
 
@@ -232,6 +232,16 @@ Rosewood (`src/rosewood.js`) goes through the same chain and settings as the bak
 
 Counted in the cloud container (SwiftShader, 1000 × 625 CSS pixels, high): 299 draws and about 0.4M triangles at the front door looking down the hall, 196 draws and 0.29M in the living room by the aquarium, 344 draws and 0.51M from the kitchen looking out into the garden, and 91 draws by Bark's kennel. The bakery's entrance view is 285. Its exterior adds the kitchen extension and the back garden to the village: behind Rosewood at height 18, 813 draws and 2.47M triangles against `main`'s 792 and 2.50M (the meadow grass under the extension and patio is cleared). The bakery itself is unchanged by sharing its helpers (`src/interior-kit.js`): 275 draws and 1,161,370 triangles before and after at the same view.
 
+### The post office
+
+The post office (`src/post-office/`) goes through the same chain and settings. It is the most thickly dressed room and the cheapest to draw, because its small parts were built to be cheap: 2,512 meshes bake down to 150 and about 208,000 triangles, which the colour and occlusion passes each draw once.
+
+- **Sharp boxes.** A rounded box with the kit's default radius is 300 triangles, and with its smallest radius 108. Letters, drawers, doors, parcels and shelves are plain 12-triangle boxes (`b` in `parts.js`). Rounded edges are kept for what the eye runs along: the counter's top, the rails and the armchair.
+- **One atlas for all the lettering.** Each kit `plaque` is a 1024 px canvas and a material of its own, and so at least a draw per pass. Signs, notices, labels, stamps and postcards share one 2048 sheet instead, on planes that bake into one mesh. The map has its own 1040 × 860 sheet, since it is too large to share.
+- **Moving parts merged.** The bake leaves moving groups alone, so `mergeGroup` merges each one by material first. The postcard rack alone would otherwise be about 100 draws per pass.
+- **One shadow map, kept.** The sun is the only shadow caster. Everything that moves stays out of its map, so the room sets `staticShadows` and draws it once on opening and after a resize or quality change. The five pendants, the stove and the two window fills are its eight point lights, fixed for the visit, each with a short `distance`, so evening changes their intensity and compiles nothing.
+- **Glass in one sheet.** Every window's pane and the door's are merged into one transparent mesh, and the jars' shells into another, because transparent meshes do not bake.
+
 ## Regression budgets
 
 These tests assert rendering work and behaviour instead of a machine-dependent FPS threshold. The village diagnostics expose `drawCalls`, `triangles`, `geometries`, `textures`, and `shadow` (`mapSize` and light-space `bounds`); water diagnostics include each pool's `reflectionSize`.
@@ -248,12 +258,40 @@ These tests assert rendering work and behaviour instead of a machine-dependent F
 - **Lanterns.** `tests/routing.spec.js` checks that the lanterns keep a fixed pool of point lights with no new shader programs at dusk, and that a lantern still lights the ground in its reach at blue hour against the same ground by day, which is what a wrong range check would break.
 - **Bakery.** `tests/interior.spec.js` checks that the bakery's shadow maps stay cached, that its AO runs at half the scene target's width, the MSAA and sun-map size for each quality, and median draw budgets of under 330 on high and under 180 on performance.
 - **Rosewood.** `tests/rosewood.spec.js` checks that Rosewood's shadow maps stay cached with a 2048 sun map on high, and median draws at the front door under 400 on high and under 250 on performance.
+- **The post office.** `tests/post-office.spec.js` holds the views from the door, the hall's far end and the back room to a median under 360 draws and 0.6M triangles on high, with its shadow map cached, and the door's view under 220 draws on performance.
 - **The Drowsy Heron.** `tests/pub.spec.js` holds each of the study's views under 450 draws and 1.8M triangles and checks that blue hour compiles no new program. In the game it holds the inn's forecourt under 1,000 draws and 2.5M triangles at the default height and zoomed out, and its room at a median under 420 draws with its shadow maps cached.
 - **The old windmill.** `tests/windmill.spec.js` holds the room at a median under 120 draws and under 0.6M triangles looking up the well and out of the top window, and checks that its sun map stays cached and that evening compiles no new program.
 
 ## Change history
 
 Measurements recorded as each change landed, newest first, each against the `main` it was merged into. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the combined baseline. Entries counted in the cloud container ran on SwiftShader, so they give draw calls and triangles but no timings.
+
+### The post office (2026-11-04)
+
+The green door on the market lane now opens a walkable room with three spaces: the public hall, the sorting office behind the counter and a back room. How it stays cheap is under [The post office](#the-post-office). Outdoors it adds only a window in the rear wall, five boxes merged into the building's existing meshes.
+
+Counted on an Apple M5 in headless Chrome at 1600 × 1000, high quality, `?resolution=fixed`, against `main` (`c9336d8`). Outdoors, the most over twelve frames after every region had streamed in. The most over a few frames depends on which fell on a water reflection capture, and that varies by more than this change adds, so the green comes out lower than `main`. The door's quiet frames are the clean comparison: 350 draws both ways, and 108 more triangles.
+
+| View | `main` draws / triangles | With the room draws / triangles |
+| --- | --- | --- |
+| The post office's door (42.1, −3.6), height 18 | 418 / 1.186M | 424 / 1.186M |
+| Market square (36.5, 3.2), height 18 | 573 / 1.548M | 579 / 1.550M |
+| Village spawn, height 18 | 1,048 / 3.125M | 1,044 / 3.120M |
+| Room, inside the door | | 245 / 0.400M |
+| Room, along the hall from the flap | | 236 / 0.397M |
+| Room, facing the stove | | 237 / 0.391M |
+| Room, the sorting frame | | 183 / 0.314M |
+| Room, inside the door, performance quality | | 120 / 0.200M |
+
+Mean frame intervals uncapped at device scale 2, inside each room's door: the median of three runs of two rounds, the two rooms taking turns, because another process was using the GPU throughout. The bakery's figure on high here is well above its 9.69 ms in [the comparison below](#cheaper-fragments-and-a-compact-scene-target-2026-11-04), so read these only against each other.
+
+| Quality | The post office ms | The bakery ms |
+| --- | --- | --- |
+| High | 9.23 | 15.48 |
+| Balanced | 8.30 | 14.24 |
+| Performance | 5.32 | 8.72 |
+
+Building the room takes about 1 s on the main thread, against about 1.4 s for the bakery, three builds of each in one page.
 
 ### The old windmill (2026-11-04)
 
