@@ -107,7 +107,7 @@ export function createInteractions({
       return;
     }
     const id = nearest.data.id || nearest.data.type;
-    if (id === "bakery" || id === "home" || id === "heron" || id === "windmill" || id === "post-office") {
+    if (id === "bakery" || id === "home" || id === "heron" || id === "windmill" || id === "post-office" || id === "thistledown") {
       enterInterior(id === "home" ? "rosewood" : id);
       return;
     }
@@ -192,6 +192,8 @@ export function createInteractions({
                   ? "Step inside the old windmill"
                 : i.id === "post-office"
                   ? "Step into the post office"
+                : i.id === "thistledown"
+                  ? "Step into Thistledown, the B&B"
                 : i.type === "stall"
                 ? activities.stallLabel(i.stall, session.dusk)
                 : i.type === "wood-flower"

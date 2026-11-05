@@ -61,6 +61,10 @@ Walk up the orchard hill to the windmill's door and press **E** to step inside i
 
 Press **E** at the green door on the market lane (or open `/?interior=post-office`). A bell on a spring announces you to nobody: Bram is out on the lane, and the card on the counter says he'll be back in five minutes. In the public hall, try box 21, spin the postcard rack, find yourself on the district map and read the notice board. Then go through the raised flap, where the date stamp lands a real postmark on an envelope and Second Class, the pigeon, has pigeonholed himself. The door marked Private leads to the parcel shelves, the village's telephone exchange, the wireless, the red bicycle, and Bram's armchair by the stove, where the loaf you delivered is waiting on the side table. **Lamps lit** in the pause menu brings on the evening.
 
+## Staying at Thistledown
+
+The cottage west of Rosewood is Thistledown, the village's bed & breakfast. Press **E** at its door (or open `/?interior=thistledown`) to walk through the hall, breakfast room, kitchen and sitting room, and up the stairs to Goldfinch, Linnet and the bathroom under the eaves. Ring at the hatch for breakfast and eat it at the window table, read the guest book, say good morning to Caruso, stroke Thimble, run the bath, or lie down on either bed to let the day go by.
+
 ## Saved progress
 
 Progress, flowers, seeds, petals, your basket and your camera preference save to this browser on this device. Clearing browser data removes the save, different origins keep separate saves, and private browsing may not save at all.

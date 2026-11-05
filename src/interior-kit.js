@@ -223,6 +223,33 @@ export function createRoomKit(root, seed) {
     map.anisotropy = 8;
     return new T.MeshStandardMaterial({ map, roughness: 0.8 });
   }
+  // Turns root's flat-coloured meshes into one vertex-coloured material per
+  // finish, shared across rooms through `finishes`, so a hundred colours bake
+  // into a handful of draws. Textured, glowing and transparent materials, and
+  // everything under a `keep` object, are left alone. Call it just before bake.
+  function paintFlat(keep = new Set(), finishes = new Map()) {
+    root.traverse((o) => {
+      const m = o.material;
+      if (!o.isMesh || !m.isMeshStandardMaterial || m.isMeshPhysicalMaterial) return;
+      if (m.transparent || m.map || m.vertexColors || m.emissive.getHex() !== 0) return;
+      for (let p = o; p && p !== root; p = p.parent) if (keep.has(p)) return;
+      const rough = Math.round(m.roughness * 5) / 5,
+        metal = m.metalness > 0.3 ? 0.75 : 0,
+        key = `${rough}/${metal}/${m.side}`;
+      if (!finishes.has(key))
+        finishes.set(
+          key,
+          new T.MeshStandardMaterial({ vertexColors: true, roughness: rough, metalness: metal, side: m.side }),
+        );
+      const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone(),
+        count = g.attributes.position.count,
+        colors = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) colors.set([m.color.r, m.color.g, m.color.b], i * 3);
+      g.setAttribute("color", new T.BufferAttribute(colors, 3));
+      o.geometry = g;
+      o.material = finishes.get(key);
+    });
+  }
   // Merges root's static meshes into one mesh per material and shadow role.
   // Transparent meshes and everything under a `keep` object stay separate.
   function bake(keep = new Set()) {
@@ -273,6 +300,7 @@ export function createRoomKit(root, seed) {
     archShape,
     arch,
     plaque,
+    paintFlat,
     bake,
   };
 }
