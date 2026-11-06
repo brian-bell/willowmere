@@ -52,3 +52,22 @@ test("coarse shrub leaves keep every leaf and its outline at a third of the tria
   expect(centers).toHaveLength(1);
   expect(Number.isFinite(centers[0].x)).toBe(true);
 });
+
+test("shrubs cast with their coarse leaves and still draw the level the view asks for", { tag: "@logic" }, () => {
+  const bushes = createBushes(),
+    [foliage] = bushes.group.children.filter((mesh) => mesh.name === "Folded shrub leaves");
+  bushes.setDetail(0);
+  const fine = foliage.geometry;
+  bushes.shadowLevel.before();
+  const casting = foliage.geometry;
+  expect(casting).not.toBe(fine);
+  expect(casting.index.count * 3).toBe(fine.index.count);
+  bushes.shadowLevel.after();
+  expect(foliage.geometry).toBe(fine);
+  // Already coarse, the view's leaves stay as they are.
+  bushes.setDetail(1);
+  bushes.shadowLevel.before();
+  expect(foliage.geometry).toBe(casting);
+  bushes.shadowLevel.after();
+  expect(foliage.geometry).toBe(casting);
+});

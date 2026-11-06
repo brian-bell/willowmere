@@ -78,7 +78,7 @@ const scaler = createResolutionScaler({
 renderer.setPixelRatio(resolution.ceiling);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-useDepthShadowMaps(renderer);
+const shadowMaps = useDepthShadowMaps(renderer);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.2;
@@ -128,6 +128,8 @@ scene.add(fill);
 const world = createWorld(THREE, scene),
   life = createLife(THREE, scene, world.terrainHeight),
   audio = createAudio();
+// Shrubs cast the sun's shadow with their coarse leaves.
+shadowMaps.around(scene, world.bushes.shadowLevel);
 const sceneTarget = new THREE.WebGLRenderTarget(innerWidth, innerHeight, {
   samples: 4,
   ...sceneTargetOptions(renderer, 4),

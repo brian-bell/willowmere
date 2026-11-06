@@ -281,7 +281,15 @@ export function createBushes(groundHeight = () => 0) {
   // The bake splits the leaves into one mesh per chunk, so the levels are
   // found among the group's children when first set.
   let parts = null;
-  const center = new T.Vector3();
+  const leafParts = () =>
+    (parts ??= group.children
+      .filter((mesh) => mesh.name.startsWith(foliage.name))
+      .map((mesh) => ({
+        mesh,
+        center: mesh.boundingSphere.center.clone().applyMatrix4(mesh.matrixWorld),
+      })));
+  const center = new T.Vector3(),
+    castingCoarse = [];
   return {
     group,
     footprints: placements.map(([x, z, r]) => ({ x, z, r: r * 0.95 })),
@@ -291,16 +299,27 @@ export function createBushes(groundHeight = () => 0) {
      * chunk's leaves from their centre.
      */
     setDetail(level) {
-      parts ??= group.children
-        .filter((mesh) => mesh.name.startsWith(foliage.name))
-        .map((mesh) => ({
-          mesh,
-          center: mesh.boundingSphere.center.clone().applyMatrix4(mesh.matrixWorld),
-        }));
-      for (const part of parts) {
+      for (const part of leafParts()) {
         const next = typeof level === "function" ? level(center.copy(part.center)) : level;
         part.mesh.geometry = next ? coarseLeaf : fineLeaf;
       }
+    },
+    /**
+     * Around the sun's shadow update (src/shadow-maps.js): every shrub casts
+     * with the two-triangle leaf, which keeps each leaf and its outline.
+     */
+    shadowLevel: {
+      before() {
+        for (const { mesh } of leafParts())
+          if (mesh.geometry === fineLeaf && mesh.visible && mesh.castShadow) {
+            castingCoarse.push(mesh);
+            mesh.geometry = coarseLeaf;
+          }
+      },
+      after() {
+        for (const mesh of castingCoarse) mesh.geometry = fineLeaf;
+        castingCoarse.length = 0;
+      },
     },
     /** Triangles each leaf draws at the current level, for tests. */
     leafTriangles: () =>

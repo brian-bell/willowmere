@@ -46,6 +46,8 @@ function createDepthTarget(renderer, width, height, name) {
 }
 
 export function useDepthShadowMaps(renderer) {
+  // What runs around each update of a scene's shadow maps (see `around`).
+  const hooks = new Map();
   function install() {
     const shadowMap = renderer.shadowMap,
       render = shadowMap.render;
@@ -66,11 +68,33 @@ export function useDepthShadowMaps(renderer) {
           );
           shadow.camera.updateProjectionMatrix();
         }
-      render.call(shadowMap, lights, scene, camera);
+      const around = hooks.get(scene);
+      if (!around || !shadowMap.enabled || (!shadowMap.autoUpdate && !shadowMap.needsUpdate))
+        return render.call(shadowMap, lights, scene, camera);
+      for (const { before } of around) before();
+      try {
+        render.call(shadowMap, lights, scene, camera);
+      } finally {
+        for (const { after } of around) after();
+      }
     };
   }
   install();
   // A context coming back makes three build a new shadow renderer (its own
   // listener ran first, being older).
   renderer.domElement.addEventListener("webglcontextrestored", install);
+  return {
+    /**
+     * Runs `before` and `after` around every update of `scene`'s shadow maps,
+     * so what casts into them can differ from what the view draws (shrubs
+     * cast with their coarse leaves). By then three has gathered the view's
+     * draws, each with its geometry, so swapping a mesh's geometry changes
+     * only its shadow; it reads an instanced mesh's count as it draws, so
+     * `after` must put any count back.
+     */
+    around(scene, ...levels) {
+      if (!hooks.has(scene)) hooks.set(scene, []);
+      hooks.get(scene).push(...levels);
+    },
+  };
 }
