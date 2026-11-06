@@ -1,4 +1,5 @@
 import { bakeScenery, createChunks, createDetail } from "./bake.js";
+import { weldVertices } from "./geometry-weld.js";
 import { createWaterSystem } from "./water.js";
 import { WORLD, inVillage, terrainHeight } from "./world-layout.js";
 import { allowsPlanting, regionDeck, regionWater, regions } from "./regions/index.js";
@@ -83,7 +84,7 @@ export function createWorld(T, scene) {
   const { flowerMats } = buildBuildings(kit, { contact });
   buildFountain(kit);
   const { fence } = buildFurniture(kit);
-  const { lamps, lampsByDistance, lanterns, placeLanterns } = buildLamps(kit);
+  const { lamps, lampsByDistance, lanterns, placeLanterns, lightLanterns } = buildLamps(kit);
   const { trees, bushes, blades, inRoad, isBlocked, reeds } = buildPlants(kit, {
     contact,
     dum,
@@ -102,6 +103,15 @@ export function createWorld(T, scene) {
       selfCulled: [trees.group],
     }),
     detail = createDetail(chunks, fieldGround, [reeds.group, bushes.group]);
+  // The bake and the builders leave geometry non-indexed so it can merge;
+  // welding its identical vertices shades each one once (geometry-weld.js).
+  const welded = new WeakSet();
+  const weld = (geometry) => {
+    if (geometry.index || welded.has(geometry)) return;
+    welded.add(geometry);
+    weldVertices(T, geometry);
+  };
+  scene.traverse((node) => node.isMesh && weld(node.geometry));
   let clock = 0;
   // The walking surface: the bridge deck's hump, a region's decks (the
   // millpond's footbridge and jetty), otherwise the terrain's grass.
@@ -136,6 +146,7 @@ export function createWorld(T, scene) {
      * shadow when `fineShadow` is.
      */
     addStreamed(mesh, { detail: small = false, field = false, far = undefined, fineShadow = undefined } = {}) {
+      if (mesh.isMesh) weld(mesh.geometry);
       mesh.updateMatrixWorld();
       const chunk = chunkOf(mesh);
       chunk.meshes.push(mesh);
@@ -189,6 +200,7 @@ export function createWorld(T, scene) {
     lanterns,
     lamps,
     placeLanterns,
+    lightLanterns,
     /** Lamps a region streamed in, at the glass's height; the light pool visits them too. */
     addLamps(points) {
       for (const { x, z } of points) {
