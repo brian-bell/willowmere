@@ -174,6 +174,8 @@ export function createDebugApi(g) {
           lamps: world.lamps.length,
           pointLights: scene.children.filter((o) => o.isPointLight).length,
           lit: world.lanterns.map((light) => light.position.toArray()),
+          // By day the pool is switched off at once (src/village/lamps.js).
+          dark: world.lanterns.every((light) => light.distance < 0 && light.intensity === 0),
           lampPositions: world.lamps.map((lamp) => lamp.toArray()),
         },
         resolution: {

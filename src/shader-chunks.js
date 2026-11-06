@@ -74,6 +74,21 @@ patch(
 		}`,
 );
 
+// Even out of reach, every point light costs each lit fragment its turn of the
+// loop: the village's six dark lanterns cost about 6% of its frame by day. A
+// negative distance on the first point light skips them all, in a branch every
+// fragment takes the same way, so no program recompiles when they come on
+// (src/village/lamps.js does this while the lanterns are dark).
+patch(
+  "lights_fragment_begin",
+  /(#pragma unroll_loop_start\s*for \( int i = 0; i < NUM_POINT_LIGHTS; i \+\+ \) \{\s*pointLight = pointLights\[ i \];[\s\S]*?#pragma unroll_loop_end)/,
+  `if ( pointLights[ 0 ].distance >= 0.0 ) {
+
+	$1
+
+	}`,
+);
+
 patch("shadowmap_pars_fragment", "uniform sampler2D directionalShadowMap", "uniform sampler2DShadow directionalShadowMap");
 patch("shadowmap_pars_fragment", "uniform sampler2D spotShadowMap", "uniform sampler2DShadow spotShadowMap");
 patch(

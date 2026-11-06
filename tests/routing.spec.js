@@ -107,6 +107,8 @@ test("lamps share a fixed pool of point lights", async ({ page }) => {
     page.evaluate(() => window.__willowmere.getDiagnostics().lanterns);
   const before = await lanterns();
   expect(before.pointLights).toBe(before.pool);
+  // Dark by day, which lit fragments skip in one branch.
+  expect(before.dark).toBe(true);
   // The village has no more lamps than the pool, so from the green every
   // village lamp is lit (the market lane's lamps may have streamed in, further off).
   const villageLamps = before.lampPositions.filter(
@@ -131,6 +133,7 @@ test("lamps share a fixed pool of point lights", async ({ page }) => {
   await page.keyboard.up("d");
   const after = await lanterns();
   expect(after.pointLights).toBe(before.pool);
+  expect(after.dark).toBe(false);
   expect(after.programs).toBe(before.programs);
 });
 

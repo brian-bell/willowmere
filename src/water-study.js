@@ -74,7 +74,7 @@ $("#light").onchange = (e) => {
   hemi.intensity = dusk ? 1 : 1.5;
   scene.background.set(dusk ? "#566782" : "#abc2a1");
   scene.fog.color.copy(scene.background);
-  for (const light of world.lanterns) light.intensity = dusk ? 18 : 0.1;
+  world.lightLanterns(dusk ? 1 : 0);
 };
 $("#quality").onchange = (e) => {
   world.water.setQuality(e.target.value);

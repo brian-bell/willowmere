@@ -31,16 +31,29 @@ export function buildLamps(kit) {
   // fixed pool of lights moves to the lamps nearest the view; the glass glows
   // on every lamp. Spare lights wait far below the ground, out of range.
   const LANTERN_LIGHTS = 6,
+    LANTERN_REACH = 4,
+    LIT_FROM = 0.002,
     spareLight = new T.Vector3(0, -100, 0),
     lampsByDistance = [...lamps],
     focus = new T.Vector2(),
     focusDistance = (lamp) => (lamp.x - focus.x) ** 2 + (lamp.z - focus.y) ** 2,
     nearerFocus = (a, b) => focusDistance(a) - focusDistance(b);
   const lanterns = Array.from({ length: LANTERN_LIGHTS }, () => {
-    const light = new T.PointLight("#ffcd82", 0.6, 4, 2);
+    const light = new T.PointLight("#ffcd82", 0.6, LANTERN_REACH, 2);
     scene.add(light);
     return light;
   });
+  // By day the lanterns are dark, but every lit fragment would still test
+  // each one's reach. A negative distance on the first point light skips the
+  // whole pool (src/shader-chunks.js), with no program to recompile.
+  /** Lights the pool for how far into blue hour the day is (0 to 1). */
+  function lightLanterns(dusk) {
+    const lit = dusk > LIT_FROM;
+    for (const light of lanterns) {
+      light.intensity = lit ? T.MathUtils.lerp(0.1, 18.0, dusk) : 0;
+      light.distance = lit ? LANTERN_REACH : -LANTERN_REACH;
+    }
+  }
   function placeLanterns(x, z) {
     focus.set(x, z);
     lampsByDistance.sort(nearerFocus);
@@ -48,5 +61,6 @@ export function buildLamps(kit) {
       lanterns[i].position.copy(lampsByDistance[i] ?? spareLight);
   }
   placeLanterns(0, 0);
-  return { lamps, lampsByDistance, lanterns, placeLanterns };
+  lightLanterns(0);
+  return { lamps, lampsByDistance, lanterns, placeLanterns, lightLanterns };
 }

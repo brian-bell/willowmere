@@ -84,7 +84,7 @@ export function createWorld(T, scene) {
   const { flowerMats } = buildBuildings(kit, { contact });
   buildFountain(kit);
   const { fence } = buildFurniture(kit);
-  const { lamps, lampsByDistance, lanterns, placeLanterns } = buildLamps(kit);
+  const { lamps, lampsByDistance, lanterns, placeLanterns, lightLanterns } = buildLamps(kit);
   const { trees, bushes, blades, inRoad, isBlocked, reeds } = buildPlants(kit, {
     contact,
     dum,
@@ -200,6 +200,7 @@ export function createWorld(T, scene) {
     lanterns,
     lamps,
     placeLanterns,
+    lightLanterns,
     /** Lamps a region streamed in, at the glass's height; the light pool visits them too. */
     addLamps(points) {
       for (const { x, z } of points) {

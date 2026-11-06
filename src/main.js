@@ -864,8 +864,7 @@ function animate(now) {
     firstPerson ? p.x : overview.viewTarget.x,
     firstPerson ? p.z : overview.viewTarget.z,
   );
-  for (const light of world.lanterns || [])
-    light.intensity = THREE.MathUtils.lerp(0.1, 18.0, duskMix);
+  world.lightLanterns(duskMix);
   renderer.toneMappingExposure = THREE.MathUtils.lerp(1.05, 0.95, duskMix);
   effects.update(dt, motion);
   if (frame % 8 === 0) interactions.scan();
