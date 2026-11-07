@@ -204,7 +204,7 @@ const activities = createActivities({
   audio,
   effects,
   fishing,
-  blocked: (x, z, r) => blocked(x, z, r),
+  blocked: (x, z, r) => occupied(x, z, r),
   motion: () => motion,
 });
 let tool = "hand",
@@ -511,7 +511,7 @@ $("#reset-position").onclick = () => {
   toast("Back home, on the village green.");
 };
 const colliders = world.colliders || [];
-const { blocked, findPath, sampleRows: sampleRouteRows } = createNavigation({
+const { blocked, occupied, findPath, sampleRows: sampleRouteRows } = createNavigation({
   walk: WORLD.walk,
   colliders,
 });

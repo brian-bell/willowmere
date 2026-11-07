@@ -4,6 +4,7 @@ import {
   MARKET,
   PATHS,
   bridgeDeck,
+  hedgeClumps,
   marketColliders,
   marketGrass,
   onGravel,
@@ -51,6 +52,10 @@ test("the lane runs from the mill road to the map's edge, flat and clear", { tag
   for (const resident of Object.values(MARKET.residents))
     expect(collides(colliders, resident.x, resident.z, 0.2)).toBe(false);
   expect(regionAt(MARKET.square.x, MARKET.square.z).name).toBe("The market lane");
+  // Its shrubs and hedgerow clumps are walked through; nothing else is.
+  const soft = colliders.filter((c) => c.passable);
+  expect(soft.length).toBe(MARKET.shrubs.length + hedgeClumps().length);
+  expect(soft.every((c) => c.r <= 0.42)).toBe(true);
 });
 
 test("the footbridge carries walkers over the brook, humped in the middle", { tag: "@logic" }, () => {
