@@ -189,16 +189,19 @@ test("touch walking and looking work at eye level with reduced motion", async ({
   const page = await context.newPage();
   await start(page);
   const before = await position(page);
-  const button = page.getByRole("button", {
-    name: "Walk forward",
-    exact: true,
-  });
-  const box = await button.boundingBox();
+  // Touch mode's thumbstick rests in the lower left; a thumb landing there
+  // and leaning forward walks.
+  const stick = page.locator(".thumbstick");
+  await expect(stick).toBeVisible();
+  const box = await stick.boundingBox();
   expect(box.width).toBeGreaterThanOrEqual(44);
   expect(box.height).toBeGreaterThanOrEqual(44);
-  await button.dispatchEvent("pointerdown", { pointerId: 1 });
+  await page.mouse.move(80, 700);
+  await page.mouse.down();
+  await page.mouse.move(80, 640, { steps: 4 });
+  await expect(stick).toHaveClass(/held/);
   await page.waitForTimeout(450);
-  await button.dispatchEvent("pointerup", { pointerId: 1 });
+  await page.mouse.up();
   await page.waitForTimeout(400);
   const after = await position(page);
   expect(Math.hypot(after.x - before.x, after.z - before.z)).toBeGreaterThan(
