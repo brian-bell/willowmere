@@ -1638,7 +1638,7 @@ html.touch,
   position: fixed;
   inset: 0;
 }
-/* From an iPhone's Home Screen the page can be laid out shorter than the
+/* From an iPhone's or iPad's Home Screen the page can be laid out shorter than the
    screen; the game then takes the screen's height from viewportSize()
    (src/game/browser.js), and the HUD's box follows it down to the home bar. */
 .touch.standalone #game {
