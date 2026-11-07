@@ -284,6 +284,10 @@ These tests assert rendering work and behaviour instead of a machine-dependent F
 
 Measurements recorded as each change landed, newest first, each against the `main` it was merged into. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the combined baseline. Entries counted in the cloud container ran on SwiftShader, so they give draw calls and triangles but no timings.
 
+### The doe and fawn (2026-11-07)
+
+Two roaming deer (`src/deer.js`, rules in `src/game/deer.js`). Each is one `SkinnedMesh`, about forty painted parts bound rigidly to fifteen bones, so in view an animal costs one draw, one sun-shadow draw and a transparent contact shadow, and out of view nothing: the doe is about 6,300 triangles and the fawn 8,800. Their bounding spheres are computed once in the rest pose and grown by a third, which holds a lowered head or a bound. They join through the streamer, so the skinned programs compile before their first draw, drop their cast shadows zoomed far out like the people and animals, and stay out of the water's captures. Their rules run every frame in well under 0.01 ms; a hop's decision tests up to sixteen candidate segments against colliders filed in 4 m cells, at most about 0.4 ms in Node. Every budget in `tests/performance.spec.js` passed on the Mac unchanged.
+
 ### Welded geometry, dark lanterns by day and coarse shrub shadows (2026-11-06)
 
 A hunt for 25%. Each part of the frame was priced alone in one page, in alternating windows so drift cancels (−35% means the frame took 35% less time without it), on high at device scale 2 against `main` (`26bab6c`):
