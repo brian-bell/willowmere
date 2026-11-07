@@ -222,7 +222,8 @@ test("in first person a thumbstick walks and a drag elsewhere looks around", asy
 });
 
 test("touch mode is for touch screens; ?touch=0 keeps the mouse controls", async ({ browser }) => {
-  const desktop = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  // This file's test.use makes contexts touch phones; a desktop says otherwise.
+  const desktop = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: false, isMobile: false });
   const page = await desktop.newPage();
   await page.goto("/");
   await page.waitForFunction(() => window.__willowmere);
