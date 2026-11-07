@@ -53,7 +53,8 @@ export function createInteractions({
               ? oneOf(LILY_HAT)
               : oneOf(phrases);
     // Wren follows her greeting with a tip for a bird still to spot, Rowan
-    // with one for a flower still to press, Basil with word of the beds.
+    // with one for a flower still to press, Basil with word of the beds,
+    // Agnes with her hammer or a fossil still to find.
     const tip =
         n.id === "wren"
           ? activities.wrenLine(session.dusk)
@@ -61,7 +62,9 @@ export function createInteractions({
             ? activities.rowanLine(session.dusk)
             : n.id === "basil"
               ? activities.basilLine()
-              : null,
+              : n.id === "agnes"
+                ? activities.agnesLine()
+                : null,
       lines = tip ? [line, tip] : [line];
     hud.openDialogue(NEIGHBOR_TITLES[n.id] || n.name, lines, () => {
       if (selling) activities.sellBasket();
@@ -69,6 +72,7 @@ export function createInteractions({
       if (receiving) activities.deliver(n.id);
       if (n.id === "mabel") activities.complete("mabel");
       if (n.id === "finn" || n.id === "basil") activities.restockSeeds(n.name);
+      if (n.id === "agnes") activities.lendHammer();
     });
   }
 
@@ -132,6 +136,10 @@ export function createInteractions({
       hud.openDialogue("THE OLD WOOD", [activities.pressFlower(flower, session.dusk)]);
       return;
     }
+    if (nearest.data.type === "fossil") {
+      hud.openDialogue("THE STONE QUARRY", [activities.splitStone(nearest.data.fossil)]);
+      return;
+    }
     if (nearest.data.type === "plot") {
       const line = activities.tendPlot(nearest.data.plot);
       if (line) hud.openDialogue("THE ALLOTMENTS", [line]);
@@ -176,6 +184,8 @@ export function createInteractions({
     }
     for (const i of world.interactables || []) {
       const d = Math.hypot(p.x - i.x, p.z - i.z);
+      // A spot up on a ledge (the quarry's bench) answers only from up there.
+      if (i.y != null && Math.abs(p.y - i.y) > 0.9) continue;
       if (d < (i.radius || 2.4))
         candidates.push({
           kind: "world",
@@ -200,7 +210,9 @@ export function createInteractions({
                   ? activities.flowerLabel(i.flower, session.dusk)
                   : i.type === "plot"
                     ? activities.plotLabel(i.plot)
-                    : i.name,
+                    : i.type === "fossil"
+                      ? activities.fossilLabel(i.fossil)
+                      : i.name,
         });
     }
     candidates.sort((a, b) => a.d - b.d);

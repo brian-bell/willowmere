@@ -3,6 +3,7 @@ import { FISH } from "../fishing.js";
 import { BIRDS } from "../game/marsh.js";
 import { FLOWERS } from "../game/wood.js";
 import { CROPS, PLOTS } from "../game/allotments.js";
+import { FOSSILS } from "../game/quarry.js";
 
 // The welcome quests, in the order the quest card lists them.
 export const QUESTS = ["mabel", "flower", "plant"];
@@ -12,7 +13,8 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 /**
  * The journal's entries as [title, text] rows, for a save's `state` and the
  * region id the player stands in. The millpond, orchard, market lane,
- * marsh, old wood and allotment entries appear once the player has been there or done something there.
+ * marsh, old wood, allotment and quarry entries appear once the player has
+ * been there or done something there.
  */
 export function journalEntries(state, here) {
   const rows = [];
@@ -97,6 +99,16 @@ export function journalEntries(state, here) {
         : rented.length
           ? `You rent ${plural(rented.length, "bed")} of ${PLOTS.length} at the allotments. Sow, water, then wait for them to grow.`
           : "Rent a bed at the allotments, south of the kitchen garden, and grow vegetables for Finn. Basil, by the shed, keeps the plots.",
+    ]);
+  const found = FOSSILS.filter((fossil) => state.fossils[fossil.id]);
+  if (found.length || state.hammer || here === "quarry")
+    rows.push([
+      "The stone quarry",
+      found.length
+        ? `You’ve found ${found.length} of ${FOSSILS.length} fossils: ${found.map((fossil) => fossil.name.toLowerCase()).join(", ")}.${found.length < FOSSILS.length ? " Agnes, at her banker, knows where the others hide." : ""}`
+        : state.hammer
+          ? "Agnes lent you her hammer. Split stones about the quarry, on its floor, its bench and the ridge above, and see what the hill has kept."
+          : "Look for fossils at the stone quarry, west of the allotments. Agnes, the mason, will lend you a hammer.",
     ]);
   return rows;
 }

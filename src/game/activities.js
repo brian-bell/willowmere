@@ -18,12 +18,23 @@ import { flowerById, flowerOpen, flowerToSeek, pressFlower as pressInJournal } f
 import { BASIL_TIPS, PLOT_LINES, PLOT_PROMPTS } from "../content/allotments.js";
 import { CROPS, PLOTS, RENT, basilTopic, plotStage, tendPlot as tendInSave, waterPlot } from "./allotments.js";
 import { plotById, plotFront } from "../regions/allotments-layout.js";
+import {
+  AGNES_DONE,
+  AGNES_HAMMER,
+  AGNES_TIPS,
+  FOSSIL_AGAIN,
+  FOSSIL_LINES,
+  FOSSIL_PROMPTS,
+  NO_HAMMER,
+} from "../content/quarry.js";
+import { agnesTopic, fossilById, lendHammer as lendInSave, splitStone as splitInSave } from "./quarry.js";
 
 // What the player does and earns: the welcome quests, gathering and planting
 // flowers, fishing from the millpond's jetty, the orchard's fruit and honey,
 // which Finn buys, the market lane's bread deliveries and stalls,
-// birdwatching from the marsh's hide, pressing the old wood's flowers, and
-// the allotment beds, whose vegetables Finn buys too.
+// birdwatching from the marsh's hide, pressing the old wood's flowers, the
+// allotment beds, whose vegetables Finn buys too, and the stone quarry's
+// fossils.
 // Each changes the save, then updates the HUD, saves and chimes.
 
 // Wildflower bouquets to gather, by index into the save's `gathered` list.
@@ -479,6 +490,33 @@ export function createActivities({
     return topic === "rent" ? BASIL_TIPS.rent(RENT) : BASIL_TIPS[topic](CROPS[crop]);
   }
 
+  // The stone quarry's fossils, split from the stone with Agnes's hammer.
+  /** The prompt at a fossil's spot. */
+  function fossilLabel(id) {
+    const fossil = fossilById(id);
+    if (state.fossils[id]) return `${fossil.name} · found`;
+    return FOSSIL_PROMPTS[id];
+  }
+  /** Splits a stone where a fossil lies: returns the line it answers with. */
+  function splitStone(id) {
+    const result = splitInSave(state, id);
+    if (result.kind === "no-hammer") return NO_HAMMER;
+    if (result.kind === "again") return oneOf(FOSSIL_AGAIN);
+    if (result.kind !== "found") return "";
+    if (motion()) effects.burst(player.position.x, player.position.y + 0.6, player.position.z);
+    reward(`${result.fossil.name} found · +${result.petals} petals`);
+    return `${FOSSIL_LINES[id]} A new page for the journal.`;
+  }
+  /** What Agnes says: the offer of her hammer, then a tip for a fossil still to find. */
+  function agnesLine() {
+    const { topic, fossil } = agnesTopic(state);
+    return topic === "hammer" ? AGNES_HAMMER : topic === "seek" ? AGNES_TIPS[fossil.id] : oneOf(AGNES_DONE);
+  }
+  /** Agnes lends her hammer, the first time she is asked. */
+  function lendHammer() {
+    if (lendInSave(state)) reward("Agnes lent you her hammer. Look for fossils about the quarry.");
+  }
+
   return {
     complete,
     flowerGroups,
@@ -511,6 +549,10 @@ export function createActivities({
     plotLabel,
     tendPlot,
     basilLine,
+    fossilLabel,
+    splitStone,
+    agnesLine,
+    lendHammer,
     get orchardReady() {
       return !!orchard;
     },

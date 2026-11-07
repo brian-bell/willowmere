@@ -9,6 +9,7 @@ import { marshDefaults } from "./marsh.js";
 import { woodDefaults } from "./wood.js";
 import { allotmentDefaults, cropBasket } from "./allotments.js";
 import { rosewoodDefaults } from "./rosewood.js";
+import { quarryDefaults } from "./quarry.js";
 
 // The key predates save versions; the version now lives inside the save.
 export const STORAGE = "willowmere.save.v1";
@@ -59,6 +60,8 @@ export function defaultState() {
     ...allotmentDefaults(),
     // Bark's finds from the back garden, the jigsaw, and balls fetched.
     ...rosewoodDefaults(),
+    // Fossils found at the stone quarry, and whether Agnes lent her hammer.
+    ...quarryDefaults(),
     gathered: [],
     plants: [],
     started: false,

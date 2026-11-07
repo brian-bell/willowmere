@@ -9,6 +9,7 @@ export const NEIGHBOR_TITLES = {
   bram: "BRAM · THE POSTMASTER",
   rowan: "ROWAN · THE FORAGER",
   tamsin: "TAMSIN · THE DROWSY HERON",
+  agnes: "AGNES · THE STONEMASON",
 };
 
 // For a neighbor with no phrases of their own.
