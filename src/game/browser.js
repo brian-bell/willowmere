@@ -31,19 +31,25 @@ async function toggleFullscreen() {
 
 /** True on iPhone and iPod, whose Safari has no full screen for pages. */
 const isIPhone = () => /iPhone|iPod/.test(navigator.userAgent);
+/** True on iPhone and iPad, including an iPad whose Safari reports a Mac. */
+const isAppleTouch = () =>
+  isIPhone() ||
+  /iPad/.test(navigator.userAgent) ||
+  (/Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1);
 
 /**
  * The size the game fills, in CSS pixels. Opened from the Home Screen, an
- * iPhone's Safari can lay the page out shorter than the screen, by about
- * the status bar's height, and leave a strip of bare page under the game.
- * There the screen's own height is used, and `--app-height` on <html> tells
- * the stylesheet (`.standalone` in style.css). A window narrower than the
- * screen (never the case on iPhone) keeps the window's size.
+ * iPhone's or iPad's Safari can lay the page out shorter than the screen, by
+ * about the status bar's height, and leave a strip of bare page under the
+ * game. There the screen's own height is used, and `--app-height` on <html>
+ * tells the stylesheet (`.standalone` in style.css). A window narrower than
+ * the screen, such as an iPad app in Split View or Stage Manager, keeps the
+ * window's size.
  */
 export function viewportSize() {
   const width = innerWidth;
   let height = innerHeight;
-  if (isIPhone() && isStandalone()) {
+  if (isAppleTouch() && isStandalone()) {
     const long = Math.max(screen.width, screen.height),
       short = Math.min(screen.width, screen.height),
       landscape = width > height,
