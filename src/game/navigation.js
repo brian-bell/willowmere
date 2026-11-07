@@ -7,9 +7,14 @@
  * ({ x, z, r }), boxes ({ x, z, w, d }), or shaped colliders that test
  * themselves within their bounds ({ minX, maxX, minZ, maxZ, blocks }), such
  * as the millpond.
+ *
+ * A collider marked `passable` (low shrubs and hedgerow clumps) still takes
+ * up ground, so the deer go round it and seeds are not planted in it, but
+ * the player walks through it: `walking` skips those.
  */
-export function collides(colliders, x, z, r = 0.27) {
+export function collides(colliders, x, z, r = 0.27, walking = false) {
   for (const c of colliders) {
+    if (walking && c.passable) continue;
     if (c.r !== undefined) {
       if (Math.hypot(x - c.x, z - c.z) < r + c.r) return true;
     } else if (c.w !== undefined) {
@@ -45,13 +50,17 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
  * `walk` is the box the player stays inside; `colliders` is the world's list,
  * read live. Colliders never move, so each route cell's walkability is
  * sampled once: in streamed rows (`sampleRows`), or all at once by the first
- * `findPath`.
+ * `findPath`. `blocked` is the walking test, which passes through passable
+ * colliders; `occupied` counts them too, for what must keep clear of shrubs.
  */
 export function createNavigation({ walk, colliders, step = 0.65 }) {
+  const outside = (x, z, r) =>
+    x < walk.minX + r || x > walk.maxX - r || z < walk.minZ + r || z > walk.maxZ - r;
   function blocked(x, z, r = 0.27) {
-    if (x < walk.minX + r || x > walk.maxX - r || z < walk.minZ + r || z > walk.maxZ - r)
-      return true;
-    return collides(colliders, x, z, r);
+    return outside(x, z, r) || collides(colliders, x, z, r, true);
+  }
+  function occupied(x, z, r = 0.27) {
+    return outside(x, z, r) || collides(colliders, x, z, r);
   }
   const route = {
     step,
@@ -164,5 +173,5 @@ export function createNavigation({ walk, colliders, step = 0.65 }) {
       result.push(toWorld(cell));
     return result.reverse();
   }
-  return { blocked, findPath, sampleRows, route };
+  return { blocked, occupied, findPath, sampleRows, route };
 }

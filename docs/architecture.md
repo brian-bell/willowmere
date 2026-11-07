@@ -25,13 +25,21 @@ All art and audio are generated in code. `vite.config.js` splits Three.js into i
 | `navigation.js` | collision and route finding |
 | `save.js` | the visit's progress in browser storage: a versioned save, merged field by field into the defaults, with migrations for changed fields |
 | `hud.js` | toasts, the quest card, conversations and the journal |
-| `activities.js` | quests, flowers, fishing, the orchard harvest, the market's deliveries and stalls, birdwatching at the marsh's hide, pressing the old wood's flowers, the allotment beds |
-| `market.js`, `marsh.js`, `wood.js`, `allotments.js` | the market's trade, the hide's birdwatching, the wood's flower pressing and the allotment beds' renting, sowing, growing and harvesting rules, as pure decisions on the save's state |
+| `activities.js` | quests, flowers, fishing, the orchard harvest, the market's deliveries and stalls, birdwatching at the marsh's hide, pressing the old wood's flowers, the allotment beds, the quarry's fossils |
+| `market.js`, `marsh.js`, `wood.js`, `allotments.js`, `quarry.js` | the market's trade, the hide's birdwatching, the wood's flower pressing, the allotment beds' renting, sowing, growing and harvesting rules, and the quarry's fossil hunting with Agnes's hammer, as pure decisions on the save's state |
 | `rosewood.js` | Rosewood's treasures (what Bark digs up), the jigsaw, and the footstep trail Bark follows, as pure decisions |
 | `interactions.js` | the prompt and what E does |
+| `touch.js`, `touch-controls.js` | touch mode, which iPhones, iPads and other finger-first devices get instead of the mouse and keyboard: which devices get it (pure, in `touch.js`), the village view's tap, drag, pinch, twist and two-finger tilt, and the thumbstick that walks in first person and in the rooms |
+| `browser.js` | the page as an app on phones and tablets: full screen, the Home Screen note, and resizing after a turn |
 | `debug-api.js` | `window.__willowmere`, which tests and benchmarks use |
 
 Game text lives in `src/content/` (journal, landmarks, neighbours, and one file per region with residents). Keep new logic out of `main.js`: add it to the module it belongs to, or a new one, and keep pure decisions free of three.js and the DOM so `@logic` tests can run them in Node.
+
+### Touch mode
+
+iPhones, iPads (including iPads whose Safari reports a Mac) and other devices whose main pointer is a finger start in touch mode; settings' Controls choice, or `?touch=1` / `?touch=0`, overrides it. Touch mode puts the class `touch` on `<html>`, and every rule for it in the stylesheets hangs off that class, so a desktop, which never gets it, keeps the mouse and keyboard controls exactly as they are. Elements marked `touch-only` or `desktop-only` show in one mode only.
+
+In touch mode `touch-controls.js` reads the canvas instead of `main.js`'s mouse handlers: in the village view a tap walks or talks (on lifting, so a drag is not a tap), one finger pans, two pinch to zoom, twist to turn and slide up or down to tilt, and Reset view puts the view back; in first person, and in every room, a thumbstick takes a finger landing in the lower left, and any other finger looks around. The page itself neither scrolls, bounces nor zooms; `#game` is inset by the safe area, so the HUD clears the notch and the home bar while the scene fills the screen. `public/manifest.webmanifest` and the icons that `node scripts/make-icons.mjs` draws let the game open full screen from the Home Screen.
 
 ## The world
 
@@ -41,7 +49,8 @@ Game text lives in `src/content/` (journal, landmarks, neighbours, and one file 
 - `src/bake.js` holds the chunk grid's bake, which merges the village's static meshes per chunk, material and shadow role, first person's detail range, and the small detail and thin shadow casters the overview drops when zoomed far out. `src/geometry-weld.js` then shares the vertices merging left as copies, for the village after the bake and for each streamed mesh.
 - `src/streaming.js` builds everything beyond the village after the game starts, a slice of each frame at a time.
 - Scenery: `src/trees.js` (branching trees, leaves, wind, levels of detail), `src/flowers.js`, `src/bushes.js`, `src/reeds.js`, `src/riverbank.js`, `src/planters.js` (pots, window boxes, beds), `src/garden.js` (the kitchen garden), `src/sky.js` (first person's sky).
-- Life: `src/life.js` (the traveler, residents and wildlife), `src/people/` (how a person is built), `src/cats.js`, `src/fishing.js` (the millpond's cast and bite).
+- Life: `src/life.js` (the traveler, residents and wildlife), `src/people/` (how a person is built), `src/cats.js`, `src/deer.js` (the doe and fawn), `src/fishing.js` (the millpond's cast and bite).
+- The doe and fawn roam the orchard hill, the old wood and the open fields south-west of it. Where they go is pure rules in `src/game/deer.js`: the doe grazes, looks up and walks on in short hops toward a far goal, stares at a visitor who comes near, and bounds away from one who comes closer or keeps coming; she forgives one who stands still. The fawn walks her trail of footprints a pace and a half behind her, and skips off to play near her while she grazes. Every step either takes is along a straight segment checked clear of the world's colliders, filed in 4 m cells. `src/deer.js` builds each animal as one `SkinnedMesh` (some forty painted parts bound rigidly to fifteen bones), so each is one draw and one shadow caster, and poses the bones every frame: a walk, trot or bound by speed, the legs upright on a slope, the head down to graze, ears and the white tail flag. They stream in through the streamer like a region's piece, so their skinned shaders compile off the main thread, and hold still with decorative motion off.
 - People: a resident's definition (in `src/life.js`, or `src/content/` for those who stream in with a region) carries a look: `garment`, `hat`, `hairStyle`, `apron`, `carry` and so on, and an unknown name throws. `src/people/index.js` assembles a figure and animates it, `clothes.js` covers neck to boots, `heads.js` faces, hair and hats, `props.js` what is held or worn, `kit.js` the verbs they build with, and `shapes.js` the shared shapes. Clothes are laid over a body's profile (`panel`), so they follow its curve. Only `walks` keeps hips, knees and elbows; everyone else's fold into the parts that move, so a standing figure is five batches and a contact shadow. A shape's `tone` attribute paints pleats, combed hair and plaited straw into the vertex colours when the batches merge, for no draw or texture.
 - Presentation: `src/bloom.js` (quarter-resolution bloom), `src/scene-target.js` (the format of the target a scene draws into), `src/shadow-maps.js` (depth-only shadow maps, which `shader-chunks.js` reads, and `around`, which lets a scene cast with different detail than it draws), `src/shader-chunks.js` (cheaper versions of Three's lighting and shadow chunks, imported by each entry point), `src/effects.js` (gathering, planting and watering particles), `src/visibility.js` (the player's silhouette behind scenery), `src/audio.js` (synthesized ambience), `src/icons.js` and `src/style.css`.
 - Water: `src/water.js`, `src/water-shaders.js` and `src/water-bounds.js` (the parts of the screen refraction resolves), described in [Water](water.md).
@@ -49,7 +58,7 @@ Game text lives in `src/content/` (journal, landmarks, neighbours, and one file 
 
 ## Regions
 
-Each area beyond the village (the millpond, the orchard hill, the inn, the market lane, the willow marsh, the old wood, the allotments, the old barrows either side of the millpond, and the open fields around them) is an entry in the registry, `src/regions/index.js`. The terrain field, the location label, the open country's grass and soil, walking and click heights, planting, colliders and streaming all loop that list, so a new region adds one line there instead of edits to the core files. The fields an entry may set are documented at the top of that file.
+Each area beyond the village (the millpond, the orchard hill, the inn, the market lane, the willow marsh, the old wood, the allotments, the stone quarry, the old barrows either side of the millpond, and the open fields around them) is an entry in the registry, `src/regions/index.js`. The terrain field, the location label, the open country's grass and soil, walking and click heights, planting, colliders and streaming all loop that list, so a new region adds one line there instead of edits to the core files. The fields an entry may set are documented at the top of that file.
 
 A region has two halves:
 
@@ -61,6 +70,14 @@ Builders make their structures with the shared parts kit in `src/regions/kit.js`
 A region needs no ground of its own. The old barrows (`src/regions/barrows-layout.js`) are meshes laid over the ground other regions and the fields already have, and their `deck` is the mounds' surface, so the player walks up and over them; their grass mask keeps the meadow off the mounds and their builder grows the same blades on top. Their west side sits inside the millpond's and the orchard's label areas, so it has a label-only entry (`westBarrowsRegion`) ahead of those two in the list.
 
 A region with gameplay usually also adds pure rules in `src/game/<region>.js`, its words in `src/content/<region>.js`, a benchmark viewpoint in `scripts/benchmark.mjs` and a draw budget in `tests/performance.spec.js`.
+
+An interactable may carry `y`, the ground it stands on; it then answers only to a player standing within 0.9 m of that height, so a spot up on a ledge stays quiet to someone walking beneath it.
+
+### The stone quarry
+
+The map's south-west corner, south of the old wood and west of the allotments. `src/regions/quarry-layout.js` raises an L-shaped ridge along the west rim and the wood's south edge and cuts its inner corner away in two lifts: a bench 1.7 m above the floor, and the ridge's grassy top above that. Each lift drops at a straight face along a line of the ground mesh's 0.4 m grid, which is what makes the faces sheer: `liftAt(x, z)` says which lift a point is on, and the ground there is the ridge cut down to that lift's level (`liftHeight`), so the ground jumps at a face line instead of sloping. `FACES` samples each face's ground above and below every grid step; the builder fills that drop with a vertical backing and stands bedded blocks in front of it, and the walking collider is one shape that keeps walkers clear of every stretch taller than a stride, from above and below. Where the ridge tapers away, its faces shrink to a step and the bench's east end runs down into the flank, which is how walkers reach the bench and the top. The floor is level with the lawn and runs out into the fields.
+
+`src/regions/quarry.js` streams in the ground (each grid cell on its own lift's heights), the faces, the cart track from the allotments' west gate and the footpath from the wood's south trail, the works (a derrick crane whose load sways, the mason's lean-to with a lantern, the banker, block stacks, a split block, the spoil heap, a stone cart, the board, ladders and a fence along the brow), rubble, gorse and Agnes, the mason. `src/game/quarry.js` holds the fossil rules: Agnes lends her hammer the first time you talk to her, and each of six fossils turns up once at its own spot on the floor, the bench or the ridge's top. Its words are in `src/content/quarry.js`.
 
 ## The Drowsy Heron
 
@@ -115,18 +132,19 @@ The village's bed & breakfast, kept by Dot Pennyfeather, who is always just out 
 
 `npm test` runs every Playwright spec in `tests/` against a Vite server it starts on port 5174. Tests tagged `@logic` import pure modules and never open a page; `npm run test:logic` runs only those, in parallel, in seconds. `npm run typecheck` runs TypeScript over the JavaScript files that start with `// @ts-check`: the pure modules, where JSDoc types such as `SaveState` (`src/game/save.js`) and `Region` (`src/regions/index.js`) catch a misspelled field before it ships. Other files are not checked; add the line when a module is pure. CI (`.github/workflows/ci.yml`) builds, type-checks, runs the logic tier, and runs the one `@smoke` test in `tests/smoke.spec.js`, which suits software WebGL. Playwright uses `CHROME_PATH` when set, installed Chrome on macOS, or Playwright's Chromium (`npx playwright install chromium`).
 
-Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.js`). It reads state (`getState`, `getPlayer`, `getView`, `getFishing`, `getOrchard`, `getMarket`, `getMarsh`, `getWood`, `getAllotments`, `getChunks`, `getStreaming`, `getWater`, `getInterior`), moves the player (`moveTo`, `findPath`, `blocked`, and `placeInterior` indoors), reports rendering work (`getDiagnostics`), and overrides rendering for measurements (`tune`, `tuneInterior`, `setAdaptiveResolution`). `getSceneFingerprint()` hashes every object's transform, geometry, material and instances, so a refactor that must not change the world can compare it before and after, with frame-locked screenshots.
+Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.js`). It reads state (`getState`, `getPlayer`, `getView`, `getDeer`, `getFishing`, `getOrchard`, `getMarket`, `getMarsh`, `getWood`, `getAllotments`, `getQuarry`, `getChunks`, `getStreaming`, `getWater`, `getInterior`), moves the player (`moveTo`, `findPath`, `blocked`, and `placeInterior` indoors), reports rendering work (`getDiagnostics`), and overrides rendering for measurements (`tune`, `tuneInterior`, `setAdaptiveResolution`). `getSceneFingerprint()` hashes every object's transform, geometry, material and instances, so a refactor that must not change the world can compare it before and after, with frame-locked screenshots.
 
 | Spec | Covers |
 | --- | --- |
 | `smoke` | the village loads, draws and starts without errors (CI) |
 | `village` | the welcome quest, interactions, garden, journal, photo mode and saved progress |
 | `journal`, `save` | the journal's entries; saving, loading, old saves and blocked storage |
-| `camera`, `first-person`, `mobile` | the overview camera, first person, and the phone HUD and touch controls |
+| `camera`, `first-person`, `mobile` | the overview camera, first person, and the phone HUD and touch mode's gestures and thumbstick |
 | `navigation`, `routing` | collision and route finding; click-to-walk across the map and the lantern light pool |
 | `world-layout`, `chunks`, `streaming` | the map's bounds, regions and terrain; the chunk bake; streaming and first person's distance limits |
-| `millpond`, `orchard`, `market`, `marsh`, `wood`, `allotments` | each region's layout, crossings, routes and activities |
+| `millpond`, `orchard`, `market`, `marsh`, `wood`, `allotments`, `quarry` | each region's layout, crossings, routes and activities |
 | `cats`, `puppy`, `trees` | wildlife, Lily and Pip, and tree geometry, culling and detail levels |
+| `deer` | the doe and fawn's range, roaming, fleeing and following (logic), and their skinned models standing on the ground |
 | `people` | that residents batch tightly wherever they come from, feet stay on the ground standing and walking, and each resident's far copy keeps their shape |
 | `water` | the water solver, captures, refraction and fallbacks (see [Water](water.md#verification)) |
 | `interior` | the walkable bakery and its rendering settings |

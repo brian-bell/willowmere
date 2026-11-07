@@ -344,3 +344,32 @@
     transform: none;
   }
 }
+/* Touch mode (src/game/touch-controls.js): a thumbstick walks in place of
+   the arrow pad, and the prompt sits under the right thumb. */
+.touch .bakery-touch,
+.touch .bakery-actions #bakery-look,
+.touch #bakery-view kbd {
+  display: none;
+}
+.touch #bakery-view .thumbstick {
+  display: block;
+}
+.touch #bakery-view.is-photo .thumbstick {
+  display: none;
+}
+.touch #bakery-view #bakery-interact,
+.touch #bakery-view #bakery-interact:hover {
+  left: auto;
+  right: 16px;
+  bottom: 150px;
+  transform: none;
+  min-height: 48px;
+  font-size: 13px;
+}
+@media (max-width: 760px), (max-height: 500px) {
+  .touch #bakery-view #bakery-interact,
+  .touch #bakery-view #bakery-interact:hover {
+    right: 12px;
+    bottom: 96px;
+  }
+}

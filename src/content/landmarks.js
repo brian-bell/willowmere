@@ -92,6 +92,25 @@ export const LANDMARK_LINES = {
   scarecrow: [
     "The scarecrow wears an old blue coat with patched elbows. A robin is perched on its hat.",
   ],
+  "quarry-derrick": [
+    "An old timber derrick, its jib cocked over the corner of the face. A fresh block hangs from the hook, turning slowly.",
+    "The winch handles are worn pale where hands have cranked them for a hundred years.",
+  ],
+  "mason-lean-to": [
+    "Mallets, chisels and claw tools hang in a neat row, each in its place. The grindstone’s trough is still wet.",
+    "Wooden templates lean in the corner: the curve of a window head, a step’s nosing, a coping stone.",
+  ],
+  "quarry-board": [
+    "“Willowmere Quarry. Building stone, walling and garden ornaments. Mind the edge. Ask for Agnes.”",
+    "Below, in chalk: “Fossil hunters welcome. Hammers lent on request.”",
+  ],
+  "stone-stacks": [
+    "Dressed blocks, squared and stacked, each marked with Agnes’s banker mark: a little arrow and a star.",
+    "One block is chalked “bridge, spare”. Another, “Hazel’s step, Tuesday”.",
+  ],
+  "stone-cart": [
+    "A flat stone cart with iron-shod wheels, loaded and ready. The shafts rest on the ground, waiting for the horse.",
+  ],
   "allotment-board": [
     "WILLOWMERE ALLOTMENTS. Plots to let, apply to Basil. Spare marrows free to a good home.",
   ],

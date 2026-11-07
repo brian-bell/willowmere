@@ -235,10 +235,12 @@ export function limb(T, curve, radius, tip, segments, radial, out) {
  * Splits an instanced mesh scattered over a region into one instanced mesh
  * per chunk, sharing its geometry and material, so each part culls on its
  * own: one mesh across a whole region has a bounding sphere that reaches
- * into views that never see it. Returns the parts (the mesh itself when its
- * instances all fall in one chunk).
+ * into views that never see it. A chunk with fewer than `least` instances
+ * joins the part whose instances lie nearest, rather than costing a draw of
+ * its own for a handful. Returns the parts (the mesh itself when its
+ * instances all fall in one part).
  */
-export function splitByChunk(T, mesh) {
+export function splitByChunk(T, mesh, { least = 0 } = {}) {
   const groups = new Map(),
     matrix = new T.Matrix4(),
     color = new T.Color();
@@ -247,6 +249,35 @@ export function splitByChunk(T, mesh) {
     const key = chunkKey(matrix.elements[12], matrix.elements[14]);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(i);
+  }
+  if (least > 0) {
+    const middle = (indices) => {
+      let x = 0,
+        z = 0;
+      for (const i of indices) {
+        mesh.getMatrixAt(i, matrix);
+        x += matrix.elements[12];
+        z += matrix.elements[14];
+      }
+      return [x / indices.length, z / indices.length];
+    };
+    for (const [key, indices] of [...groups].sort((a, b) => a[1].length - b[1].length)) {
+      if (indices.length >= least || groups.size < 2) continue;
+      const [x, z] = middle(indices);
+      let nearest = null,
+        best = Infinity;
+      for (const [other, rest] of groups) {
+        if (other === key) continue;
+        const [ox, oz] = middle(rest),
+          d = Math.hypot(ox - x, oz - z);
+        if (d < best) {
+          best = d;
+          nearest = rest;
+        }
+      }
+      nearest.push(...indices);
+      groups.delete(key);
+    }
   }
   if (groups.size < 2) return [mesh];
   return [...groups.values()].map((indices) => {

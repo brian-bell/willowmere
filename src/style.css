@@ -893,8 +893,7 @@ input[type="checkbox"] {
 .photo-mode .bottom-right,
 .photo-mode .toolbar,
 .photo-mode #intro,
-.photo-mode #interaction,
-.photo-mode #touch-controls {
+.photo-mode #interaction {
   display: none !important;
 }
 .photo-mode .view-controls,
@@ -919,9 +918,6 @@ input[type="checkbox"] {
 }
 #loading.loaded {
   opacity: 0;
-}
-#touch-controls {
-  display: none;
 }
 @media (max-height: 780px) {
   .welcome {
@@ -1117,47 +1113,6 @@ input[type="checkbox"] {
   }
   dialog h2 {
     font-size: 25px;
-  }
-}
-@media (pointer: coarse) {
-  #touch-controls {
-    display: block;
-    position: absolute;
-    right: 17px;
-    bottom: 102px;
-    text-align: center;
-  }
-  #touch-controls button {
-    border: 1px solid #fff5db66;
-    background: #f7efdeb8;
-    color: #3d5948;
-    width: 35px;
-    height: 34px;
-    border-radius: 7px;
-    margin: 2px;
-    touch-action: none;
-  }
-  #touch-controls #touch-interact {
-    width: 80px;
-    font-size: 10px;
-    height: 29px;
-  }
-  .first-person #touch-controls button {
-    width: 44px;
-    height: 44px;
-  }
-  .first-person #touch-controls #touch-interact {
-    width: 80px;
-    height: 44px;
-  }
-  .first-person #touch-controls {
-    bottom: 156px;
-  }
-  .first-person #interaction {
-    bottom: 320px;
-  }
-  .first-person #free-look {
-    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1381,13 +1336,6 @@ input[type="checkbox"] {
     grid-area: 1 / 5;
   }
 }
-@media (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
-  #touch-controls,
-  .first-person #touch-controls {
-    right: 10px;
-    bottom: 10px;
-  }
-}
 
 /* The interaction prompt doubles as the button that acts on it. */
 #interaction {
@@ -1423,7 +1371,7 @@ input[type="checkbox"] {
 #game {
   -webkit-tap-highlight-color: transparent;
 }
-#game button:not([data-key]) {
+#game button {
   touch-action: manipulation;
 }
 #scene {
@@ -1445,9 +1393,6 @@ input[type="checkbox"] {
 /* A conversation sits above every control, so its button is always reachable. */
 .dialogue {
   z-index: 5;
-}
-#game:has(#dialogue:not([hidden])) #touch-controls {
-  display: none;
 }
 
 /* Phones: one row of round buttons along the top, the quest folded into a
@@ -1633,35 +1578,6 @@ input[type="checkbox"] {
     right: calc(10px + 2 * 36px + 2 * 4px);
   }
 }
-/* Touch screens tap the world to walk and to interact, so the walking pad
-   only appears in first person, where a drag looks around instead. */
-@media (pointer: coarse) {
-  #game:not(.first-person) #touch-controls,
-  #view-help,
-  .slot {
-    display: none;
-  }
-  #interaction kbd {
-    font-size: 0;
-    line-height: 1.2;
-    padding: 5px 8px;
-    border-radius: 8px;
-  }
-  #interaction kbd::after {
-    content: "Tap";
-    font-size: 10px;
-    font-weight: 600;
-  }
-}
-@media (pointer: coarse) and (max-width: 760px) and (orientation: portrait) {
-  .first-person #touch-controls {
-    right: 10px;
-    bottom: 72px;
-  }
-  .first-person #interaction {
-    bottom: 180px;
-  }
-}
 @media (max-height: 500px) and (orientation: landscape) {
   .playing .day-card {
     left: 50%;
@@ -1678,5 +1594,222 @@ input[type="checkbox"] {
   }
   .first-person #interaction {
     bottom: 72px;
+  }
+}
+
+/* Touch mode: iPhones, iPads and other devices whose main pointer is a
+   finger get `touch` on <html> (src/game/touch-controls.js). Desktop never
+   gets the class, so nothing below changes it. */
+html:not(.touch) .touch-only,
+.touch .desktop-only {
+  display: none !important;
+}
+/* The page is an app here: it neither scrolls, bounces nor zooms, and a long
+   press selects nothing. */
+html.touch,
+.touch body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+.touch body {
+  position: fixed;
+  inset: 0;
+}
+/* The scene fills the whole screen, under the notch and the home bar; the
+   HUD keeps to the safe area inside them. */
+.touch #game {
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: env(safe-area-inset-left, 0px);
+  width: auto;
+  height: auto;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.touch #scene,
+.touch .vignette,
+.touch #loading {
+  position: fixed;
+  inset: 0;
+}
+.touch :is(.quest-card, dialog) {
+  touch-action: pan-y;
+}
+/* Gestures take the place of the camera panel and the keyboard's hints. */
+.touch
+  :is(
+    #free-look,
+    #view-help,
+    #camera-toggle,
+    #camera-more,
+    .camera-extra,
+    .zoom-controls,
+    .bottom-right .controls,
+    .slot
+  ) {
+  display: none !important;
+}
+.touch #game kbd {
+  display: none;
+}
+.touch .view-controls,
+.touch .first-person .view-controls {
+  grid-template-columns: 1fr;
+}
+#view-reset {
+  display: none;
+}
+.touch #game:not(.first-person) .view-moved #view-reset {
+  display: block;
+  min-height: 44px;
+  padding: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+#view-reset span {
+  display: block;
+  font-size: 17px;
+}
+.touch .camera-mode-controls #view-toggle {
+  min-height: 44px;
+}
+/* The prompt is a button: "Tap" in place of E. */
+.touch #game #interaction kbd {
+  display: inline-block;
+  font-size: 0;
+  line-height: 1.2;
+  padding: 5px 8px;
+  border-radius: 8px;
+}
+.touch #interaction kbd::after {
+  content: "Tap";
+  font-size: 10px;
+  font-weight: 600;
+}
+.touch #game #interaction {
+  min-height: 48px;
+  font-size: 13px;
+}
+/* In first person the right thumb, which looks around, reaches the prompt. */
+.touch #game.first-person #interaction,
+.touch #game.first-person #interaction:is(:hover, :active) {
+  left: auto;
+  right: 16px;
+  bottom: 150px;
+  transform: none;
+}
+/* The thumbstick rests faintly in the lower left; a thumb landing anywhere
+   in that part of the screen picks it up from there. */
+.thumbstick {
+  display: none;
+  position: fixed;
+  left: calc(env(safe-area-inset-left, 0px) + 84px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 112px);
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
+  border: 1.5px solid #fff6dd99;
+  border-radius: 50%;
+  background: radial-gradient(circle, #f5efde1a 0 52%, #f5efde3d 100%);
+  box-shadow: 0 6px 24px #1c302522;
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 2;
+}
+.thumbstick.held {
+  opacity: 1;
+  transition: none;
+}
+.thumbstick i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 52px;
+  height: 52px;
+  margin: -26px;
+  border-radius: 50%;
+  background: #f5efdee6;
+  box-shadow: 0 4px 14px #1c302540;
+}
+.touch #game.playing.first-person:not(.photo-mode) > .thumbstick {
+  display: block;
+}
+.touch #game:has(#dialogue:not([hidden])) > .thumbstick {
+  display: none;
+}
+/* Settings: full screen sits beside "Return to the village green". */
+.settings-actions {
+  display: contents;
+}
+.touch .settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#fullscreen[hidden] {
+  display: none;
+}
+/* Phones in touch mode: round buttons big enough for a thumb. */
+@media (max-width: 760px), (max-height: 500px) {
+  .touch .icon-button,
+  .touch .bottom-left .soft-button {
+    width: 40px;
+    height: 40px;
+  }
+  .touch .bottom-left {
+    right: calc(10px + 2 * 40px + 2 * 6px);
+  }
+  .touch #game .quest-toggle {
+    min-height: 40px;
+  }
+  .touch #game .quest-card {
+    top: 60px;
+  }
+  .touch .view-controls,
+  .touch .first-person .view-controls {
+    top: 60px;
+    width: 56px;
+  }
+  .touch #game:not(.first-person) .view-moved #view-reset {
+    font-size: 9px;
+  }
+  .touch #game.first-person #interaction,
+  .touch #game.first-person #interaction:is(:hover, :active) {
+    right: 10px;
+    bottom: 84px;
+  }
+  .touch .thumbstick {
+    left: calc(env(safe-area-inset-left, 0px) + 74px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+  }
+}
+@media (max-width: 400px) and (orientation: portrait) {
+  .touch .bottom-left {
+    right: calc(10px + 2 * 40px + 2 * 4px);
+  }
+}
+/* Short landscape phones: the rail runs along the top right, under the buttons. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .touch .view-controls,
+  .touch .first-person .view-controls {
+    width: auto;
+  }
+  .touch #game .quest-card {
+    top: 10px;
+  }
+  .touch #game.first-person #interaction,
+  .touch #game.first-person #interaction:is(:hover, :active) {
+    bottom: 76px;
+  }
+  .touch .thumbstick {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
   }
 }

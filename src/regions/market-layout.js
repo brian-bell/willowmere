@@ -206,8 +206,9 @@ export function marketColliders() {
     { x: M.postBox.x, z: M.postBox.z, r: 0.26 },
     { x: M.signpost.x, z: M.signpost.z, r: 0.14 },
     box(M.cart.x, M.cart.z, M.cart.w, M.cart.d),
-    ...hedgeClumps().map(([x, z]) => ({ x, z, r: 0.42 })),
-    ...M.shrubs.map(([x, z]) => ({ x, z, r: 0.4 })),
+    // The player walks through the hedgerows and shrubs (see collides()).
+    ...hedgeClumps().map(([x, z]) => ({ x, z, r: 0.42, passable: true })),
+    ...M.shrubs.map(([x, z]) => ({ x, z, r: 0.4, passable: true })),
     box((b.minX + b.maxX) / 2, b.minZ, span, 0.16),
     box((b.minX + b.maxX) / 2, b.maxZ, span, 0.16),
   ];

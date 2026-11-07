@@ -5,6 +5,7 @@ import { MARKET_RESIDENTS } from "../src/content/market.js";
 import { MARSH_RESIDENTS } from "../src/content/marsh.js";
 import { HERON_KEEPER } from "../src/content/pub.js";
 import { WOOD_RESIDENTS } from "../src/content/wood.js";
+import { QUARRY_RESIDENTS } from "../src/content/quarry.js";
 import { createLife } from "../src/life.js";
 
 function everyone() {
@@ -15,6 +16,7 @@ function everyone() {
     ...WOOD_RESIDENTS,
     ...MARSH_RESIDENTS,
     ...ALLOTMENT_RESIDENTS,
+    ...QUARRY_RESIDENTS,
     { ...HERON_KEEPER, x: 0, z: 0 },
   ])
     life.addResident(def);
@@ -45,7 +47,7 @@ function extent(meshes) {
 
 test("a resident who streams in batches as tightly as one who lives in the village", { tag: "@logic" }, () => {
   const { standing } = everyone();
-  expect(standing).toHaveLength(9);
+  expect(standing).toHaveLength(10);
   for (const npc of standing) {
     const meshes = drawn(npc.group);
     // Its contact shadow, body, head, eyes and two arms.

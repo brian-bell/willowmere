@@ -78,8 +78,9 @@ export function buildPlants(
   scene.add(bushes.group);
   // Pools barely resolve single leaves; their captures skip the dense foliage.
   water.excludeFromCaptures(...trees.foliage, trees.crowns, bushes.group);
+  // The player walks through shrubs; everything else still keeps off them.
   for (const footprint of bushes.footprints) {
-    colliders.push(footprint);
+    colliders.push({ ...footprint, passable: true });
     contact(footprint.x, footprint.z, footprint.r * 2.5, footprint.r * 2.1);
   }
   // Garden border flowers and meadow grass.

@@ -53,13 +53,11 @@ test("regions name the same village places as always, and the fields beyond", { 
     for (let z = -21; z <= 21; z += 0.5)
       expect(regionAt(x, z).name).toBe(legacy(x, z));
   for (const [x, z] of [
-    [-36, 30],
     [36, 25],
     [44, -25],
     [0, -24],
-    [-30, 30],
     [30, 30],
-    [-47, 41],
+    [47, 41],
   ])
     expect(regionAt(x, z).name).toBe("The open fields");
   // Either side of the millpond, the old barrows.
@@ -104,6 +102,15 @@ test("regions name the same village places as always, and the fields beyond", { 
     [-5, 25],
   ])
     expect(regionAt(x, z).name).toBe("The allotments");
+  // South of the old wood and west of the allotments, the stone quarry
+  // fills the map's south-west corner.
+  for (const [x, z] of [
+    [-36, 30],
+    [-30, 30],
+    [-47, 41],
+    [-24.5, 21.5],
+  ])
+    expect(regionAt(x, z).name).toBe("The stone quarry");
 });
 
 test("chunk seeds are independent of build order", { tag: "@logic" }, () => {

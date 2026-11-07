@@ -54,6 +54,9 @@ export function createDebugApi(g) {
       if (heading !== undefined) g.life.player.rotation.y = heading;
       g.stopAfterJump(heading);
     },
+    getDeer: () => g.deer.describe(),
+    // Stands the doe (and the fawn behind her) near (x, z), facing `heading`.
+    placeDeer: (x, z, heading) => g.deer.herd.place(x, z, heading),
     getFishing: () => ({ phase: g.fishing.phase, fish: { ...g.state.fish } }),
     getTrees: () =>
       g.world.trees.levels().map((tree) => ({
@@ -86,6 +89,12 @@ export function createDebugApi(g) {
       pressed: { ...g.state.pressed },
       coins: g.state.coins,
       rowan: g.life.npcs.some((n) => n.id === "rowan"),
+    }),
+    getQuarry: () => ({
+      fossils: { ...g.state.fossils },
+      hammer: g.state.hammer,
+      coins: g.state.coins,
+      agnes: g.life.npcs.some((n) => n.id === "agnes"),
     }),
     getAllotments: () => ({
       plots: structuredClone(g.state.plots),
