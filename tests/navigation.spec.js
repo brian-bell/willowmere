@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createNavigation } from "../src/game/navigation.js";
+import { collides, createNavigation } from "../src/game/navigation.js";
 import { regionColliders } from "../src/regions/index.js";
 import { WORLD } from "../src/world-layout.js";
 import { MILLPOND } from "../src/regions/millpond-layout.js";
@@ -34,6 +34,32 @@ test("the walk box, circles, boxes and shaped colliders block walking", { tag: "
   expect(blocked(9.8, 0)).toBe(true);
   expect(blocked(9.7, 0)).toBe(false);
   expect(blocked(9.7, 0, 0.4)).toBe(true);
+});
+
+test("the player walks and routes through passable shrubs, which still occupy their ground", { tag: "@logic" }, () => {
+  const shrub = { x: 0, z: 0, r: 1, passable: true },
+    // A hedge of shrubs across the middle, closed at both ends by walls.
+    hedge = Array.from({ length: 9 }, (_, i) => ({ x: 0, z: -4 + i, r: 0.6, passable: true })),
+    walls = [
+      { x: 0, z: 6.5, w: 1, d: 3 },
+      { x: 0, z: -6.5, w: 1, d: 3 },
+    ],
+    colliders = [shrub, ...hedge, ...walls],
+    { blocked, occupied, findPath } = createNavigation({ walk, colliders });
+  expect(blocked(0, 0)).toBe(false);
+  expect(occupied(0, 0)).toBe(true);
+  expect(occupied(1.3, 0)).toBe(false);
+  // Walls and the walk box block both tests.
+  expect(blocked(0, 6.5)).toBe(true);
+  expect(occupied(0, 6.5)).toBe(true);
+  expect(blocked(9.8, 0)).toBe(true);
+  // collides() alone, as the deer use it, keeps off shrubs.
+  expect(collides(colliders, 0, 0)).toBe(true);
+  expect(collides(colliders, 0, 0, 0.27, true)).toBe(false);
+  // A route crosses the hedge straight through.
+  const route = findPath({ x: -6, z: 0 }, { x: 6, z: 0 });
+  expect(route.length).toBeGreaterThan(0);
+  expect(Math.max(...route.map((p) => Math.abs(p.z)))).toBeLessThan(1);
 });
 
 test("routes go around colliders and end exactly at the goal", { tag: "@logic" }, () => {
