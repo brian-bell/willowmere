@@ -55,13 +55,21 @@ test("regions name the same village places as always, and the fields beyond", { 
   for (const [x, z] of [
     [-36, 30],
     [36, 25],
-    [36, -25],
-    [0, -30],
+    [44, -25],
+    [0, -24],
     [-30, 30],
     [30, 30],
     [-47, 41],
   ])
     expect(regionAt(x, z).name).toBe("The open fields");
+  // Either side of the millpond, the old barrows.
+  for (const [x, z] of [
+    [-1, -33],
+    [0, -30],
+    [31.5, -32.5],
+    [37.8, -26.4],
+  ])
+    expect(regionAt(x, z).name).toBe("The old barrows");
   // South of the village, the brook runs on into the willow marsh.
   for (const [x, z] of [
     [12, 21.5],

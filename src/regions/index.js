@@ -41,6 +41,7 @@ import { heronRegion } from "./heron-layout.js";
 import { marshRegion } from "./marsh-layout.js";
 import { woodRegion } from "./wood-layout.js";
 import { allotmentsRegion } from "./allotments-layout.js";
+import { barrowsRegion, westBarrowsRegion } from "./barrows-layout.js";
 
 /**
  * @typedef {{ minX?: number, maxX?: number, minZ?: number, maxZ?: number }} OpenBox
@@ -63,6 +64,9 @@ import { allotmentsRegion } from "./allotments-layout.js";
 
 /** @type {Region[]} */
 export const regions = [
+  // The old barrows' west side lies within the millpond's and the orchard's
+  // areas, so its label comes before theirs.
+  westBarrowsRegion,
   millpondRegion,
   orchardRegion,
   // Before the market, whose label it takes where the two overlap.
@@ -71,6 +75,7 @@ export const regions = [
   marshRegion,
   woodRegion,
   allotmentsRegion,
+  barrowsRegion,
   // The open country: the label everywhere else, and its grass.
   {
     id: "fields",
