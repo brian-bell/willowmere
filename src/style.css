@@ -1638,6 +1638,24 @@ html.touch,
   position: fixed;
   inset: 0;
 }
+/* From an iPhone's Home Screen the page can be laid out shorter than the
+   screen; the game then takes the screen's height from viewportSize()
+   (src/game/browser.js), and the HUD's box follows it down to the home bar. */
+.touch.standalone #game {
+  bottom: auto;
+  height: calc(
+    var(--app-height, 100dvh) - env(safe-area-inset-top, 0px) -
+      env(safe-area-inset-bottom, 0px)
+  );
+}
+.touch.standalone :is(.vignette, #loading) {
+  bottom: auto;
+  height: var(--app-height, 100dvh);
+}
+.touch.standalone,
+.touch.standalone body {
+  min-height: var(--app-height, 100dvh);
+}
 .touch :is(.quest-card, dialog) {
   touch-action: pan-y;
 }
