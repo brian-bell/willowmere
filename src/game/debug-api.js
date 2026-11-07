@@ -55,6 +55,8 @@ export function createDebugApi(g) {
       g.stopAfterJump(heading);
     },
     getDeer: () => g.deer.describe(),
+    // Stands the doe (and the fawn behind her) near (x, z), facing `heading`.
+    placeDeer: (x, z, heading) => g.deer.herd.place(x, z, heading),
     getFishing: () => ({ phase: g.fishing.phase, fish: { ...g.state.fish } }),
     getTrees: () =>
       g.world.trees.levels().map((tree) => ({

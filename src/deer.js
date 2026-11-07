@@ -308,7 +308,9 @@ export function createDeer(T, { groundHeight, colliders, avoid, water, seed }) {
 
     // The gait follows the ground actually covered, in the rest pose's
     // metres, so the hooves do not slide.
-    const moved = Math.hypot(s.x - a.lastX, s.z - a.lastZ) / scale;
+    let moved = Math.hypot(s.x - a.lastX, s.z - a.lastZ) / scale;
+    // Placed somewhere new (by a test): no stride for the jump.
+    if (moved > 2) moved = 0;
     a.lastX = s.x;
     a.lastZ = s.z;
     const speed = dt > 0 ? moved / dt : 0;

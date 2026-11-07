@@ -617,6 +617,32 @@ export function createHerd({ colliders, avoid = () => [], seed = 0x0d0e, start }
     clear,
     open,
     /**
+     * Stands the doe at (x, z), or the clear spot nearest it, grazing and
+     * facing `heading`, with the fawn a pace behind (for tests and views).
+     */
+    place(/** @type {number} */ x, /** @type {number} */ z, /** @type {number} */ heading = 0) {
+      let spot = null;
+      for (let r = 0; r < 6 && !spot; r += 0.25)
+        for (let k = 0; k < 16 && !spot; k++) {
+          const px = x + Math.sin((k / 16) * TAU) * r,
+            pz = z + Math.cos((k / 16) * TAU) * r;
+          if (clear(px, pz, DEER.doe.radius + 0.3)) spot = { x: px, z: pz };
+        }
+      if (!spot) return false;
+      Object.assign(doe, { x: spot.x, z: spot.z, heading, speed: 0, activity: "graze", timer: range(4, 8) });
+      doe.route.length = 0;
+      const fx = spot.x - Math.sin(heading) * DEER.lag,
+        fz = spot.z - Math.cos(heading) * DEER.lag,
+        behind = clear(fx, fz, DEER.fawn.radius) && open(fx, fz, spot.x, spot.z, DEER.fawn.radius);
+      Object.assign(fawn, { x: behind ? fx : spot.x, z: behind ? fz : spot.z, heading, speed: 0, activity: "follow" });
+      fawn.route.length = 0;
+      trail.length = 0;
+      lastCrumb = { x: spot.x, z: spot.z };
+      if (behind) trail.push(lastCrumb);
+      anchor = null;
+      return true;
+    },
+    /**
      * Advances both by `dt` seconds. `player` is the visitor's ground
      * position, or null when there is nobody to notice.
      */
