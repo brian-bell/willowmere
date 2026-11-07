@@ -29,9 +29,17 @@ All art and audio are generated in code. `vite.config.js` splits Three.js into i
 | `market.js`, `marsh.js`, `wood.js`, `allotments.js` | the market's trade, the hide's birdwatching, the wood's flower pressing and the allotment beds' renting, sowing, growing and harvesting rules, as pure decisions on the save's state |
 | `rosewood.js` | Rosewood's treasures (what Bark digs up), the jigsaw, and the footstep trail Bark follows, as pure decisions |
 | `interactions.js` | the prompt and what E does |
+| `touch.js`, `touch-controls.js` | touch mode, which iPhones, iPads and other finger-first devices get instead of the mouse and keyboard: which devices get it (pure, in `touch.js`), the village view's tap, drag, pinch, twist and two-finger tilt, and the thumbstick that walks in first person and in the rooms |
+| `browser.js` | the page as an app on phones and tablets: full screen, the Home Screen note, and resizing after a turn |
 | `debug-api.js` | `window.__willowmere`, which tests and benchmarks use |
 
 Game text lives in `src/content/` (journal, landmarks, neighbours, and one file per region with residents). Keep new logic out of `main.js`: add it to the module it belongs to, or a new one, and keep pure decisions free of three.js and the DOM so `@logic` tests can run them in Node.
+
+### Touch mode
+
+iPhones, iPads (including iPads whose Safari reports a Mac) and other devices whose main pointer is a finger start in touch mode; settings' Controls choice, or `?touch=1` / `?touch=0`, overrides it. Touch mode puts the class `touch` on `<html>`, and every rule for it in the stylesheets hangs off that class, so a desktop, which never gets it, keeps the mouse and keyboard controls exactly as they are. Elements marked `touch-only` or `desktop-only` show in one mode only.
+
+In touch mode `touch-controls.js` reads the canvas instead of `main.js`'s mouse handlers: in the village view a tap walks or talks (on lifting, so a drag is not a tap), one finger pans, two pinch to zoom, twist to turn and slide up or down to tilt, and Reset view puts the view back; in first person, and in every room, a thumbstick takes a finger landing in the lower left, and any other finger looks around. The page itself neither scrolls, bounces nor zooms; `#game` is inset by the safe area, so the HUD clears the notch and the home bar while the scene fills the screen. `public/manifest.webmanifest` and the icons that `node scripts/make-icons.mjs` draws let the game open full screen from the Home Screen.
 
 ## The world
 
@@ -120,7 +128,7 @@ Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.
 | `smoke` | the village loads, draws and starts without errors (CI) |
 | `village` | the welcome quest, interactions, garden, journal, photo mode and saved progress |
 | `journal`, `save` | the journal's entries; saving, loading, old saves and blocked storage |
-| `camera`, `first-person`, `mobile` | the overview camera, first person, and the phone HUD and touch controls |
+| `camera`, `first-person`, `mobile` | the overview camera, first person, and the phone HUD and touch mode's gestures and thumbstick |
 | `navigation`, `routing` | collision and route finding; click-to-walk across the map and the lantern light pool |
 | `world-layout`, `chunks`, `streaming` | the map's bounds, regions and terrain; the chunk bake; streaming and first person's distance limits |
 | `millpond`, `orchard`, `market`, `marsh`, `wood`, `allotments` | each region's layout, crossings, routes and activities |

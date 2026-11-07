@@ -1,4 +1,6 @@
 import * as T from "three";
+import { createThumbstick, isTouchMode, TOUCH_LOOK } from "./game/touch-controls.js";
+import { STICK_RUN } from "./game/touch.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
@@ -107,7 +109,7 @@ export function createInterior({
     <div class="bakery-crosshair" aria-hidden="true"><i></i></div>
     <button id="bakery-interact" hidden><kbd>E</kbd><span></span></button>
     <div id="bakery-note" role="status" hidden><span></span><p></p></div>
-    <footer class="bakery-help"><span><b>WASD</b> walk <i>·</i> <b>Drag</b> look <i>·</i> <b>E</b> interact</span><span>Make yourself at home.</span></footer>
+    <footer class="bakery-help"><span class="desktop-only"><b>WASD</b> walk <i>·</i> <b>Drag</b> look <i>·</i> <b>E</b> interact</span><span class="touch-only"><b>Left thumb</b> walk <i>·</i> <b>Drag</b> look</span><span>Make yourself at home.</span></footer>
     <div class="bakery-touch" role="group">
       <button data-walk="forward" aria-label="Walk forward">↑</button>
       <button data-walk="left" aria-label="Step left">←</button>
@@ -117,7 +119,7 @@ export function createInterior({
     <button class="bakery-photo-return" hidden>Return to your visit <kbd>P</kbd></button>
     <dialog id="bakery-pause" aria-labelledby="bakery-pause-title">
       <span class="bakery-eyebrow">A MOMENT TO YOURSELF</span><h2 id="bakery-pause-title">Stay a little longer.</h2>
-      <p>Walk with WASD. Drag to look around, or turn with ← and →. Press E near something that catches your eye.</p>
+      <p class="desktop-only">Walk with WASD. Drag to look around, or turn with ← and →. Press E near something that catches your eye.</p><p class="touch-only">Hold the lower left of the screen and lean your thumb to walk, or to the rim to hurry. Drag anywhere else to look around, and tap the button that appears near something that catches your eye.</p>
       <button id="bakery-resume">Keep wandering <span>→</span></button>
       <div class="bakery-pause-options"><button id="bakery-light" aria-pressed="false">After hours</button><button id="bakery-photo" aria-pressed="false">Photo <kbd>P</kbd></button></div>
       <button id="bakery-exit">Return to the village</button>
@@ -125,6 +127,8 @@ export function createInterior({
   `;
   document.querySelector("#game").append(panel);
   const $ = (selector) => panel.querySelector(selector);
+  // Touch mode walks with a thumbstick in place of the arrow pad.
+  const stick = createThumbstick(panel);
   const pauseDialog = $("#bakery-pause");
   const prompt = $("#bakery-interact");
   const keys = new Set(),
@@ -142,6 +146,7 @@ export function createInterior({
   function clearInput() {
     keys.clear();
     touch.clear();
+    stick.reset();
     walker?.stop();
     dragging = null;
   }
@@ -279,24 +284,32 @@ export function createInterior({
       interact();
       return;
     }
+    if (isTouchMode() && stick.claim(e)) {
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     if (dragging) return;
     dragging = { id: e.pointerId, x: e.clientX, y: e.clientY };
     canvas.setPointerCapture(e.pointerId);
   });
   document.addEventListener("pointermove", (e) => {
     if (!active || paused) return;
+    if (stick.move(e)) return;
     if (document.pointerLockElement === canvas)
       walker.look(-e.movementX * 0.0025, -e.movementY * 0.0025);
     else if (dragging?.id === e.pointerId) {
+      const rate = isTouchMode() ? TOUCH_LOOK : 0.0035;
       walker.look(
-        -(e.clientX - dragging.x) * 0.0035,
-        -(e.clientY - dragging.y) * 0.0035,
+        -(e.clientX - dragging.x) * rate,
+        -(e.clientY - dragging.y) * rate,
       );
       dragging.x = e.clientX;
       dragging.y = e.clientY;
     }
   });
   const stopDrag = (e) => {
+    if (stick.end(e)) return;
     if (dragging?.id === e.pointerId) dragging = null;
   };
   canvas.addEventListener("pointerup", stopDrag);
@@ -480,19 +493,30 @@ export function createInterior({
       let moved = 0;
       if (!paused) {
         const held = (action) => [...touch.values()].includes(action);
-        const forward =
+        let forward =
           Number(keys.has("w") || keys.has("arrowup") || held("forward")) -
           Number(keys.has("s") || keys.has("arrowdown") || held("back"));
-        const strafe =
+        let strafe =
           Number(keys.has("d") || held("right")) -
           Number(keys.has("a") || held("left"));
+        // The thumbstick walks as far as it leans, and runs at its rim.
+        const lean = stick.value;
+        if (lean.magnitude > 0) {
+          forward = -lean.y;
+          strafe = lean.x;
+        }
         walker.look(
           ((keys.has("arrowleft") ? 1 : 0) - (keys.has("arrowright") ? 1 : 0)) *
             dt *
             1.65,
           ((keys.has("pageup") ? 1 : 0) - (keys.has("pagedown") ? 1 : 0)) * dt,
         );
-        moved = walker.update(dt, forward, strafe, keys.has("shift"));
+        moved = walker.update(
+          dt,
+          forward,
+          strafe,
+          keys.has("shift") || lean.magnitude >= STICK_RUN,
+        );
       }
       const bobTarget =
         motion && moved > 0.0001 ? Math.sin(walker.distance * 8) * 0.016 : 0;

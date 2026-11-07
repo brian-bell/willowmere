@@ -53,10 +53,20 @@ export function createOverviewCamera({ camera, isFirstPerson, onZoom }) {
     targetViewHeight = 29,
     snap = false;
 
+  // Touch mode offers one button that undoes every change to the view.
+  function updateViewReset() {
+    const moved =
+      targetYaw !== 0 ||
+      targetTilt !== DEFAULT_TILT ||
+      targetPan.lengthSq() > 0 ||
+      targetViewHeight !== DEFAULT_VIEW_HEIGHT;
+    $(".view-controls").classList.toggle("view-moved", moved);
+  }
   function setYaw(angle) {
     targetYaw = THREE.MathUtils.euclideanModulo(angle, 360);
     $("#yaw-angle").textContent = `${Math.round(targetYaw)}°`;
     $("#yaw-reset").disabled = targetYaw === 0;
+    updateViewReset();
   }
   function setPan(x, y) {
     targetPan.set(
@@ -68,6 +78,7 @@ export function createOverviewCamera({ camera, isFirstPerson, onZoom }) {
     $("#pan-up").disabled = targetPan.y <= -PAN_LIMIT;
     $("#pan-down").disabled = targetPan.y >= PAN_LIMIT;
     $("#pan-reset").disabled = targetPan.lengthSq() === 0;
+    updateViewReset();
   }
   function setTilt(angle) {
     targetTilt = THREE.MathUtils.clamp(angle, MIN_TILT, MAX_TILT);
@@ -78,6 +89,7 @@ export function createOverviewCamera({ camera, isFirstPerson, onZoom }) {
     $("#tilt-down").disabled = targetTilt <= MIN_TILT;
     $("#tilt-angle").textContent = `${Math.round(targetTilt)}°`;
     $("#tilt-reset").disabled = targetTilt === DEFAULT_TILT;
+    updateViewReset();
   }
   function updateZoomControls() {
     const firstPerson = isFirstPerson();
@@ -88,6 +100,7 @@ export function createOverviewCamera({ camera, isFirstPerson, onZoom }) {
   function setZoom(height) {
     targetViewHeight = THREE.MathUtils.clamp(height, MIN_VIEW_HEIGHT, MAX_VIEW_HEIGHT);
     updateZoomControls();
+    updateViewReset();
   }
 
   return {
@@ -110,6 +123,41 @@ export function createOverviewCamera({ camera, isFirstPerson, onZoom }) {
     setPan,
     setZoom,
     updateZoomControls,
+    /** The view's zoom (its height in metres), yaw and tilt (degrees), as a gesture starts. */
+    pose: () => ({ zoom: targetViewHeight, yaw: targetYaw, tilt: targetTilt }),
+    /**
+     * Sets zoom, yaw and tilt at once, without easing, so the view keeps up
+     * with the fingers moving it.
+     */
+    place({ zoom, yaw: nextYaw, tilt: nextTilt }) {
+      setZoom(zoom);
+      if (viewHeight !== targetViewHeight) {
+        viewHeight = targetViewHeight;
+        onZoom();
+      }
+      setYaw(nextYaw);
+      yaw = targetYaw;
+      setTilt(nextTilt);
+      tilt = targetTilt;
+    },
+    /**
+     * Pans the map by a finger's movement in CSS pixels, so the ground under
+     * the finger follows it; `screenHeight` is the canvas's height.
+     */
+    dragBy(dx, dy, screenHeight) {
+      const metresPerPixel = (camera.top - camera.bottom) / Math.max(1, screenHeight),
+        // The ground is foreshortened up the screen by the tilt.
+        rise = Math.max(0.2, Math.sin(THREE.MathUtils.degToRad(tilt)));
+      setPan(targetPan.x - dx * metresPerPixel, targetPan.y - (dy * metresPerPixel) / rise);
+      pan.copy(targetPan);
+    },
+    /** Eases the view back to how it starts. */
+    resetView() {
+      setZoom(DEFAULT_VIEW_HEIGHT);
+      setTilt(DEFAULT_TILT);
+      setYaw(0);
+      setPan(0, 0);
+    },
     /** Starts at a zoom without easing there. */
     zoomAt(height) {
       viewHeight = targetViewHeight = height;
@@ -150,6 +198,7 @@ export function createOverviewCamera({ camera, isFirstPerson, onZoom }) {
       $("#pan-up").onclick = () => setPan(targetPan.x, targetPan.y - PAN_STEP);
       $("#pan-down").onclick = () => setPan(targetPan.x, targetPan.y + PAN_STEP);
       $("#pan-reset").onclick = () => setPan(0, 0);
+      $("#view-reset").onclick = () => this.resetView();
     },
     /** Fits the orthographic frustum to the screen's aspect. */
     fit(aspect) {

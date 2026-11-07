@@ -8,6 +8,8 @@ import { sceneTargetOptions } from "./scene-target.js";
 import "./style.css";
 import { applyIcons } from "./icons.js";
 applyIcons();
+// iPhones and iPads get touch-first controls; see src/game/touch-controls.js.
+applyTouchMode();
 import { createWorld } from "./world.js";
 import { createLife } from "./life.js";
 import { createAudio } from "./audio.js";
@@ -21,6 +23,16 @@ import { createActivities } from "./game/activities.js";
 import { createDebugApi } from "./game/debug-api.js";
 import { createHud } from "./game/hud.js";
 import { createInteractions } from "./game/interactions.js";
+import {
+  applyTouchMode,
+  controlMode,
+  createTouchControls,
+  isTouchMode,
+  saveControlMode,
+  tipOnce,
+} from "./game/touch-controls.js";
+import { setupBrowser } from "./game/browser.js";
+import { stickSpeed } from "./game/touch.js";
 import { leafLevelAtDistance, overviewFineDetail, overviewLeafLevel } from "./game/detail.js";
 import { loadState, saveState } from "./game/save.js";
 import { SHADOW_MAP_SIZES, createSunShadow } from "./game/shadows.js";
@@ -287,7 +299,11 @@ if (started) {
 overview.bindControls();
 $("#start").onclick = () => {
   begin();
-  toast("Follow the paths. A little adventure is all you need.");
+  if (isTouchMode())
+    tipOnce("village", () =>
+      toast("Tap to wander. Drag the map, pinch to zoom, twist to turn."),
+    );
+  else toast("Follow the paths. A little adventure is all you need.");
 };
 function selectTool(value) {
   tool = value;
@@ -341,13 +357,33 @@ const interactions = createInteractions({
   isIndoors: () => !!interior?.active || interiorLoading,
   enterInterior,
 });
+const touch = createTouchControls({
+  canvas,
+  host: $("#game"),
+  overview,
+  enabled: isTouchMode,
+  blocked: () =>
+    !!interior?.active || interiorLoading || hud.inDialogue || hud.modalOpen(),
+  firstPerson: () => firstPerson,
+  canWalk: () => !photo,
+  onPress: begin,
+  onTap(e) {
+    // Touch screens have no P or Escape key, so a tap ends photo mode.
+    if (photo) setPhoto(false);
+    else if (!firstPerson) tapWorld(e);
+  },
+  onLook(turn, tilt) {
+    if (!canLook()) return;
+    yaw += turn;
+    pitch = THREE.MathUtils.clamp(pitch + tilt, -1.35, 1.35);
+  },
+});
 function releaseLook() {
   if (dragging && canvas.hasPointerCapture(dragging.id))
     canvas.releasePointerCapture(dragging.id);
   dragging = null;
   if (document.pointerLockElement === canvas) document.exitPointerLock();
 }
-const coarsePointer = matchMedia("(pointer: coarse)");
 function updateViewUI() {
   $("#game").classList.toggle("first-person", firstPerson);
   $("#view-toggle").setAttribute("aria-pressed", String(firstPerson));
@@ -358,7 +394,11 @@ function updateViewUI() {
   $("#view-help").hidden = !firstPerson;
   canvas.setAttribute(
     "aria-label",
-    firstPerson
+    isTouchMode()
+      ? firstPerson
+        ? "First-person village. Hold the screen's lower left to walk, drag elsewhere to look."
+        : "Interactive village. Tap to walk or talk; drag, pinch and twist to move the view."
+      : firstPerson
       ? "First-person village. WASD to walk, drag to look, arrow keys to turn, Page Up and Page Down to look up and down, E to interact, V to switch views."
       : "Interactive village. Move with WASD or arrow keys, interact with E. V for first person.",
   );
@@ -374,6 +414,7 @@ function setFirstPerson(value) {
     pitch = -0.08;
   }
   interactions.pending = null;
+  touch.reset();
   firstPerson = value;
   Object.assign(scene.fog, firstPerson ? FOG.firstPerson : FOG.overview);
   sunShadow.setMapSize($("#quality").value, firstPerson);
@@ -385,6 +426,10 @@ function setFirstPerson(value) {
   updateViewUI();
   save();
   canvas.focus({ preventScroll: true });
+  if (firstPerson && started && isTouchMode())
+    tipOnce("first-person", () =>
+      toast("Your left thumb walks; drag anywhere else to look around."),
+    );
 }
 setFirstPerson(state.viewMode === "first-person");
 $("#view-toggle").onclick = () => {
@@ -451,7 +496,7 @@ function setPhoto(value) {
   photo = value;
   $("#game").classList.toggle("photo-mode", photo);
   $("#photo-hint").hidden = !photo;
-  $("#photo-hint span").textContent = coarsePointer.matches
+  $("#photo-hint span").textContent = isTouchMode()
     ? "Tap anywhere to return"
     : firstPerson
       ? "Drag to look · V to switch views · Press P or Esc to return"
@@ -474,6 +519,15 @@ $("#sound").onclick = async () => {
   } catch {
     toast("Ambient audio is unavailable in this browser.");
   }
+};
+$("#controls-mode").value = controlMode();
+$("#controls-mode").onchange = (e) => {
+  saveControlMode(e.target.value);
+  applyTouchMode(e.target.value);
+  releaseLook();
+  touch.reset();
+  keys.clear();
+  updateViewUI();
 };
 $("#volume").oninput = (e) => audio.setVolume(Number(e.target.value) / 100);
 $("#motion").onchange = (e) => (motion = e.target.checked);
@@ -582,20 +636,6 @@ document.addEventListener("visibilitychange", () => {
     interior?.blur();
   }
 });
-$$("[data-key]").forEach((b) => {
-  b.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    b.setPointerCapture(e.pointerId);
-    keys.add(b.dataset.key.toLowerCase());
-    clickPath.length = 0;
-    interactions.pending = null;
-    begin();
-  });
-  const release = () => keys.delete(b.dataset.key.toLowerCase());
-  b.addEventListener("pointerup", release);
-  b.addEventListener("pointercancel", release);
-  b.addEventListener("lostpointercapture", release);
-});
 $("#interaction").onclick = interactions.interact;
 // On phones the quest card folds down to its title row; a tap opens the list.
 const phoneLayout = matchMedia("(max-width: 760px), (max-height: 500px)");
@@ -650,6 +690,8 @@ destination.rotation.x = -Math.PI / 2;
 destination.visible = false;
 scene.add(destination);
 canvas.addEventListener("pointerdown", (e) => {
+  // Touch mode reads the canvas itself (src/game/touch-controls.js).
+  if (isTouchMode()) return;
   if (interior?.active || interiorLoading) return;
   if (e.button !== 0 || hud.inDialogue || hud.modalOpen()) return;
   // Touch screens have no P or Escape key, so a tap ends photo mode.
@@ -666,6 +708,11 @@ canvas.addEventListener("pointerdown", (e) => {
     }
     return;
   }
+  tapWorld(e);
+});
+// A click or tap on the village view: walk to whoever or whatever is there,
+// or to the spot on the ground.
+function tapWorld(e) {
   const r = canvas.getBoundingClientRect();
   mouse.set(
     ((e.clientX - r.left) / r.width) * 2 - 1,
@@ -702,7 +749,7 @@ canvas.addEventListener("pointerdown", (e) => {
       destination.visible = true;
     }
   }
-});
+}
 canvas.addEventListener(
   "wheel",
   (e) => {
@@ -734,6 +781,7 @@ window.addEventListener("resize", () => {
     scaler.reset(q);
   resize();
 });
+setupBrowser({ canvas, onResize: resize, toast });
 $("#quality").value = startQuality;
 $("#quality").dispatchEvent(new Event("change"));
 let elapsed = 0,
@@ -763,7 +811,9 @@ function animate(now) {
   }
   scaler.update(now, interval);
   overview.turn(dt, motion);
-  const p = life.player.position;
+  const p = life.player.position,
+    stick = touch.stick.value;
+  let stickPace = 0;
   input.set(0, 0);
   if (!hud.inDialogue && !hud.modalOpen()) {
     if (firstPerson) {
@@ -778,12 +828,18 @@ function animate(now) {
         1.35,
       );
     }
-    const horiz =
+    let horiz =
         (keys.has("d") || (!firstPerson && keys.has("arrowright")) ? 1 : 0) -
         (keys.has("a") || (!firstPerson && keys.has("arrowleft")) ? 1 : 0),
       vert =
         (keys.has("s") || keys.has("arrowdown") ? 1 : 0) -
         (keys.has("w") || keys.has("arrowup") ? 1 : 0);
+    // The thumbstick walks as far as it leans, and runs at its rim.
+    if (firstPerson && stick.magnitude > 0) {
+      horiz = stick.x;
+      vert = stick.y;
+      stickPace = stickSpeed(stick.magnitude, 3.0, 5.1);
+    }
     if (firstPerson)
       input.set(
         Math.cos(yaw) * horiz + Math.sin(yaw) * vert,
@@ -804,7 +860,7 @@ function animate(now) {
       } else input.normalize();
     }
   }
-  const speed = keys.has("shift") ? 5.1 : 3.0;
+  const speed = stickPace || (keys.has("shift") ? 5.1 : 3.0);
   velocity.lerp(input.multiplyScalar(speed), 1 - Math.exp(-dt * 14));
   if (input.lengthSq() < 0.001 && velocity.length() < 0.06) velocity.set(0, 0);
   const subdivisions = Math.max(1, Math.ceil((velocity.length() * dt) / 0.12));
