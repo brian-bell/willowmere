@@ -33,6 +33,30 @@ async function toggleFullscreen() {
 const isIPhone = () => /iPhone|iPod/.test(navigator.userAgent);
 
 /**
+ * The size the game fills, in CSS pixels. Opened from the Home Screen, an
+ * iPhone's Safari can lay the page out shorter than the screen, by about
+ * the status bar's height, and leave a strip of bare page under the game.
+ * There the screen's own height is used, and `--app-height` on <html> tells
+ * the stylesheet (`.standalone` in style.css). A window narrower than the
+ * screen (never the case on iPhone) keeps the window's size.
+ */
+export function viewportSize() {
+  const width = innerWidth;
+  let height = innerHeight;
+  if (isIPhone() && isStandalone()) {
+    const long = Math.max(screen.width, screen.height),
+      short = Math.min(screen.width, screen.height),
+      landscape = width > height,
+      screenWidth = landscape ? long : short,
+      screenHeight = landscape ? short : long;
+    if (Math.abs(screenWidth - width) < 2 && screenHeight > height && screenHeight - height < 160)
+      height = screenHeight;
+  }
+  document.documentElement.style.setProperty("--app-height", `${height}px`);
+  return { width, height };
+}
+
+/**
  * Wires the settings' full-screen button and Home Screen note, and resizes
  * once a turned device has settled. `onResize()` refits the game to the screen;
  * `toast(text)` shows a passing note.

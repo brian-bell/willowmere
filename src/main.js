@@ -32,7 +32,7 @@ import {
   saveControlMode,
   tipOnce,
 } from "./game/touch-controls.js";
-import { setupBrowser } from "./game/browser.js";
+import { setupBrowser, viewportSize } from "./game/browser.js";
 import { stickSpeed } from "./game/touch.js";
 import { leafLevelAtDistance, overviewFineDetail, overviewLeafLevel } from "./game/detail.js";
 import { loadState, saveState } from "./game/save.js";
@@ -769,8 +769,7 @@ canvas.addEventListener(
   { passive: false },
 );
 function updateFrustum() {
-  const w = innerWidth,
-    h = innerHeight;
+  const { width: w, height: h } = viewportSize();
   const aspect = w / h;
   overview.fit(aspect);
   firstPersonCamera.aspect = aspect;
@@ -778,8 +777,9 @@ function updateFrustum() {
   firstPersonCamera.updateProjectionMatrix();
 }
 function resize() {
-  renderer.setSize(innerWidth, innerHeight);
-  composer.setSize(innerWidth, innerHeight);
+  const { width, height } = viewportSize();
+  renderer.setSize(width, height);
+  composer.setSize(width, height);
   updateFrustum();
   interior?.resize();
 }

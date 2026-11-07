@@ -1,5 +1,6 @@
 import * as T from "three";
 import { createThumbstick, isTouchMode, TOUCH_LOOK } from "./game/touch-controls.js";
+import { viewportSize } from "./game/browser.js";
 import { STICK_RUN } from "./game/touch.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
@@ -446,7 +447,8 @@ export function createInterior({
       clearInput();
     },
     resize() {
-      camera.aspect = innerWidth / innerHeight;
+      const { width, height } = viewportSize();
+      camera.aspect = width / height;
       camera.fov = camera.aspect < 0.8 ? 78 : 66;
       camera.updateProjectionMatrix();
       const quality = document.querySelector("#quality").value;
@@ -476,7 +478,7 @@ export function createInterior({
         }
       // The village sets its quality's full pixel ratio while the bakery is open.
       composer.setPixelRatio(overrides.pixelRatio ?? renderer.getPixelRatio());
-      composer.setSize(innerWidth, innerHeight);
+      composer.setSize(width, height);
     },
     place(pose) {
       walker?.place(pose);
