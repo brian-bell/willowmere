@@ -114,6 +114,26 @@ export const LANDMARK_LINES = {
   "allotment-board": [
     "WILLOWMERE ALLOTMENTS. Plots to let, apply to Basil. Spare marrows free to a good home.",
   ],
+  "long-barrow": [
+    "The door stone has been pushed a hand’s width aside. Cool air breathes out of the gap, smelling of chalk and rain.",
+    "You call a soft hello into the dark. The echo takes a long time to come back, and comes back quieter, as if something hushed it.",
+    "Someone has left a posy of meadowsweet on the threshold. It is fresh. Nobody you ask remembers leaving it.",
+    "Mabel says the barrows were old when the mill was new. Nobody in the village knows who built them, or who sleeps inside.",
+    "The spirals on the doorposts wind inward. Follow one with your eye and it seems to keep turning after you stop.",
+  ],
+  "old-mound": [
+    "The kerbstones lean in toward the mound, like old friends listening to a story.",
+    "You count the stones round the mound: twelve. You count again, slowly: thirteen. You decide not to count a third time.",
+    "The turf on the mound is warm, even in the shade, as if something underneath is dreaming of summer.",
+    "Two spirals are cut into the stone, one turning out and one turning in. The lines are worn soft, but the cuts are sharp at the bottom.",
+    "Basil says the rabbits won’t dig here and the sheep won’t graze. The grass grows exactly as it likes.",
+  ],
+  "standing-stone": [
+    "The stone leans toward the millpond, as if it is trying to hear what the water is saying.",
+    "Lichen has written something across the stone in yellow and grey. You can’t read it, but it looks like a name.",
+    "You put your palm flat on the stone. It hums, very faintly, the way a bell does long after it has rung.",
+    "Faint spirals are worn into its face. At blue hour, people say, they shine like moonlight on water.",
+  ],
 };
 
 // Any landmark without lines of its own.

@@ -58,7 +58,7 @@ In touch mode `touch-controls.js` reads the canvas instead of `main.js`'s mouse 
 
 ## Regions
 
-Each area beyond the village (the millpond, the orchard hill, the inn, the market lane, the willow marsh, the old wood, the allotments, the stone quarry, and the open fields around them) is an entry in the registry, `src/regions/index.js`. The terrain field, the location label, the open country's grass and soil, walking and click heights, planting, colliders and streaming all loop that list, so a new region adds one line there instead of edits to the core files. The fields an entry may set are documented at the top of that file.
+Each area beyond the village (the millpond, the orchard hill, the inn, the market lane, the willow marsh, the old wood, the allotments, the stone quarry, the old barrows either side of the millpond, and the open fields around them) is an entry in the registry, `src/regions/index.js`. The terrain field, the location label, the open country's grass and soil, walking and click heights, planting, colliders and streaming all loop that list, so a new region adds one line there instead of edits to the core files. The fields an entry may set are documented at the top of that file.
 
 A region has two halves:
 
@@ -66,6 +66,8 @@ A region has two halves:
 - **A builder** that `stream(T, world, game)` loads with `import()` once the village is on screen. It resolves to `{ jobs, ...api }`. Each job is `{ x, z, step(deadline) }`: `step` works until `performance.now()` passes the deadline and returns nothing to be called again, or the finished objects. The rest of the object goes to the region's game logic through `activities.regionLoaded`. `game` carries `life`, for residents (`life.addResident`), and `dusk()`, how far into blue hour the day is.
 
 Builders make their structures with the shared parts kit in `src/regions/kit.js` (painted boxes, posts, beams, rods and glass, merged into one vertex-coloured mesh plus one glass mesh) and their paths with `src/regions/lines.js`, rather than their own helpers. They register meshes with `world.addStreamed(mesh, { detail })`, animations with `world.animate(x, z, update)` and lamps with `world.addLamps`, seed their layout with `chunkRandom(cx, cz)` and seat placements on `terrainHeight(x, z)`. Trees on raised ground share the village trees' resources through `world.trees`, as `src/regions/orchard.js` shows. [Rendering performance](performance.md#checklist-for-changes) lists the rules that keep a streamed region cheap.
+
+A region needs no ground of its own. The old barrows (`src/regions/barrows-layout.js`) are meshes laid over the ground other regions and the fields already have, and their `deck` is the mounds' surface, so the player walks up and over them; their grass mask keeps the meadow off the mounds and their builder grows the same blades on top. Their west side sits inside the millpond's and the orchard's label areas, so it has a label-only entry (`westBarrowsRegion`) ahead of those two in the list.
 
 A region with gameplay usually also adds pure rules in `src/game/<region>.js`, its words in `src/content/<region>.js`, a benchmark viewpoint in `scripts/benchmark.mjs` and a draw budget in `tests/performance.spec.js`.
 
