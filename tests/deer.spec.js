@@ -152,3 +152,45 @@ test("the doe and fawn are one skinned draw each, stand on the ground and move t
   for (let i = 0; i < 30; i++) deer.update(1 / 30, null, false);
   expect(deer.describe()).toEqual(at);
 });
+
+test("the deer stream in on the map and bolt from a visitor who walks up", async ({ page }) => {
+  test.setTimeout(600000);
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "willowmere.save.v1",
+      JSON.stringify({ started: true, quests: { mabel: false, flower: false, plant: false }, plants: [] }),
+    );
+  });
+  await page.goto("/?resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
+  await page.waitForFunction(() => window.__willowmere.getDeer().every((d) => d.inScene), null, {
+    timeout: 300000,
+    polling: 1000,
+  });
+  // In the open fields south-west of the wood, then a visitor three metres off.
+  expect(await page.evaluate(() => window.__willowmere.placeDeer(-35, 29, 1.2))).toBe(true);
+  const [doe] = await page.evaluate(() => window.__willowmere.getDeer());
+  await page.evaluate(([x, z]) => window.__willowmere.moveTo(x + 3, z), [doe.x, doe.z]);
+  await page.waitForFunction(() => window.__willowmere.getDeer()[0].activity === "flee", null, {
+    timeout: 30000,
+  });
+  await page.waitForFunction(
+    () => {
+      const w = window.__willowmere,
+        player = w.getPlayer(),
+        [doe, fawn] = w.getDeer();
+      return (
+        Math.hypot(doe.x - player.x, doe.z - player.z) > 8 &&
+        Math.hypot(doe.x - fawn.x, doe.z - fawn.z) < 5
+      );
+    },
+    null,
+    { timeout: 60000 },
+  );
+  expect(errors).toEqual([]);
+});
