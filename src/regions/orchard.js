@@ -13,6 +13,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { chunkRandom } from "../world-layout.js";
 import { createKit, limb } from "./kit.js";
 import { outsideWindows } from "../windmill/layout.js";
+import { millSails } from "../windmill/sails.js";
 import { crownShells } from "../trees.js";
 import {
   FRUIT_TREES,
@@ -104,7 +105,7 @@ export function orchardJobs(T, world) {
         world.addStreamed(mesh);
         world.addStreamed(sails);
         const turn = sails.userData.turn;
-        world.animate(O.windmill.x, O.windmill.z, (dt, t, clock) => turn(clock));
+        world.animate(O.windmill.x, O.windmill.z, (dt) => turn(dt));
         world.interactables.push(
           {
             id: "windmill",
@@ -837,15 +838,17 @@ function structures(T, range) {
   const mesh = k.mesh("Orchard windmill, hives and bench", material),
     sails = k.mesh("Windmill sails", material, sailLayer);
   k.dispose();
-  // The sails turn slowly about the shaft.
+  // The sails turn slowly about the shaft, as the ones seen from inside do, and
+  // stand still while the brake is on (src/windmill/sails.js).
   const facingShaft = new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 0, 1), shaft),
     spin = new T.Quaternion(),
     zAxis = new T.Vector3(0, 0, 1);
   sails.position.copy(hub);
   sails.quaternion.copy(facingShaft);
   sails.updateMatrix();
-  sails.userData.turn = (clock) => {
-    sails.quaternion.copy(facingShaft).multiply(spin.setFromAxisAngle(zAxis, -clock * 0.32));
+  sails.userData.turn = (dt) => {
+    millSails.step(dt);
+    sails.quaternion.copy(facingShaft).multiply(spin.setFromAxisAngle(zAxis, -millSails.turn));
     sails.updateMatrix();
     sails.updateMatrixWorld();
   };

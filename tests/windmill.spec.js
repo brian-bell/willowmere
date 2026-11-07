@@ -21,6 +21,7 @@ import {
   railAt,
   wallRadius,
 } from "../src/windmill/layout.js";
+import { SAIL_RATE, createSails } from "../src/windmill/sails.js";
 
 // A visitor with the room's own walker, whose colliders and ladder follow its
 // level exactly as src/windmill/room.js swaps them.
@@ -352,6 +353,44 @@ async function atTheDoor(page) {
   });
 }
 
+test("the brake brings the sails to a stand and holds them, and letting go starts them again", { tag: "@logic" }, () => {
+  const sails = createSails(),
+    run = (seconds) => {
+      for (let n = 0; n < seconds * 60; n++) sails.step(1 / 60);
+    };
+  run(2);
+  expect(sails.turn).toBeCloseTo(2 * SAIL_RATE, 5);
+  expect(sails.turning).toBe(true);
+
+  expect(sails.toggleBrake()).toBe(true);
+  // The sails run on a little as the brake bites, then stop within a few seconds.
+  const leaning = sails.turn;
+  run(0.5);
+  expect(sails.turning).toBe(true);
+  run(3);
+  expect(sails.turning).toBe(false);
+  expect(sails.turn - leaning).toBeLessThan(SAIL_RATE);
+  // Held, they stay where they stopped.
+  const held = sails.turn;
+  run(20);
+  expect(sails.turn).toBe(held);
+
+  // Let go, the wind takes them up again, more slowly than the brake stopped them.
+  expect(sails.toggleBrake()).toBe(false);
+  run(1);
+  expect(sails.turning).toBe(true);
+  expect(sails.drive).toBeLessThan(0.7);
+  run(8);
+  expect(sails.drive).toBeGreaterThan(0.99);
+
+  // Without motion the sails keep their angle, but the brake still bites.
+  sails.toggleBrake();
+  const still = sails.turn;
+  for (let n = 0; n < 240; n++) sails.step(1 / 60, false);
+  expect(sails.turn).toBe(still);
+  expect(sails.turning).toBe(false);
+});
+
 test("the door opens the tower, and the ladders climb it with the keys", async ({ page }) => {
   test.setTimeout(900000);
   const errors = [];
@@ -407,6 +446,9 @@ test("the door opens the tower, and the ladders climb it with the keys", async (
   await expect.poll(async () => (await inside()).turning, { timeout: 30000 }).toBe(false);
   await page.keyboard.press("e");
   await expect.poll(async () => (await inside()).turning, { timeout: 30000 }).toBe(true);
+  // Leant on again, the brake is still on when you go out.
+  await page.keyboard.press("e");
+  await expect.poll(async () => (await inside()).turning, { timeout: 30000 }).toBe(false);
 
   // The window seat lets the light move on.
   const seat = polar(2.3, FURNITURE.seat.theta),
@@ -435,6 +477,15 @@ test("the door opens the tower, and the ladders climb it with the keys", async (
   await page.waitForFunction(() => !window.__willowmere.getInterior().active);
   const back = await page.evaluate(() => window.__willowmere.getPlayer());
   expect(Math.hypot(back.x - outside.x, back.z - outside.z)).toBeLessThan(0.1);
+  // Outside, the sails stand where the brake stopped them.
+  const sails = () => page.evaluate(() => window.__willowmere.getWindmillSails());
+  const before = await sails();
+  expect(before.braked).toBe(true);
+  expect(before.outside).not.toBeNull();
+  for (let n = 0; n < 30; n++) await page.evaluate(() => new Promise(requestAnimationFrame));
+  const after = await sails();
+  expect(after.turn).toBe(before.turn);
+  expect(after.outside).toEqual(before.outside);
   expect(errors).toEqual([]);
 });
 
