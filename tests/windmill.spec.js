@@ -477,8 +477,10 @@ test("the door opens the tower, and the ladders climb it with the keys", async (
   await page.waitForFunction(() => !window.__willowmere.getInterior().active);
   const back = await page.evaluate(() => window.__willowmere.getPlayer());
   expect(Math.hypot(back.x - outside.x, back.z - outside.z)).toBeLessThan(0.1);
-  // Outside, the sails stand where the brake stopped them.
+  // Outside, the sails stand where the brake stopped them. Their pose was last
+  // set before you went in, so give the hill a few frames to catch it up.
   const sails = () => page.evaluate(() => window.__willowmere.getWindmillSails());
+  for (let n = 0; n < 10; n++) await page.evaluate(() => new Promise(requestAnimationFrame));
   const before = await sails();
   expect(before.braked).toBe(true);
   expect(before.outside).not.toBeNull();
