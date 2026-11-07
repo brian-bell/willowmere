@@ -2,8 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1.0,viewport-fit=cover"
+    />
     <meta name="theme-color" content="#28493f" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Willowmere" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta
       name="description"
       content="A little place to slow down. Explore the living storybook village of Willowmere."
@@ -99,6 +111,13 @@
           title="Switch camera view (V)"
         >
           First person <kbd>V</kbd>
+        </button>
+        <button
+          id="view-reset"
+          type="button"
+          title="Put the view back as it was"
+        >
+          <span aria-hidden="true">⟲</span> Reset view
         </button>
         <button
           id="free-look"
@@ -239,7 +258,8 @@
           waiting for you here.
         </p>
         <button id="start">Let’s take a wander <span>↗</span></button
-        ><small>WASD to move · Click a path to wander</small>
+        ><small class="desktop-only">WASD to move · Click a path to wander</small
+        ><small class="touch-only">Tap a path to wander · Pinch to zoom</small>
       </div>
       <div
         id="dialogue"
@@ -285,6 +305,12 @@
             <option value="performance">Performance</option>
           </select></label
         ><label
+          >Controls<select id="controls-mode">
+            <option value="auto">Automatic</option>
+            <option value="touch">Touch</option>
+            <option value="desktop">Mouse &amp; keyboard</option>
+          </select></label
+        ><label
           >Ambient volume<input
             id="volume"
             type="range"
@@ -295,13 +321,33 @@
           >Motion<input id="motion" type="checkbox" checked /> Gentle world
           animations</label
         >
-        <p>
+        <p class="touch-only">
+          Tap to walk, or tap someone to say hello<br />Drag the map to look
+          around · Pinch to zoom · Twist to turn · Slide two fingers up or
+          down to tilt<br />First person: your left thumb walks (push to the
+          rim to run) · Drag anywhere else to look
+        </p>
+        <p id="home-screen-tip" class="touch-only" hidden>
+          For full screen, tap Share, then Add to Home Screen.
+        </p>
+        <p class="desktop-only">
           WASD / arrows to walk · Shift to run<br />E to interact · 1–4 tools ·
           J journal · V switch camera view<br />P photo mode · Esc close · Scroll to zoom<br />Use Zoom, Tilt, Yaw, and Pan to adjust the map view<br />First person: drag to look · ← → turn · Page Up / Down look up / down
         </p>
-        <button id="reset-position" class="soft-button">
-          Return to the village green
-        </button>
+        <div class="settings-actions">
+          <button id="reset-position" class="soft-button">
+            Return to the village green
+          </button>
+          <button
+            id="fullscreen"
+            class="soft-button touch-only"
+            type="button"
+            aria-pressed="false"
+            hidden
+          >
+            <span aria-hidden="true">⛶</span>Full screen</button
+          >
+        </div>
         <section class="studies" aria-labelledby="studies-title">
           <span id="studies-title" class="eyebrow">STUDIES</span>
           <div class="study-links">
@@ -340,14 +386,6 @@
       <div id="loading">
         <span class="brand-leaf">❧</span>
         <h2>A little world is waking up…</h2>
-      </div>
-      <div id="touch-controls">
-        <button data-key="w" aria-label="Walk forward">↑</button>
-        <div>
-          <button data-key="a" aria-label="Walk left">←</button
-          ><button data-key="s" aria-label="Walk backward">↓</button
-          ><button data-key="d" aria-label="Walk right">→</button>
-        </div>
       </div>
     </main>
     <script type="module" src="/src/main.js"></script>

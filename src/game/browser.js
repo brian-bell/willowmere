@@ -1,0 +1,83 @@
+// The page as an app on phones and tablets: full screen where the browser
+// allows it, a nudge toward the Home Screen on iPhone (whose Safari cannot go
+// full screen), and nothing the browser's own gestures can grab. The pinch
+// that would zoom the page is stopped in touch-controls.js; the stylesheet
+// keeps the page from scrolling or bouncing (see `.touch` in style.css).
+
+const $ = (s) => document.querySelector(s);
+
+/** True when the game was opened from the Home Screen, or is full screen there. */
+export const isStandalone = () =>
+  matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches ||
+  navigator.standalone === true;
+
+const fullscreenElement = () =>
+  document.fullscreenElement ?? document.webkitFullscreenElement ?? null;
+
+function canFullscreen() {
+  const root = document.documentElement;
+  return !!(
+    (document.fullscreenEnabled || document.webkitFullscreenEnabled) &&
+    (root.requestFullscreen || root.webkitRequestFullscreen)
+  );
+}
+
+async function toggleFullscreen() {
+  const root = document.documentElement;
+  if (fullscreenElement())
+    await (document.exitFullscreen ?? document.webkitExitFullscreen)?.call(document);
+  else await (root.requestFullscreen ?? root.webkitRequestFullscreen)?.call(root, { navigationUI: "hide" });
+}
+
+/** True on iPhone and iPod, whose Safari has no full screen for pages. */
+const isIPhone = () => /iPhone|iPod/.test(navigator.userAgent);
+
+/**
+ * Wires the settings' full-screen button and Home Screen note, and resizes
+ * once a turned device has settled. `onResize()` refits the game to the screen;
+ * `toast(text)` shows a passing note.
+ */
+export function setupBrowser({ canvas, onResize, toast }) {
+  const root = document.documentElement;
+  root.classList.toggle("standalone", isStandalone());
+
+  const button = $("#fullscreen");
+  const updateButton = () => {
+    const on = !!fullscreenElement();
+    button.setAttribute("aria-pressed", String(on));
+    button.lastChild.textContent = on ? "Leave full screen" : "Full screen";
+  };
+  button.hidden = !canFullscreen() || isStandalone();
+  button.onclick = async () => {
+    try {
+      await toggleFullscreen();
+    } catch {
+      toast("This browser can't go full screen here.");
+    }
+  };
+  for (const type of ["fullscreenchange", "webkitfullscreenchange"])
+    document.addEventListener(type, () => {
+      updateButton();
+      onResize();
+    });
+  updateButton();
+  // iPhone's Safari can only go full screen from the Home Screen.
+  $("#home-screen-tip").hidden = isStandalone() || canFullscreen() || !isIPhone();
+
+  // A long press on the scene would offer to save an image or select text.
+  canvas.addEventListener("contextmenu", (e) => {
+    if (root.classList.contains("touch")) e.preventDefault();
+  });
+  // A quick second tap would zoom the page in browsers that ignore touch-action.
+  document.addEventListener(
+    "dblclick",
+    (e) => {
+      if (root.classList.contains("touch")) e.preventDefault();
+    },
+    { passive: false },
+  );
+  // Sizes read during a turn can be the old ones; read them again once it settles.
+  const settle = () => setTimeout(onResize, 250);
+  screen.orientation?.addEventListener?.("change", settle);
+  window.addEventListener("orientationchange", settle);
+}
