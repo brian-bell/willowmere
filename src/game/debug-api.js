@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { millSails } from "../windmill/sails.js";
 
 // window.__willowmere: the hooks Playwright tests and the benchmark scripts
 // drive and read. Normal play never calls them. `tune` applies the
@@ -122,6 +123,13 @@ export function createDebugApi(g) {
       pointerLocked: document.pointerLockElement === g.canvas,
     }),
     getInterior: () => g.interior?.diagnostics() ?? { active: false },
+    // The windmill's brake and sails, and the outdoor sails' pose.
+    getWindmillSails: () => ({
+      braked: millSails.braked,
+      turning: millSails.turning,
+      turn: millSails.turn,
+      outside: g.scene.getObjectByName("Windmill sails")?.quaternion.toArray() ?? null,
+    }),
     tuneInterior: (settings) => g.interior?.tune(settings),
     placeInterior: (pose) => g.interior?.place(pose),
     getWater: () => g.world.water.diagnostics(),

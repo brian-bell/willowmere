@@ -15,6 +15,7 @@ import {
 } from "./layout.js";
 import { buildMachinery } from "./machinery.js";
 import { createBatch, createWindmillMaterials } from "./parts.js";
+import { millSails } from "./sails.js";
 import { createWindmillSetting } from "./setting.js";
 import { buildTower } from "./tower.js";
 
@@ -22,10 +23,8 @@ import { buildTower } from "./tower.js";
 // mill's machinery standing in its well, and platforms winding up the wall from
 // the flags to the cap, joined by ladders. The walker's colliders change with its
 // level as they do on the inn's stair, and on a ladder it keeps to the ladder's
-// line. Nothing that moves casts a shadow, so the sun's map renders once.
-
-// How fast the sails turn outside (src/regions/orchard.js).
-const SAIL_RATE = 0.32;
+// line. Nothing that moves casts a shadow, so the sun's map renders once. The
+// sails and their brake are shared with the orchard's windmill (./sails.js).
 
 const FLOOR_Y = Object.fromEntries(FLOORS.map((f) => [f.id, f.y]));
 
@@ -65,9 +64,6 @@ export function createWindmillRoom() {
     level: "meal",
     dusk: 0,
     target: 0,
-    turn: 0,
-    drive: 1,
-    braked: false,
     climbed: false,
     owl: owlRest,
   };
@@ -109,8 +105,8 @@ export function createWindmillRoom() {
     },
     interact(point) {
       if (point.id === "brake") {
-        state.braked = !state.braked;
-        return { ...(state.braked ? WINDMILL_NOTES.brakeOn : WINDMILL_NOTES.brakeOff), sound: "creak" };
+        const braked = millSails.toggleBrake();
+        return { ...(braked ? WINDMILL_NOTES.brakeOn : WINDMILL_NOTES.brakeOff), sound: "creak" };
       }
       const said = WINDMILL_NOTES[point.id];
       if (!said) return null;
@@ -120,7 +116,6 @@ export function createWindmillRoom() {
     enter() {
       use("meal");
       state.dusk = state.target;
-      state.drive = state.braked ? 0 : 1;
     },
     /** Stands the walker on a level as well as a spot (benchmarks and tests). */
     place({ level }) {
@@ -152,10 +147,8 @@ export function createWindmillRoom() {
         eye.set(x, room.eyeAt(walker), z);
       }
       state.dusk += (state.target - state.dusk) * (1 - Math.exp(-dt * 2.4));
-      // The brake takes the sails down over a few seconds; the wind picks them up.
-      state.drive += ((state.braked ? 0 : 1) - state.drive) * (1 - Math.exp(-dt * (state.braked ? 2.2 : 0.9)));
-      if (motion) state.turn += dt * state.drive * SAIL_RATE;
-      machinery.update(-state.turn);
+      millSails.step(dt, motion);
+      machinery.update(-millSails.turn);
       setting.apply(state.dusk, t, eye, innerHeight);
       // Within sight the owl follows you, by the shortest way round.
       if (motion) {
@@ -176,8 +169,8 @@ export function createWindmillRoom() {
     diagnostics: () => ({
       level: state.level,
       floor: eye.y - TOWER.eye,
-      turning: state.drive > 0.02,
-      braked: state.braked,
+      turning: millSails.turning,
+      braked: millSails.braked,
     }),
   };
   return room;
