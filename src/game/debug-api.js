@@ -54,6 +54,7 @@ export function createDebugApi(g) {
       if (heading !== undefined) g.life.player.rotation.y = heading;
       g.stopAfterJump(heading);
     },
+    getDeer: () => g.deer.describe(),
     getFishing: () => ({ phase: g.fishing.phase, fish: { ...g.state.fish } }),
     getTrees: () =>
       g.world.trees.levels().map((tree) => ({
