@@ -10,6 +10,7 @@ import { applyIcons } from "./icons.js";
 applyIcons();
 import { createWorld } from "./world.js";
 import { createLife } from "./life.js";
+import { createDeer } from "./deer.js";
 import { createAudio } from "./audio.js";
 import { createEffects } from "./effects.js";
 import { createPlayerVisibility } from "./visibility.js";
@@ -128,6 +129,13 @@ scene.add(fill);
 const world = createWorld(THREE, scene),
   life = createLife(THREE, scene, world.terrainHeight),
   audio = createAudio();
+// The doe and fawn roam beyond the village, so they stream in like it.
+const deer = createDeer(THREE, {
+  groundHeight: world.terrainHeight,
+  colliders: world.colliders,
+  avoid: () => life.npcs,
+  water: world.water,
+});
 // Shrubs cast the sun's shadow with their coarse leaves.
 shadowMaps.around(scene, world.bushes.shadowLevel);
 const sceneTarget = new THREE.WebGLRenderTarget(innerWidth, innerHeight, {
@@ -146,6 +154,7 @@ const streamer = createStreamer(renderer, scene, { target: composer.readBuffer }
 let openCountryRequested = false;
 // Lit windows and lamp glass brighten at blue hour, streamed regions' too.
 const glowMaterials = world.glowMaterials;
+streamer.add(deer.job);
 const startPos = world.spawn || { x: -3, z: 5 };
 life.player.position.set(startPos.x, 0, startPos.z);
 const effects = createEffects(scene);
@@ -820,6 +829,7 @@ function animate(now) {
   const moving = velocity.length() > 0.08;
   life.setPlayerMotion(velocity.x, velocity.y);
   life.update(dt, elapsed, moving, motion);
+  deer.update(dt, p, motion);
   activities.updateFishing(dt, elapsed);
   if (moving && elapsed - lastStep > 0.33) {
     audio.step();
@@ -881,6 +891,7 @@ function animate(now) {
   else world.setOverviewDetail(fineDetail);
   world.trees.setGroundDetail(fineDetail);
   life.setCastShadows(fineDetail);
+  deer.setCastShadows(fineDetail);
   streamer.update(p.x, p.z, camera);
   sunShadow.fit({ firstPerson, yaw, targetYaw: overview.targetYaw });
   scene.updateMatrixWorld();
@@ -921,6 +932,7 @@ window.__willowmere = createDebugApi({
   sky,
   world,
   life,
+  deer,
   streamer,
   fishing,
   activities,

@@ -39,8 +39,8 @@ test("the open country streams in around the village after startup", async ({
     .poll(async () => streaming(page), { timeout: 600000 })
     .toMatchObject({ pending: 0 });
   // Every region in the registry with a builder loaded and queued its pieces,
-  // and every piece finished: theirs, plus the route grid and the fishing
-  // float that the game queues itself.
+  // and every piece finished: theirs, plus the route grid, the fishing float
+  // and the doe and fawn that the game queues itself.
   const done = await streaming(page);
   expect(Object.keys(done.regions).sort()).toEqual(
     regions.filter((region) => region.stream).map((region) => region.id).sort(),
@@ -48,7 +48,7 @@ test("the open country streams in around the village after startup", async ({
   for (const [id, jobs] of Object.entries(done.regions))
     expect(jobs, id).toBeGreaterThan(0);
   expect(done.finished).toBe(
-    2 + Object.values(done.regions).reduce((sum, jobs) => sum + jobs, 0),
+    3 + Object.values(done.regions).reduce((sum, jobs) => sum + jobs, 0),
   );
   // The open country's 16 grass patches, one per chunk around the village.
   expect(done.regions.fields).toBe(16);
