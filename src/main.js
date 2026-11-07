@@ -226,8 +226,8 @@ let tool = "hand",
   day = "day";
 let interior = null,
   interiorLoading = false;
-// The bakery, Rosewood, the inn, the windmill, the post office and the B&B open
-// as walkable rooms (src/interior.js).
+// The bakery, Rosewood, the inn, the windmill, the post office, the B&B and the
+// Copper Kettle open as walkable rooms (src/interior.js).
 const INTERIOR_NAMES = {
   bakery: "The bakery",
   rosewood: "Rosewood",
@@ -235,6 +235,7 @@ const INTERIOR_NAMES = {
   windmill: "The old windmill",
   "post-office": "The post office",
   thistledown: "Thistledown",
+  "copper-kettle": "The Copper Kettle",
 };
 async function enterInterior(room = "bakery") {
   if (interiorLoading || interior?.active || !INTERIOR_NAMES[room]) return;

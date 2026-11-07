@@ -45,7 +45,7 @@ The countryside streams in around the village once you start:
 
 - **The millpond**, north past the mill: cast from the jetty and press when the float dips. Each kind of fish you meet goes in the journal.
 - **The orchard hill**, north-west: shake the apple and pear trees and open the hives to fill your basket. Finn buys fruit and honey.
-- **The market lane**, east over the brook: carry Finn's loaves to Hazel at the Copper Kettle and Bram at the post office, and shop the stalls for seeds and keepsakes in the golden afternoon. The post office's green door opens onto a room of its own.
+- **The market lane**, east over the brook: carry Finn's loaves to Hazel at the Copper Kettle and Bram at the post office, and shop the stalls for seeds and keepsakes in the golden afternoon. The post office's green door and the Copper Kettle's both open onto rooms of their own.
 - **The willow marsh**, south along the brook: walk the boardwalk, meet Wren, and watch from the bird hide. Some birds only come out at blue hour.
 - **The old wood**, west past the wildflower meadow: follow the trails under the oaks and beeches, meet Rowan by the clearing's fairy ring, and press a woodland flower from each patch into your journal. The anemones close at blue hour, and the honeysuckle opens only then.
 
@@ -61,6 +61,10 @@ Walk up the orchard hill to the windmill's door and press **E** to step inside i
 
 Press **E** at the green door on the market lane (or open `/?interior=post-office`). A bell on a spring announces you to nobody: Bram is out on the lane, and the card on the counter says he'll be back in five minutes. In the public hall, try box 21, spin the postcard rack, find yourself on the district map and read the notice board. Then go through the raised flap, where the date stamp lands a real postmark on an envelope and Second Class, the pigeon, has pigeonholed himself. The door marked Private leads to the parcel shelves, the village's telephone exchange, the wireless, the red bicycle, and Bram's armchair by the stove, where the loaf you delivered is waiting on the side table. **Lamps lit** in the pause menu brings on the evening.
 
+
+## Inside the Copper Kettle
+
+Press **E** at the tea room's door on the market lane (or open `/?interior=copper-kettle`). The bell over the door rings you in, and Hazel calls from the terrace to sit anywhere you like. Cut a slice of the Victoria sponge under its dome, pour yourself a cup at the bay table, stroke Crumpet asleep on the window seat, wind the gramophone, sign the visitors' book and read the chalked menu. Behind the counter, the copper urn sighs out steam; through the curtained doorway, Hazel's kitchen has scones to cut, an oven to peek into, a pantry of jam and her recipe book. Sit a while by the fire to let the evening come in. Once Hazel has had one of Finn's loaves, it waits on the counter's bread board.
 ## Staying at Thistledown
 
 The cottage west of Rosewood is Thistledown, the village's bed & breakfast. Press **E** at its door (or open `/?interior=thistledown`) to walk through the hall, breakfast room, kitchen and sitting room, and up the stairs to Goldfinch, Linnet and the bathroom under the eaves. Ring at the hatch for breakfast and eat it at the window table, read the guest book, say good morning to Caruso, stroke Thimble, run the bath, or lie down on either bed to let the day go by.
@@ -71,7 +75,7 @@ Progress, flowers, seeds, petals, your basket and your camera preference save to
 
 ## Scope
 
-Willowmere is a small playable prototype: a welcome quest, free exploration of the village and the regions around it, and five walkable interiors: the bakery, Rosewood, The Drowsy Heron, the old windmill and the post office. Other buildings have no interiors, and there is no long campaign or multiplayer.
+Willowmere is a small playable prototype: a welcome quest, free exploration of the village and the regions around it, and seven walkable interiors: the bakery, Rosewood, The Drowsy Heron, the old windmill, the post office, Thistledown and the Copper Kettle. Other buildings have no interiors, and there is no long campaign or multiplayer.
 
 ## Development
 
