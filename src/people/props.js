@@ -106,6 +106,13 @@ const HELD = {
     for (const x of [-0.042, -0.014, 0.014, 0.042])
       kit.part(g, "prism", iron, x, ground + 0.11, 0.03, 0.009, 0.2, 0.009);
   },
+  // A mason's round beech mallet, its head worn smooth.
+  mallet(kit, g) {
+    const beech = 0xb08d62;
+    kit.part(g, "peg", 0x9c7c55, 0, 0.06, 0.02, 0.016, 0.16, 0.016);
+    kit.part(g, "tube", beech, 0, 0.17, 0.02, 0.058, 0.1, 0.058);
+    kit.part(g, "tube", shade(beech, 0.82), 0, 0.12, 0.02, 0.06, 0.012, 0.06);
+  },
   // An innkeeper's pewter tankard, with a head on it.
   tankard(kit, g) {
     const pewter = 0x9a9c97;

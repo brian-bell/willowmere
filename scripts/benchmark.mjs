@@ -42,9 +42,9 @@ for (const quality of ["high", "balanced", "performance"])
 // orchard hill from beside its bench, at the default height and at eye level
 // looking back over the village (phase 4's gate), the market square at the
 // default height and at eye level looking along the lane (phase 5's), and the
-// marsh from its boardwalk, the old wood from its clearing and the
-// allotments from their cross path, each at the default height and at eye
-// level.
+// marsh from its boardwalk, the old wood from its clearing, the
+// allotments from their cross path and the stone quarry from its floor,
+// each at the default height and at eye level.
 configs.push(
   { name: "high, millpond", quality: "high", tune: {}, view: "millpond" },
   { name: "high, orchard", quality: "high", tune: {}, view: "orchard" },
@@ -59,6 +59,8 @@ configs.push(
   { name: "high, wood, first person", quality: "high", tune: {}, view: "wood-first-person" },
   { name: "high, allotments", quality: "high", tune: {}, view: "allotments" },
   { name: "high, allotments, first person", quality: "high", tune: {}, view: "allotments-first-person" },
+  { name: "high, quarry", quality: "high", tune: {}, view: "quarry" },
+  { name: "high, quarry, first person", quality: "high", tune: {}, view: "quarry-first-person" },
 );
 if (ablate) {
   for (const [name, tune] of Object.entries(ablations))
@@ -89,6 +91,7 @@ if (ablate) {
     { name: "high, marsh, height 30", quality: "high", tune: {}, view: "marsh-30" },
     { name: "high, wood, height 30", quality: "high", tune: {}, view: "wood-30" },
     { name: "high, allotments, height 30", quality: "high", tune: {}, view: "allotments-30" },
+    { name: "high, quarry, height 30", quality: "high", tune: {}, view: "quarry-30" },
     { name: "high, height 30", quality: "high", tune: {}, view: "height-30" },
     {
       name: "high, height 30, open-country grass hidden",
@@ -152,7 +155,8 @@ try {
   // door, the marsh views on the boardwalk, facing the
   // hide across the mere, the wood views in its clearing, facing west past
   // the fairy ring, the allotment views on the cross path by the east beds,
-  // facing west along it, the rest at the spawn on the village green.
+  // facing west along it, the quarry views on its floor by the block stacks,
+  // facing the faces, the rest at the spawn on the village green.
   const MILLPOND = { x: 8.6, z: -25.8 },
     ORCHARD = { x: -21, z: -27.6, heading: 0.65 },
     MARKET = { x: 36.5, z: 3.2, heading: -1.75 },
@@ -160,6 +164,7 @@ try {
     MARSH = { x: 7.8, z: 31.2, heading: 1.2 },
     WOOD = { x: -35.5, z: 0, heading: -2 },
     ALLOTMENTS = { x: -6.5, z: 28.6, heading: -1.5 },
+    QUARRY = { x: -34, z: 34, heading: -2.3 },
     SPAWN = { x: -2.8, z: 6.2 };
   let at = SPAWN;
   const setView = async (view) => {
@@ -177,7 +182,9 @@ try {
               ? WOOD
               : view.startsWith("allotments")
                 ? ALLOTMENTS
-                : SPAWN;
+                : view.startsWith("quarry")
+                  ? QUARRY
+                  : SPAWN;
     // Revisions without the hook stay at the spawn.
     if (place !== at && (await page.evaluate(() => !!window.__willowmere.moveTo))) {
       await page.evaluate(

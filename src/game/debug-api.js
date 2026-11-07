@@ -87,6 +87,12 @@ export function createDebugApi(g) {
       coins: g.state.coins,
       rowan: g.life.npcs.some((n) => n.id === "rowan"),
     }),
+    getQuarry: () => ({
+      fossils: { ...g.state.fossils },
+      hammer: g.state.hammer,
+      coins: g.state.coins,
+      agnes: g.life.npcs.some((n) => n.id === "agnes"),
+    }),
     getAllotments: () => ({
       plots: structuredClone(g.state.plots),
       basket: { ...g.state.basket },
