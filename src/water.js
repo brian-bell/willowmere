@@ -115,6 +115,10 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
   const bodies = [];
   // Dense scenery that the captures barely resolve, such as individual leaves.
   const captureExcluded = new Set();
+  // What a reflection shows as a pixel or two once the overview is zoomed far
+  // out: left out of reflection captures while setFarCaptures(true) holds.
+  const farExcluded = new Set();
+  let farCaptures = false;
   const zero = new T.DataTexture(new Uint8Array(4), 1, 1);
   zero.needsUpdate = true;
   const sceneTarget = new T.WebGLRenderTarget(1, 1, { type: T.HalfFloatType });
@@ -316,6 +320,11 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       jets: [],
       lastReflection: -Infinity,
       reflectionReady: false,
+      // For diagnostics: whether the last frame drew this surface, how many
+      // reflections it has captured, and what the last one drew.
+      inView: false,
+      reflections: 0,
+      lastCapture: [0, 0],
     };
     bodies.push(body);
     allocate(body);
@@ -411,8 +420,13 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       material,
       12,
     );
-    drops.frustumCulled = false;
+    // The drops fall along the stream, so the stream's bounds, grown by a
+    // drop's size, hold every one of them wherever it is on its arc.
+    stream.geometry.computeBoundingSphere();
+    drops.boundingSphere = stream.geometry.boundingSphere.clone();
+    drops.boundingSphere.radius += radius * 1.2 * 2.6;
     group.add(drops);
+    farExcluded.add(stream).add(drops);
     const dummy = new T.Object3D();
     for (let i = 0; i < drops.count; i++) {
       dummy.position.copy(point(i / drops.count));
@@ -597,7 +611,13 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     renderer.clippingPlanes = [clipPlane];
     renderer.setRenderTarget(body.reflection);
     if (!renderer.autoClear) renderer.clear();
+    const { info } = renderer,
+      calls = info.autoReset ? 0 : info.render.calls,
+      triangles = info.autoReset ? 0 : info.render.triangles;
     renderer.render(scene, mirror);
+    body.lastCapture[0] = info.render.calls - calls;
+    body.lastCapture[1] = info.render.triangles - triangles;
+    body.reflections++;
     body.lastReflection = wallTime;
     body.reflectionReady = true;
     body.mesh.material.uniforms.uReflectionReady.value = 1;
@@ -808,8 +828,10 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
         ),
     );
     lastCaptureCount = 0;
-    for (const body of bodies)
-      if (!visible.includes(body)) body.impulses.length = 0;
+    for (const body of bodies) {
+      body.inView = visible.includes(body);
+      if (!body.inView) body.impulses.length = 0;
+    }
     if (!visible.length) {
       pendingDt = 0;
       return;
@@ -823,7 +845,9 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       previousScissorTest = renderer.getScissorTest();
     const previousClearAlpha = renderer.getClearAlpha();
     const surfaceVisibility = bodies.map((body) => body.mesh.visible);
-    const excludedVisibility = [...captureExcluded].map((o) => [o, o.visible]);
+    const excludedVisibility = [...captureExcluded, ...(farCaptures ? farExcluded : [])].map(
+      (o) => [o, o.visible],
+    );
     renderer.getClearColor(savedClear);
     renderer.getViewport(savedViewport);
     renderer.getScissor(savedScissor);
@@ -877,6 +901,9 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
             settings.interval * (b.config.reflectionEvery ?? 1),
         )
         .sort((a, b) => a.lastReflection - b.lastReflection);
+      // Zoomed far out, the reflections leave out what they would show as a
+      // pixel or two; the main pass, and refraction from it, still draw them.
+      if (farCaptures) for (const object of farExcluded) object.visible = false;
       for (const body of overdue.filter(
         (b, i) => !b.reflectionReady || i === 0,
       ))
@@ -924,6 +951,16 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     for (const object of objects) if (object) captureExcluded.add(object);
   }
 
+  // Hidden from reflection captures only while far captures are on: things a
+  // reflection seen from the zoomed-out overview shrinks to a pixel or two.
+  function excludeFromFarCaptures(...objects) {
+    for (const object of objects) if (object) farExcluded.add(object);
+  }
+
+  function setFarCaptures(on) {
+    farCaptures = on;
+  }
+
   function setQuality(value) {
     if (!QUALITY[value] || quality === value) return;
     quality = value;
@@ -939,6 +976,7 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
       time,
       steps: totalSteps,
       captures: lastCaptureCount,
+      farCaptures,
       frame: renderFrame,
       refraction: [sceneTarget.width, sceneTarget.height],
       refractionSource,
@@ -951,6 +989,10 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
         reflectionReady: b.reflectionReady,
         reflectionSize: [b.reflection.width, b.reflection.height],
         reflectionDrawn: [b.reflection.viewport.z, b.reflection.viewport.w],
+        inView: b.inView,
+        reflections: b.reflections,
+        // Draw calls and triangles of its last reflection capture.
+        lastCapture: [...b.lastCapture],
         impulses: b.impulses.length,
         sources: b.sources.length,
         vertices: b.mesh.geometry.attributes.position.count,
@@ -1035,6 +1077,8 @@ export function createWaterSystem(scene, { quality = "high" } = {}) {
     update,
     render,
     excludeFromCaptures,
+    excludeFromFarCaptures,
+    setFarCaptures,
     setQuality,
     diagnostics,
     inspect,

@@ -5,14 +5,17 @@ import { animatePerson, createPeople } from "./people/index.js";
 /**
  * Hand-built inhabitants and wildlife. Coordinates are in the village's X/Z
  * plane; groundHeight(x, z) lifts everyone onto the terrain under them.
+ * `water`, if given, leaves them out of its reflections zoomed far out.
  */
-export function createLife(THREE, scene, groundHeight = () => 0) {
+export function createLife(THREE, scene, groundHeight = () => 0, water = null) {
   // Everything that walks, flies or wags, whose cast shadows the overview
-  // drops when zoomed far out (each keeps its soft contact shadow).
+  // drops when zoomed far out (each keeps its soft contact shadow), as the
+  // water's reflections drop the figures themselves.
   const figures = [];
   const addFigure = (root) => {
     figures.push(root);
     scene.add(root);
+    water?.excludeFromFarCaptures(root);
   };
   let casters = null,
     castsShadows = true;

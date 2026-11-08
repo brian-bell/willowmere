@@ -235,6 +235,9 @@ export function buildGround(kit) {
     transparent: true,
     depthWrite: false,
   });
+  // A reflection sees the ground from below, so these never show in one: the
+  // world leaves them out of the water's captures.
+  const contacts = [];
   function contact(x, z, w, d) {
     const m = mesh(
       new T.PlaneGeometry(w, d),
@@ -246,10 +249,11 @@ export function buildGround(kit) {
     m.rotation.x = -Math.PI / 2;
     m.castShadow = false;
     m.receiveShadow = false;
+    contacts.push(m);
     return m;
   }
   const palette = ["#66834b", "#739153", "#789957", "#89a361", "#668654"].map(
     (v) => mat(v),
   );
-  return { flat, fieldGround, contact };
+  return { flat, fieldGround, contact, contacts };
 }
