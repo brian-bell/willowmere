@@ -23,7 +23,7 @@ export const ORCHARD = {
   // Ground the hill's own mesh covers; the open country's grass is cut away
   // over it. Its south edge meets the village's grass.
   ground: { minX: -46, maxX: -2, minZ: -40.6, maxZ: -20.8 },
-  // The windmill on the summit: a tapering tower under a domed cap. Its door
+  // The windmill on the summit: a tapering tower under an ogee cap. Its door
   // faces the path, south-east, and its sails the village. A bearing is an angle
   // from +z toward +x. Its inside is src/windmill/, at a walkable scale.
   windmill: {
