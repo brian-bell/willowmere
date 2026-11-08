@@ -62,9 +62,15 @@ export function marketJobs(T, world, { life } = {}) {
       "market tea room",
       M.teaRoom.x,
       M.teaRoom.z,
-      () => finish("Market tea room", teaRoom(T, range), [sign(T, "THE COPPER KETTLE", teaSignAt())]),
+      () => {
+        const [main, fine] = teaRoom(T, range),
+          detail = fine.mesh("Market tea room detail", material);
+        fine.dispose();
+        return [...finish("Market tea room", main, [sign(T, "THE COPPER KETTLE", teaSignAt())]), detail];
+      },
       (meshes) => {
-        added(meshes);
+        // The small round things hide zoomed far out.
+        for (const mesh of meshes) world.addStreamed(mesh, { far: mesh.name === "Market tea room detail" });
         world.interactables.push({
           id: "tea-room",
           name: "The Copper Kettle",
@@ -416,15 +422,22 @@ const TEA = {
   pitch: 1.25,
 };
 
+// Returns two kits: the building, and its small round things (flowers, the
+// rose, knobs, cups, the hanging kettle), which the overview hides zoomed far
+// out, where they are a pixel each.
 function teaRoom(T, range) {
-  const k = createKit(T),
+  const main = createKit(T),
+    fine = createKit(T),
+    k = { ...main, ball: fine.ball, fine },
     t = M.teaRoom,
     front = t.d / 2;
-  k.placed(t.x, 0, t.z, 0, () => {
-    teaShell(k, t);
-    teaFront(k, t, front);
-    teaSides(k, t);
-  });
+  main.placed(t.x, 0, t.z, 0, () =>
+    fine.placed(t.x, 0, t.z, 0, () => {
+      teaShell(k, t);
+      teaFront(k, t, front);
+      teaSides(k, t);
+    }),
+  );
   // The terrace: round tables, chairs about them, and a teapot on each.
   for (const [i, table] of M.tables.entries()) {
     k.cyl("#6a5442", table.x, 0.36, table.z, 0.06, 0.72);
@@ -433,15 +446,15 @@ function teaRoom(T, range) {
     // A cream cloth with a sage hem, falling a little over the edge.
     k.cyl("#f2ead5", table.x, 0.7, table.z, 0.49, 0.1);
     k.cyl("#7f9a7c", table.x, 0.655, table.z, 0.495, 0.02);
-    k.ball(i ? "#b87333" : "#8ca5b0", table.x + 0.1, 0.86, table.z - 0.05, 0.09, 0.08, 0.09);
-    k.cyl(i ? "#b87333" : "#8ca5b0", table.x + 0.2, 0.89, table.z - 0.05, 0.012, 0.09, 0, -0.9);
-    k.ball("#f4efe3", table.x - 0.18, 0.79, table.z + 0.12, 0.045, 0.03, 0.045);
+    fine.ball(i ? "#b87333" : "#8ca5b0", table.x + 0.1, 0.86, table.z - 0.05, 0.09, 0.08, 0.09);
+    fine.cyl(i ? "#b87333" : "#8ca5b0", table.x + 0.2, 0.89, table.z - 0.05, 0.012, 0.09, 0, -0.9);
+    fine.ball("#f4efe3", table.x - 0.18, 0.79, table.z + 0.12, 0.045, 0.03, 0.045);
     for (const [cx, cz] of [[-0.22, -0.18], [0.24, 0.16]]) {
-      k.cyl("#f4efe3", table.x + cx, 0.762, table.z + cz, 0.06, 0.008);
-      k.cyl(i ? "#e7b6bb" : "#a9c2a0", table.x + cx, 0.785, table.z + cz, 0.032, 0.04);
+      fine.cyl("#f4efe3", table.x + cx, 0.762, table.z + cz, 0.06, 0.008);
+      fine.cyl(i ? "#e7b6bb" : "#a9c2a0", table.x + cx, 0.785, table.z + cz, 0.032, 0.04);
     }
-    k.ball("#e4a3b8", table.x - 0.05, 0.84, table.z + 0.22, 0.035);
-    k.cyl("#9fb8d0", table.x - 0.05, 0.79, table.z + 0.22, 0.025, 0.06);
+    fine.ball("#e4a3b8", table.x - 0.05, 0.84, table.z + 0.22, 0.035);
+    fine.cyl("#9fb8d0", table.x - 0.05, 0.79, table.z + 0.22, 0.025, 0.06);
     for (let c = 0; c < 2; c++) {
       const a = (i ? 0.4 : -0.3) + c * Math.PI + range(-0.15, 0.15),
         cx = table.x + Math.sin(a) * 0.72,
@@ -454,7 +467,7 @@ function teaRoom(T, range) {
       });
     }
   }
-  return k;
+  return [main, fine];
 }
 
 // The walls, the coursed roof, the framed gables and the stack.
@@ -493,13 +506,13 @@ function teaShell(k, t) {
   }
   const ridgeY = h + pitch + 0.08;
   k.cyl(ridge, 0, ridgeY, 0, 0.11, w + 0.56, 0, Math.PI / 2);
-  for (let i = 0; i <= 8; i++) k.cyl("#527058", -(w + 0.5) / 2 + (i * (w + 0.5)) / 8, ridgeY, 0, 0.122, 0.04, 0, Math.PI / 2);
+  for (let i = 0; i <= 8; i++) k.fine.cyl("#527058", -(w + 0.5) / 2 + (i * (w + 0.5)) / 8, ridgeY, 0, 0.122, 0.04, 0, Math.PI / 2);
   // Finials over the gables, and bargeboards along their rakes.
   for (const sx of [-1, 1]) {
     const x = sx * (w / 2 + 0.25);
-    k.post(timber, x, 0, ridgeY - 0.1, ridgeY + 0.22, 0.035);
+    k.fine.post(timber, x, 0, ridgeY - 0.1, ridgeY + 0.22, 0.035);
     k.ball(TEA.copper, x, ridgeY + 0.26, 0, 0.06, 0.08, 0.06);
-    k.post(timber, x, 0, h + pitch - 0.35, h + pitch - 0.05, 0.03);
+    k.fine.post(timber, x, 0, h + pitch - 0.35, h + pitch - 0.05, 0.03);
     k.ball(timber, x, h + pitch - 0.38, 0, 0.045);
     for (const side of [-1, 1]) {
       const zEave = side * run,
@@ -519,9 +532,9 @@ function teaShell(k, t) {
     k.cyl("#3f3a35", 0, y - 0.07, z + side * 0.04, 0.06, w + 0.5, 0, Math.PI / 2);
     for (const sx of [-1, 1]) {
       const x = sx * (w / 2 + 0.16);
-      k.rod("#3f3a35", [x, y - 0.08, z + side * 0.04], [x, y - 0.25, side * (d / 2 + 0.12)], 0.035);
+      k.fine.rod("#3f3a35", [x, y - 0.08, z + side * 0.04], [x, y - 0.25, side * (d / 2 + 0.12)], 0.035);
       k.post("#3f3a35", x, side * (d / 2 + 0.12), 0.05, y - 0.25, 0.035);
-      k.box("#3f3a35", x, 0.08, side * (d / 2 + 0.2), 0.1, 0.06, 0.14);
+      k.fine.box("#3f3a35", x, 0.08, side * (d / 2 + 0.2), 0.1, 0.06, 0.14);
     }
   }
   // Framed gables: a collar, three studs and two braces in oak on the cream.
@@ -572,8 +585,8 @@ function teaFront(k, t, front) {
     glassTop = 1.76;
   k.box(wall, bx, 0.62, bz, bw, 0.56, bd);
   for (const x of [bx - 0.56, bx, bx + 0.56]) {
-    k.box("#e2d3b0", x, 0.62, front + bd + 0.005, 0.44, 0.34, 0.02);
-    k.box(timber, x, 0.8, front + bd + 0.012, 0.46, 0.025, 0.02);
+    k.fine.box("#e2d3b0", x, 0.62, front + bd + 0.005, 0.44, 0.34, 0.02);
+    k.fine.box(timber, x, 0.8, front + bd + 0.012, 0.46, 0.025, 0.02);
   }
   k.box(timber, bx, glassBottom - 0.02, bz + 0.03, bw + 0.14, 0.07, bd + 0.12);
   k.glazed(() => {
@@ -596,22 +609,22 @@ function teaFront(k, t, front) {
     lipZ = front + 0.62 + 0.475 * Math.cos(0.42);
   for (let i = 0; i < stripes * 2; i++) {
     const x = bx - 0.87 + (i + 0.5) * (aw / (stripes * 2));
-    k.cyl(Math.floor(i / 2) % 2 ? "#f2ead5" : "#5f8e86", x, lipY - 0.03, lipZ, aw / (stripes * 4) + 0.005, 0.02, Math.PI / 2);
+    k.fine.cyl(Math.floor(i / 2) % 2 ? "#f2ead5" : "#5f8e86", x, lipY - 0.03, lipZ, aw / (stripes * 4) + 0.005, 0.02, Math.PI / 2);
   }
   k.box("#5f8e86", bx, lipY - 0.01, lipZ, aw, 0.05, 0.025);
   for (const sx of [-1, 1]) {
-    k.rod(iron, [bx + sx * 0.86, 1.62, front + 0.04], [bx + sx * 0.86, lipY - 0.02, lipZ - 0.02], 0.014);
-    k.box(iron, bx + sx * 0.86, 2.24, front + 0.04, 0.05, 0.06, 0.06);
+    k.fine.rod(iron, [bx + sx * 0.86, 1.62, front + 0.04], [bx + sx * 0.86, lipY - 0.02, lipZ - 0.02], 0.014);
+    k.fine.box(iron, bx + sx * 0.86, 2.24, front + 0.04, 0.05, 0.06, 0.06);
   }
   // ---- the door: half-glazed, a fanlight, a hood on brackets, a brass knob
   const dz = front + 0.02;
   k.box(door, 0, 0.92, dz, 0.95, 1.56, 0.08);
   k.glazed(() => k.box("#ffcf73", 0, 1.3, dz + 0.045, 0.62, 0.56, 0.02));
-  for (const x of [-0.104, 0.104]) k.box(door, x, 1.3, dz + 0.06, 0.03, 0.56, 0.02);
-  k.box(door, 0, 1.3, dz + 0.06, 0.62, 0.03, 0.02);
-  for (const sx of [-1, 1]) k.box("#5f7f77", sx * 0.2, 0.55, dz + 0.05, 0.3, 0.5, 0.02);
+  for (const x of [-0.104, 0.104]) k.fine.box(door, x, 1.3, dz + 0.06, 0.03, 0.56, 0.02);
+  k.fine.box(door, 0, 1.3, dz + 0.06, 0.62, 0.03, 0.02);
+  for (const sx of [-1, 1]) k.fine.box("#5f7f77", sx * 0.2, 0.55, dz + 0.05, 0.3, 0.5, 0.02);
   k.ball("#d8b25a", 0.34, 0.98, dz + 0.08, 0.035);
-  k.box("#d8b25a", 0, 0.76, dz + 0.055, 0.26, 0.05, 0.015);
+  k.fine.box("#d8b25a", 0, 0.76, dz + 0.055, 0.26, 0.05, 0.015);
   // A fan of glass over the door, with its bars.
   k.box(timber, 0, 1.72, dz + 0.02, 1.15, 0.08, 0.1);
   const fan = new k.unit.cylinder.constructor(0.42, 0.42, 0.04, 16, 1, false, -Math.PI / 2, Math.PI);
@@ -619,13 +632,13 @@ function teaFront(k, t, front) {
   fan.dispose();
   for (let i = 1; i < 5; i++) {
     const a = (i / 5) * Math.PI;
-    k.rod(timber, [0, 1.77, dz + 0.07], [Math.cos(a) * 0.4, 1.77 + Math.sin(a) * 0.22, dz + 0.07], 0.012);
+    k.fine.rod(timber, [0, 1.77, dz + 0.07], [Math.cos(a) * 0.4, 1.77 + Math.sin(a) * 0.22, dz + 0.07], 0.012);
   }
   for (const sx of [-1, 1]) k.box(timber, sx * 0.53, 1.04, front + 0.06, 0.1, 1.98, 0.1);
   // The hood: two curved brackets and a little sage roof.
   for (const sx of [-1, 1]) {
-    k.beam(timber, [sx * 0.6, 1.78, front + 0.05], [sx * 0.6, 2.06, front + 0.42], 0.06);
-    k.box(timber, sx * 0.6, 1.95, front + 0.1, 0.06, 0.3, 0.1);
+    k.fine.beam(timber, [sx * 0.6, 1.78, front + 0.05], [sx * 0.6, 2.06, front + 0.42], 0.06);
+    k.fine.box(timber, sx * 0.6, 1.95, front + 0.1, 0.06, 0.3, 0.1);
   }
   k.box(TEA.roofDark, 0, 2.15, front + 0.25, 1.45, 0.06, 0.6, 0, 0.32);
   k.box(timber, 0, 2.07, front + 0.52, 1.45, 0.07, 0.05);
@@ -638,10 +651,10 @@ function teaFront(k, t, front) {
     k.ball("#5f8546", 1.1 + i * 0.112, 0.97, front + 0.2 + (i % 2 ? 0.05 : -0.04), 0.07, 0.06, 0.07);
     k.ball(["#e4a3b8", "#f3e3a2", "#b7a6d6", "#f2ead5"][i % 4], 1.12 + i * 0.112, 1.04, front + 0.22 + (i % 2 ? -0.03 : 0.04), 0.04);
   }
-  for (const sx of [-1, 1]) k.box(iron, 1.55 + sx * 0.42, 0.72, front + 0.12, 0.03, 0.12, 0.2);
+  for (const sx of [-1, 1]) k.fine.box(iron, 1.55 + sx * 0.42, 0.72, front + 0.12, 0.03, 0.12, 0.2);
   // A trellis beside the door, a rambling rose up it and over the hood.
-  for (const x of [0.66, 0.82, 0.98]) k.box("#e9dfc6", x, 1.3, front + 0.035, 0.025, 1.8, 0.02);
-  for (let y = 0.6; y < 2.2; y += 0.32) k.box("#e9dfc6", 0.82, y, front + 0.045, 0.36, 0.02, 0.02);
+  for (const x of [0.66, 0.82, 0.98]) k.fine.box("#e9dfc6", x, 1.3, front + 0.035, 0.025, 1.8, 0.02);
+  for (let y = 0.6; y < 2.2; y += 0.32) k.fine.box("#e9dfc6", 0.82, y, front + 0.045, 0.36, 0.02, 0.02);
   const rose = [
     [0.86, 0.55], [0.74, 0.8], [0.92, 1.0], [0.7, 1.25], [0.88, 1.45], [0.76, 1.7], [0.9, 1.92], [0.72, 2.12], [0.55, 2.28], [0.36, 2.3],
   ];
@@ -653,30 +666,30 @@ function teaFront(k, t, front) {
   const sx = 2.25,
     out = 0.78,
     by = 2.2;
-  k.box(iron, sx, by, front + 0.03, 0.1, 0.36, 0.04);
-  k.box(iron, sx, by + 0.12, front + out / 2 + 0.03, 0.03, 0.03, out);
-  k.beam(iron, [sx, by - 0.14, front + 0.04], [sx, by + 0.1, front + out * 0.6], 0.025);
-  k.cyl(iron, sx, by + 0.12, front + out + 0.04, 0.035, 0.03);
-  for (const z of [front + out - 0.06, front + out + 0.04]) k.rod(iron, [sx, by + 0.11, z], [sx, by - 0.03, z], 0.007);
+  k.fine.box(iron, sx, by, front + 0.03, 0.1, 0.36, 0.04);
+  k.fine.box(iron, sx, by + 0.12, front + out / 2 + 0.03, 0.03, 0.03, out);
+  k.fine.beam(iron, [sx, by - 0.14, front + 0.04], [sx, by + 0.1, front + out * 0.6], 0.025);
+  k.fine.cyl(iron, sx, by + 0.12, front + out + 0.04, 0.035, 0.03);
+  for (const z of [front + out - 0.06, front + out + 0.04]) k.fine.rod(iron, [sx, by + 0.11, z], [sx, by - 0.03, z], 0.007);
   const ky = by - 0.3,
     kz = front + out;
   k.ball(copper, sx, ky, kz, 0.17, 0.14, 0.17);
-  k.cyl(copperDark, sx, ky - 0.13, kz, 0.14, 0.03);
-  k.cyl(copper, sx, ky + 0.13, kz, 0.08, 0.05);
+  k.fine.cyl(copperDark, sx, ky - 0.13, kz, 0.14, 0.03);
+  k.fine.cyl(copper, sx, ky + 0.13, kz, 0.08, 0.05);
   k.ball(copperDark, sx, ky + 0.17, kz, 0.03);
-  k.rod(copper, [sx, ky - 0.03, kz - 0.15], [sx, ky + 0.12, kz - 0.29], 0.025);
-  k.rod(copper, [sx, ky + 0.12, kz - 0.29], [sx, ky + 0.15, kz - 0.33], 0.018);
-  k.rod(copperDark, [sx, ky + 0.12, kz - 0.1], [sx, ky + 0.25, kz], 0.014);
-  k.rod(copperDark, [sx, ky + 0.25, kz], [sx, ky + 0.12, kz + 0.1], 0.014);
+  k.fine.rod(copper, [sx, ky - 0.03, kz - 0.15], [sx, ky + 0.12, kz - 0.29], 0.025);
+  k.fine.rod(copper, [sx, ky + 0.12, kz - 0.29], [sx, ky + 0.15, kz - 0.33], 0.018);
+  k.fine.rod(copperDark, [sx, ky + 0.12, kz - 0.1], [sx, ky + 0.25, kz], 0.014);
+  k.fine.rod(copperDark, [sx, ky + 0.25, kz], [sx, ky + 0.12, kz + 0.1], 0.014);
   // ---- an A-board on the terrace, chalked with the day's teas
   const ax = 1.45,
     az = front + 0.95;
   for (const side of [-1, 1]) {
     // The two boards lean together at the top, like a tent.
-    k.box("#6a5442", ax, 0.42, az + side * 0.11, 0.56, 0.82, 0.04, 0, -side * 0.26);
-    k.box("#2c3230", ax, 0.44, az + side * 0.125, 0.46, 0.66, 0.02, 0, -side * 0.26);
+    k.fine.box("#6a5442", ax, 0.42, az + side * 0.11, 0.56, 0.82, 0.04, 0, -side * 0.26);
+    k.fine.box("#2c3230", ax, 0.44, az + side * 0.125, 0.46, 0.66, 0.02, 0, -side * 0.26);
     for (let i = 0; i < 4; i++)
-      k.box("#f3efe2", ax + (i % 2 ? 0.04 : -0.03), 0.66 - i * 0.13, az + side * (0.082 + i * 0.035), 0.3 - (i % 2) * 0.1, 0.025, 0.012, 0, -side * 0.26);
+      k.fine.box("#f3efe2", ax + (i % 2 ? 0.04 : -0.03), 0.66 - i * 0.13, az + side * (0.082 + i * 0.035), 0.3 - (i % 2) * 0.1, 0.025, 0.012, 0, -side * 0.26);
   }
   // Flower tubs by the door.
   flowerTub(k, -0.85, front + 0.45, ["#e4a3b8", "#f3e3a2", "#d98b8b"]);

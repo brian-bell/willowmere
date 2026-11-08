@@ -296,14 +296,14 @@ Measurements recorded as each change landed, newest first, each against the `mai
 
 ### The Copper Kettle (2026-11-08)
 
-Hazel's tea room on the market lane now opens a walkable room: the tea room, the space behind its counter and the kitchen. How it stays cheap is under [The Copper Kettle](#the-copper-kettle). Outdoors, `teaRoom()` in `src/regions/market.js` was rebuilt in more detail: a coursed roof with ridge tiles, finials, bargeboards, gutters and downpipes, a stack with pots and a copper cowl, a glazed bay under a scalloped awning, a half-glazed door with a fanlight, a climbing rose, a window box, shuttered side windows, the kitchen's rear window, a hanging copper kettle on an iron bracket, an A-board and laid terrace tables. It is all still the region kit's one vertex-coloured mesh and its glazed layer, so it adds no draw.
+Hazel's tea room on the market lane now opens a walkable room: the tea room, the space behind its counter and the kitchen. How it stays cheap is under [The Copper Kettle](#the-copper-kettle). Outdoors, `teaRoom()` in `src/regions/market.js` was rebuilt in more detail: a coursed roof with ridge tiles, finials, bargeboards, gutters and downpipes, a stack with pots and a copper cowl, a glazed bay under a scalloped awning, a half-glazed door with a fanlight, a climbing rose, a window box, shuttered side windows, the kitchen's rear window, a hanging copper kettle on an iron bracket, an A-board and laid terrace tables. It is two vertex-coloured meshes and the glazed layer: the building, and its small round things and fittings (flowers, the rose, knobs, cups, brackets, the hanging kettle and the A-board, about 10,000 of its 13,000 triangles), which the overview hides zoomed far out (`far`), where each is a pixel. The first version kept them all in one mesh and pushed the village zoomed out to the cap about 24,000 triangles over its 2.65M budget on the Mac; with the split the building adds about 900 triangles there over `main`'s.
 
-Counted in the cloud container on SwiftShader at 1200 × 750, high quality, `?resolution=fixed`, with the frame-locked probe and every region streamed in, against `main` (`9707714`):
+Counted in the cloud container on SwiftShader at 1200 × 750, high quality, `?resolution=fixed`, with the frame-locked probe and every region streamed in, against `main` (`9707714`). The first two rows were counted again after the detail split, which adds three draws there (the detail mesh's colour, depth and shadow); the rear and overview rows are from before it:
 
 | View | `main` draws / triangles | The Copper Kettle draws / triangles |
 | --- | --- | --- |
-| First person on the lane, facing the front | 293 / 1.256M | 293 / 1.290M |
-| First person at the terrace's corner | 555 / 1.848M | 555 / 1.881M |
+| First person on the lane, facing the front | 293 / 1.256M | 296 / 1.290M |
+| First person at the terrace's corner | 555 / 1.848M | 558 / 1.881M |
 | First person behind, facing the rear and side | 337 / 1.333M | 338 / 1.368M |
 | Overview over the tea room, zoomed in | 363 / 1.208M | 363 / 1.241M |
 | Room, inside the door, high | | 124 / 0.333M |

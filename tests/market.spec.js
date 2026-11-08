@@ -169,6 +169,7 @@ test("the market lane streams in, and its residents take Finn's bread", async ({
     "Market footbridge",
     "Market tea room",
     "Market tea room glass",
+    "Market tea room detail",
     "Market post office",
     "Market stalls and bunting",
     "Market signpost and cart",
