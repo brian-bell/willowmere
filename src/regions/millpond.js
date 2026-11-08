@@ -7,6 +7,7 @@
 import { chunkRandom } from "../world-layout.js";
 import { createKit } from "./kit.js";
 import { createReeds } from "../reeds.js";
+import { buildWeir, weirCascade } from "./millpond-weir.js";
 import {
   MILLPOND as M,
   brookEdge,
@@ -50,8 +51,9 @@ export function millpondJobs(T, world) {
       10,
       -26,
       () => structures(T, range),
-      ([mesh]) => {
+      ([mesh, stonework]) => {
         world.addStreamed(mesh);
+        world.addStreamed(stonework, { far: true });
         world.interactables.push({
           id: "jetty",
           name: "Fishing jetty",
@@ -221,86 +223,17 @@ function water(T, world) {
     grid: [64, 48],
     segments: [48, 36],
   });
-  // White water where the cascade lands.
+  // White water where the cascade lands, across the open crest's width.
   for (let i = 0; i < 6; i++)
     world.water.addSource("brook-north", {
-      x: 10.35 + i * 0.66,
+      x: 10.25 + i * 0.56,
       z: M.weir.downstream + 0.62,
       radius: 0.16,
       strength: 0.01,
       interval: 0.19 + (i % 3) * 0.03,
       phase: i * 0.07,
     });
-  return cascade(T);
-}
-
-// A sheet of water over the weir's crest and down its sloping face.
-function cascade(T) {
-  const width = 4.1,
-    across = 24,
-    along = 10,
-    positions = [],
-    uvs = [],
-    index = [];
-  for (let j = 0; j <= along; j++) {
-    const t = j / along,
-      z = M.weir.crest + t * 0.92,
-      // Leaves the crest level, then curls down the face to the brook.
-      y = M.surface + 0.004 - (M.surface - M.brookSurface - 0.006) * smooth(0.12, 1, t);
-    for (let i = 0; i <= across; i++) {
-      const u = i / across;
-      positions.push(M.brookX - width / 2 + u * width, y, z);
-      uvs.push(u, t);
-      if (i < across && j < along) {
-        const a = j * (across + 1) + i,
-          b = a + across + 1;
-        index.push(a, b, a + 1, a + 1, b, b + 1);
-      }
-    }
-  }
-  const geometry = new T.BufferGeometry();
-  geometry.setAttribute("position", new T.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("uv", new T.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(index);
-  geometry.computeVertexNormals();
-  const time = { value: 0 };
-  const material = new T.MeshStandardMaterial({
-    color: "#dcebe4",
-    roughness: 0.25,
-    transparent: true,
-    opacity: 0.8,
-    depthWrite: false,
-  });
-  material.userData.time = time;
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uCascadeTime = time;
-    shader.vertexShader = "varying vec2 vCascade;\n" + shader.vertexShader;
-    shader.vertexShader = shader.vertexShader.replace(
-      "#include <begin_vertex>",
-      "#include <begin_vertex>\nvCascade = uv;",
-    );
-    shader.fragmentShader =
-      "uniform float uCascadeTime; varying vec2 vCascade;\n" + shader.fragmentShader;
-    // Streaks run down the face; the foot of the fall turns to foam.
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <alphamap_fragment>",
-      `#include <alphamap_fragment>
-      float lane = vCascade.x * 46.0 + sin(vCascade.x * 13.0) * 2.0;
-      float streak = 0.5 + 0.5 * sin(lane + sin(lane * 0.37) * 3.0)
-        * sin(vCascade.y * 9.0 - uCascadeTime * 7.0 + lane * 0.21);
-      float foot = smoothstep(0.55, 1.0, vCascade.y);
-      diffuseColor.a *= mix(0.45 + 0.4 * streak, 0.95, foot)
-        * smoothstep(0.0, 0.04, vCascade.x) * smoothstep(1.0, 0.96, vCascade.x)
-        * smoothstep(0.0, 0.1, vCascade.y);
-      diffuseColor.rgb = mix(diffuseColor.rgb * (0.82 + 0.18 * streak), vec3(0.93, 0.96, 0.94), foot * 0.7);`,
-    );
-  };
-  material.customProgramCacheKey = () => "millpond-cascade";
-  const mesh = new T.Mesh(geometry, material);
-  mesh.name = "Millpond weir cascade";
-  mesh.receiveShadow = true;
-  mesh.matrixAutoUpdate = false;
-  return mesh;
+  return weirCascade(T);
 }
 
 // --- Structures -----------------------------------------------------------
@@ -318,27 +251,10 @@ function structures(T, range) {
     roof = ["#7d949a", "#738b92", "#87a0a4"];
   const pick = (list) => list[Math.floor(range(0, list.length))];
 
-  // The weir: a sill of dressed stones across the brook, wing walls into the
-  // banks and a sloping apron under the cascade.
-  const { weir } = M;
-  for (let x = 9.35; x < 14.7; x += 0.58) {
-    const top = weir.top + range(-0.015, 0.02);
-    box(pick(stone), x + 0.29, top / 2 - 0.2, weir.crest, 0.56, top + 0.4, 0.52, range(-0.03, 0.03));
-  }
-  for (let x = 9.9; x < 14.1; x += 0.52)
-    box(pick(stone), x + 0.26, 0.12, weir.downstream + 0.42, 0.5, 0.18, 0.66, 0, -0.42);
-  for (const side of [-1, 1])
-    for (let i = 0; i < 4; i++)
-      box(
-        pick(stone),
-        M.brookX + side * (2.75 + i * 0.5),
-        0.36 - i * 0.05,
-        weir.crest + range(-0.05, 0.05),
-        0.52,
-        0.42,
-        0.6 + i * 0.08,
-        range(-0.1, 0.1),
-      );
+  // The weir, its wing walls and hatch (millpond-weir.js); its dressed
+  // stones and fittings go to a mesh of their own, hidden from far off.
+  const fine = k.layer();
+  buildWeir(T, k, fine, range);
 
   // The footbridge: planks over a humped pair of stringers, posts and rails.
   const fb = M.footbridge,
@@ -518,13 +434,12 @@ function structures(T, range) {
     }
   });
 
-  const mesh = k.mesh(
-    "Millpond weir, footbridge, jetty and boathouse",
-    new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 }),
-  );
+  const material = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 }),
+    mesh = k.mesh("Millpond weir, footbridge, jetty and boathouse", material),
+    stonework = k.mesh("Millpond weir stonework", material, fine);
   k.dispose();
   hull.dispose();
-  return mesh;
+  return [mesh, stonework];
 }
 
 // --- Stones, lilies and reeds -----------------------------------------------
