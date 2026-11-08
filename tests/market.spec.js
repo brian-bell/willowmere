@@ -183,6 +183,8 @@ test("the market lane streams in, and its residents take Finn's bread", async ({
     "Market tea room detail",
     "Market post office",
     "Market stalls and bunting",
+    "Market stalls detail",
+    "Market stall boards",
     "Market signpost and cart",
     "Market sign: THE COPPER KETTLE",
   ])
