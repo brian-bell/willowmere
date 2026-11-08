@@ -17,6 +17,7 @@ import { buildLamps } from "./village/lamps.js";
 import { buildPlants } from "./village/plants.js";
 import { buildAccents } from "./village/accents.js";
 import { buildRosewoodYard } from "./village/rosewood-yard.js";
+import { buildRears } from "./village/rears.js";
 
 // The world: the village (built by the modules in src/village/), the water,
 // the collision layout shared with the regions, the chunk bake, and what the
@@ -94,12 +95,14 @@ export function createWorld(T, scene) {
     scatterColliders,
   });
   buildAccents(kit);
-  // Rosewood's kitchen extension and back garden draw no random numbers.
-  buildRosewoodYard(kit, { fence, contact });
+  // Rosewood's kitchen extension and back garden, and the backs of the
+  // houses, draw no random numbers. Their small detail stays out of the bake
+  // so that it can hide zoomed far out (village/fine.js).
+  const fine = [...buildRosewoodYard(kit, { fence, contact }), ...buildRears(kit, { contact })];
   // Bake the village into its chunks, and let first person hide small
   // detail far from the eye (see bake.js).
   const glowMaterials = bakeScenery(T, scene, grid, {
-      skip: initialChildren,
+      skip: new Set([...initialChildren, ...fine]),
       selfCulled: [trees.group],
     }),
     detail = createDetail(chunks, fieldGround, [reeds.group, bushes.group]);
@@ -112,6 +115,26 @@ export function createWorld(T, scene) {
     weldVertices(T, geometry);
   };
   scene.traverse((node) => node.isMesh && weld(node.geometry));
+  /**
+   * Registers a mesh that streamed in after startup with the chunk under its
+   * centre, and with first person's detail range when `detail` is set;
+   * zoomed far out, the overview hides it when `far` is set and drops its
+   * shadow when `fineShadow` is.
+   */
+  function addStreamed(mesh, { detail: small = false, field = false, far = undefined, fineShadow = undefined } = {}) {
+    if (mesh.isMesh) weld(mesh.geometry);
+    mesh.updateMatrixWorld();
+    const chunk = chunkOf(mesh);
+    chunk.meshes.push(mesh);
+    if (mesh.material?.emissive?.getHex() > 0) {
+      chunk.glow.add(mesh.material);
+      glowMaterials.add(mesh.material);
+    }
+    detail.addCaster(mesh, fineShadow);
+    if (small || far) detail.addDetail(mesh, field, far);
+    if (field) detail.addField(mesh);
+  }
+  for (const mesh of fine) addStreamed(mesh, { far: true });
   let clock = 0;
   // The walking surface: the bridge deck's hump, a region's decks (the
   // millpond's footbridge and jetty), otherwise the terrain's grass.
@@ -139,25 +162,7 @@ export function createWorld(T, scene) {
     water,
     // Shared by the village's meadow grass and the open country's.
     grassBlade: { geometry: blades.geometry, material: blades.material },
-    /**
-     * Registers a mesh that streamed in after startup with the chunk under its
-     * centre, and with first person's detail range when `detail` is set;
-     * zoomed far out, the overview hides it when `far` is set and drops its
-     * shadow when `fineShadow` is.
-     */
-    addStreamed(mesh, { detail: small = false, field = false, far = undefined, fineShadow = undefined } = {}) {
-      if (mesh.isMesh) weld(mesh.geometry);
-      mesh.updateMatrixWorld();
-      const chunk = chunkOf(mesh);
-      chunk.meshes.push(mesh);
-      if (mesh.material?.emissive?.getHex() > 0) {
-        chunk.glow.add(mesh.material);
-        glowMaterials.add(mesh.material);
-      }
-      detail.addCaster(mesh, fineShadow);
-      if (small || far) detail.addDetail(mesh, field, far);
-      if (field) detail.addField(mesh);
-    },
+    addStreamed,
     /**
      * Shows or hides the open country (for measuring its cost): true, false,
      * or "ground" to hide only its grass.

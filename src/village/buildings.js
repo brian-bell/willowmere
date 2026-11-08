@@ -4,6 +4,16 @@
 
 import { createPlanters } from "../planters.js";
 
+// The village's four houses, in build order (the order is part of the
+// village's random layout). Each faces +z; src/village/rears.js dresses
+// their backs from the same numbers.
+export const HOUSES = [
+  { id: "home", x: -7, z: -6, w: 5.5, d: 4.3, h: 3.25, roof: "blue", sign: "ROSEWOOD" },
+  { id: "bakery", x: 1.2, z: -8.4, w: 4.8, d: 4.2, h: 3, roof: "rust", sign: "THE DAILY LOAF" },
+  { id: "mill", x: 17, z: -7, w: 4.4, d: 4.4, h: 3.5, roof: "blue", sign: "WILLOW MILL" },
+  { id: "thistledown", x: -15, z: -3, w: 4, d: 3.6, h: 2.7, roof: "rust", sign: "THISTLEDOWN" },
+];
+
 export function buildBuildings(kit, { contact }) {
   const {
     ivory,
@@ -414,10 +424,8 @@ export function buildBuildings(kit, { contact }) {
     });
     return p;
   }
-  house(-7, -6, 5.5, 4.3, 3.25, roofBlue, "ROSEWOOD", "home");
-  house(1.2, -8.4, 4.8, 4.2, 3, roofRust, "THE DAILY LOAF", "bakery");
-  house(17, -7, 4.4, 4.4, 3.5, roofBlue, "WILLOW MILL", "mill");
-  house(-15, -3, 4, 3.6, 2.7, roofRust, "THISTLEDOWN", "thistledown");
+  for (const { x, z, w, d, h, roof: r, sign, id } of HOUSES)
+    house(x, z, w, d, h, r === "blue" ? roofBlue : roofRust, sign, id);
   // Bakery's flour store has a lower shed roof and working delivery hatch.
   box(stone, 4.33, 0.18, -8.2, 1.6, 0.3, 3.15);
   box(ivory, 4.3, 1.13, -8.2, 1.6, 1.85, 3.1);
