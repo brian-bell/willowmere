@@ -73,6 +73,17 @@ export function deliverLoaf(state, resident, now) {
 }
 
 /**
+ * Whether Hazel has had one of Finn's loaves: a whole round delivered, or
+ * a loaf delivered and hers no longer in the bag. Her tea room keeps it on
+ * the counter (src/copper-kettle/room.js).
+ * @param {{ carrying: string[], made: number, rounds: number }} deliveries
+ */
+export function hazelHasLoaf(deliveries) {
+  if (!deliveries?.made) return false;
+  return deliveries.rounds > 0 || !deliveries.carrying.includes("hazel");
+}
+
+/**
  * What a stall offers right now: `open` at the golden afternoon, `owned`
  * once its keepsake is bought, and whether the purse covers the price.
  * @param {SaveState} state

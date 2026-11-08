@@ -14,12 +14,13 @@ import { createHeronRoom } from "./pub/room.js";
 import { createWindmillRoom } from "./windmill/room.js";
 import { createPostOffice } from "./post-office/room.js";
 import { createThistledownRoom } from "./thistledown/room.js";
+import { createCopperKettle } from "./copper-kettle/room.js";
 import { createInteriorWalker } from "./interior-movement.js";
 import "./interior.css";
 
 // The walkable interiors share one camera, input, postprocessing chain and
 // panel. Each room (the bakery, Rosewood, the inn, the windmill, the post office,
-// the B&B) is built the first time it opens
+// the B&B, the tea room) is built the first time it opens
 // and supplies its scene, lights, walkable layout, the points E answers at,
 // and its own animation; `state` and `save` are the visit's progress.
 const ROOMS = {
@@ -29,6 +30,7 @@ const ROOMS = {
   windmill: () => createWindmillRoom(),
   "post-office": (progress) => createPostOffice(progress),
   thistledown: () => createThistledownRoom(),
+  "copper-kettle": (progress) => createCopperKettle(progress),
 };
 
 export function createInterior({

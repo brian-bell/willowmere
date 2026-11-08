@@ -35,11 +35,6 @@ export const LANDMARK_LINES = {
     "Someone has carved two initials into the armrest, and a small heart between them.",
     "The wind brings the smell of apples and warm grass. There is nowhere else to be.",
   ],
-  "tea-room": [
-    "Through the bay window: cake stands, mismatched cups, and a cat asleep on the windowsill.",
-    "The smell of toasted teacakes drifts out every time the door swings.",
-    "A chalkboard by the door: “Today, rosehip & ginger. Always, a seat by the window.”",
-  ],
   "post-box": [
     "You lift the flap and peer in. Someone has posted a letter with a pressed daisy tucked in the envelope.",
     "The pillar box is warm from the sun, and very red, and very proud of it.",
