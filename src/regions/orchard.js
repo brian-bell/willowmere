@@ -12,7 +12,7 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { chunkRandom } from "../world-layout.js";
 import { createKit, limb } from "./kit.js";
-import { outsideWindows } from "../windmill/layout.js";
+import { buildWindmill } from "./orchard-windmill.js";
 import { millSails } from "../windmill/sails.js";
 import { crownShells } from "../trees.js";
 import {
@@ -100,10 +100,13 @@ export function orchardJobs(T, world) {
       "orchard windmill, hives and bench",
       O.windmill.x,
       O.windmill.z,
-      () => structures(T, range),
-      ([mesh, sails]) => {
+      () => structures(T, range, world.materials.glass),
+      ([mesh, sails, detail, panes]) => {
         world.addStreamed(mesh);
         world.addStreamed(sails);
+        world.addStreamed(panes);
+        // The stones, ironwork and rails hide zoomed far out.
+        world.addStreamed(detail, { far: true });
         const turn = sails.userData.turn;
         world.animate(O.windmill.x, O.windmill.z, (dt) => turn(dt));
         world.interactables.push(
@@ -664,116 +667,19 @@ function createHarvest(T, world) {
 
 // Every structure shares one vertex-coloured material: one draw per pass.
 // The windmill's sails are a second mesh that turns.
-function structures(T, range) {
+function structures(T, range, glass) {
   const k = createKit(T, { segments: 10 }),
     { add, box, post, placed } = k,
     unitCylinder = k.unit.cylinder,
-    sailLayer = k.layer(),
-    color = new T.Color(),
-    matrix = new T.Matrix4(),
-    quaternion = new T.Quaternion(),
-    scale = new T.Vector3();
+    sailLayer = k.layer();
   const wood = ["#8a6a4a", "#7f6145", "#93724f"],
     darkWood = "#5f4c3a",
     pick = (list) => list[Math.floor(range(0, list.length))];
 
-  // The windmill: a limewashed stone tower on a darker plinth, tapering to a
-  // tarred wooden cap; its sails face south-east, over the village.
-  const w = O.windmill;
-  let floor = Infinity;
-  for (let a = 0; a < TAU; a += TAU / 12)
-    floor = Math.min(floor, orchardGround(w.x + Math.cos(a) * w.radius, w.z + Math.sin(a) * w.radius));
-  const towerHeight = w.height,
-    capBase = floor + towerHeight,
-    profile = [];
-  for (let y = -0.7; y <= towerHeight + 1e-6; y += 0.3) {
-    const t = Math.max(0, y) / towerHeight;
-    profile.push(new T.Vector2(w.radius - w.taper * t + (y < 0.3 ? 0.06 : 0), y));
-  }
-  const tower = new T.LatheGeometry(profile, 20);
-  tower.translate(w.x, floor, w.z);
-  {
-    const p = tower.attributes.position,
-      colors = new Float32Array(p.count * 3);
-    const lime = new T.Color("#e2dac6"),
-      course = new T.Color("#cfc6b0"),
-      plinth = new T.Color("#9d9886");
-    for (let i = 0; i < p.count; i++) {
-      const y = p.getY(i) - floor;
-      color.copy(y < 0.3 ? plinth : Math.round(y / 0.3) % 2 ? lime : course);
-      // Weathering streaks below the windows.
-      const a = Math.atan2(p.getZ(i) - w.z, p.getX(i) - w.x);
-      color.multiplyScalar(1 - 0.05 * Math.max(0, Math.sin(a * 5 + 1)) * smooth(1, 4, y));
-      color.toArray(colors, i * 3);
-    }
-    tower.setAttribute("color", new T.BufferAttribute(colors, 3));
-    k.piece(tower);
-  }
-  const radiusAt = (y) => w.radius - w.taper * (y / towerHeight);
-  // A string course under the cap.
-  add(unitCylinder, "#b9b19c", w.x, capBase - 0.1, w.z, radiusAt(towerHeight) + 0.07, 0.16, radiusAt(towerHeight) + 0.07);
-  // The cap: an ogee dome of tarred boards, with a finial.
-  const capProfile = [];
-  for (let i = 0; i <= 8; i++) {
-    const t = i / 8;
-    capProfile.push(new T.Vector2((radiusAt(towerHeight) + 0.12) * Math.cos(t * Math.PI * 0.5) ** 0.8, t * w.capHeight));
-  }
-  const cap = new T.LatheGeometry(capProfile, 20);
-  cap.translate(w.x, capBase, w.z);
-  k.piece(cap, "#5b4a3c");
-  add(unitCylinder, darkWood, w.x, capBase + w.capHeight + 0.1, w.z, 0.05, 0.3, 0.05);
-  // The door faces the path's end, the sails the village, and the windows are
-  // the ones the inside looks out of (src/windmill/layout.js).
-  const doorAngle = w.doorBearing,
-    shaft = new T.Vector3(Math.sin(w.shaftBearing), 0, Math.cos(w.shaftBearing)),
-    face = (angle, y, build, out = 0) => {
-      const r = radiusAt(y) + out;
-      placed(w.x + Math.sin(angle) * r, floor + y, w.z + Math.cos(angle) * r, angle, build);
-    };
-  face(doorAngle, 0, () => {
-    box(darkWood, 0, 0.82, 0, 0.86, 1.64, 0.14);
-    box("#4d3d30", 0, 0.82, 0.05, 0.08, 1.5, 0.05);
-    box("#b9b19c", 0, 1.74, 0.02, 1.12, 0.18, 0.2);
-    box("#a59f8c", 0, 0.06, 0.32, 1.1, 0.12, 0.5);
-  }, 0.07);
-  for (const [angle, y] of outsideWindows())
-    face(doorAngle + angle, y, () => {
-      box(darkWood, 0, 0, 0, 0.5, 0.66, 0.1);
-      box("#f3d896", 0, 0, 0.04, 0.36, 0.52, 0.04);
-      box("#b9b19c", 0, -0.38, 0.06, 0.62, 0.08, 0.14);
-    });
-  // The windshaft and hub, out of the cap toward the sails.
-  const hub = new T.Vector3(w.x, capBase + w.shaftRise, w.z).addScaledVector(shaft, radiusAt(towerHeight) + 0.55);
-  {
-    const length = radiusAt(towerHeight) + 0.6,
-      geometry = unitCylinder.clone().rotateX(Math.PI / 2);
-    geometry.applyMatrix4(
-      matrix.compose(
-        new T.Vector3(w.x, capBase + w.shaftRise, w.z).addScaledVector(shaft, length / 2),
-        quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), shaft),
-        scale.set(0.13, 0.13, length),
-      ),
-    );
-    k.piece(geometry, darkWood);
-  }
-  // The sails, built in the hub's frame (the shaft along +z), each a stock
-  // with a lattice and a sailcloth on its leading side.
-  k.into(sailLayer, () => {
-    add(unitCylinder.clone().rotateX(Math.PI / 2), "#4e3f33", 0, 0, 0.12, 0.22, 0.22, 0.32);
-    for (let n = 0; n < 4; n++)
-      k.transformed(new T.Matrix4().makeRotationZ((n * Math.PI) / 2), () => {
-        const length = 3.7,
-          width = 0.86;
-        box("#6b5644", 0, length / 2, 0.2, 0.11, length + 0.2, 0.11);
-        for (const x of [0.12, width])
-          box("#7b6450", x, length / 2 + 0.55, 0.22, 0.05, length - 0.9, 0.05);
-        for (let i = 0; i < 9; i++) {
-          const y = 0.9 + (i / 8) * (length - 1.05);
-          box("#7b6450", width / 2 + 0.06, y, 0.22, width - 0.04, 0.04, 0.04);
-        }
-        box("#ece3cc", width / 2 + 0.07, length / 2 + 0.55, 0.25, width - 0.12, length - 1.0, 0.015);
-      });
-  });
+  // The windmill (orchard-windmill.js): its shape and glass here, its small
+  // things in `fine`, its sails in their own layer.
+  const fine = createKit(T, { segments: 12 }),
+    { hub, shaft } = buildWindmill(T, k, fine, sailLayer);
 
   // The beehives: white lifts under a pitched roof, on a little stand, their
   // entrances facing south.
@@ -836,8 +742,14 @@ function structures(T, range) {
 
   const material = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 });
   const mesh = k.mesh("Orchard windmill, hives and bench", material),
-    sails = k.mesh("Windmill sails", material, sailLayer);
+    sails = k.mesh("Windmill sails", material, sailLayer),
+    detail = fine.mesh("Orchard windmill detail", material),
+    panes = new T.Mesh(k.glass(), glass);
   k.dispose();
+  fine.dispose();
+  panes.name = "Orchard windmill glass";
+  panes.castShadow = panes.receiveShadow = false;
+  panes.matrixAutoUpdate = false;
   // The sails turn slowly about the shaft, as the ones seen from inside do, and
   // stand still while the brake is on (src/windmill/sails.js).
   const facingShaft = new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 0, 1), shaft),
@@ -852,7 +764,7 @@ function structures(T, range) {
     sails.updateMatrix();
     sails.updateMatrixWorld();
   };
-  return [mesh, sails];
+  return [mesh, sails, detail, panes];
 }
 
 // --- Bees and flowers -------------------------------------------------------
