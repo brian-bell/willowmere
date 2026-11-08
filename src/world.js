@@ -45,7 +45,7 @@ export function createWorld(T, scene) {
       animated,
     }),
     { grass, path, glass } = kit;
-  const { flat, fieldGround, contact } = buildGround(kit);
+  const { flat, fieldGround, contact, contacts } = buildGround(kit);
   buildPaths(kit, { flat });
   const { riverConfig, dum } = buildBrook(kit, { flat });
   // The brook blocks walking along its whole length; the bridges' spans are
@@ -135,7 +135,9 @@ export function createWorld(T, scene) {
     if (field) detail.addField(mesh);
   }
   for (const mesh of fine) addStreamed(mesh, { far: true });
-  water.excludeFromCaptures(...fine);
+  water.excludeFromCaptures(...fine, ...contacts);
+  // Zoomed far out, the meadow's grass and blossoms reflect as a pixel or two.
+  water.excludeFromFarCaptures(...detail.grassAndBlossoms());
   let clock = 0;
   // The walking surface: the bridge deck's hump, a region's decks (the
   // millpond's footbridge and jetty), otherwise the terrain's grass.
@@ -170,9 +172,18 @@ export function createWorld(T, scene) {
      */
     showFields: detail.showFields,
     /** First person: hides small detail more than DETAIL_RANGE (bake.js) from (x, z). */
-    setDetailFocus: detail.setDetailFocus,
-    /** The overview: shows small detail, or drops the smallest when zoomed far out. */
-    setOverviewDetail: detail.setOverviewDetail,
+    setDetailFocus(x, z) {
+      water.setFarCaptures(false);
+      detail.setDetailFocus(x, z);
+    },
+    /**
+     * The overview: shows small detail, or drops the smallest, and leaves the
+     * smallest things out of reflections, when zoomed far out.
+     */
+    setOverviewDetail(near) {
+      water.setFarCaptures(!near);
+      detail.setOverviewDetail(near);
+    },
     getGroundHeight,
     surfaceHeight,
     isPlantable,

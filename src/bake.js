@@ -287,7 +287,8 @@ export function bakeScenery(T, scene, { chunkAt, chunkOf }, { skip, selfCulled }
 // casters (reeds, cattails, shrub stems and blossoms) stop casting shadows
 // there too: their shadows are lines a pixel wide.
 export const DETAIL_RANGE = 30;
-const FAR_HIDDEN = ["River pebbles", "Riverbank shingle and pebbles", "Riverbank grass tufts"],
+const GRASS_AND_BLOSSOMS = ["Grass blades", "Meadow blossoms"],
+  FAR_HIDDEN = ["River pebbles", "Riverbank shingle and pebbles", "Riverbank grass tufts"],
   FINE_CASTERS = [
     "Reed leaves and stems",
     "Cattail heads",
@@ -381,5 +382,10 @@ export function createDetail(chunks, fieldGround, casterRoots = []) {
       for (const { mesh, field, far } of detailParts)
         mesh.visible = (near || !far) && (!field || fieldShown(mesh));
     },
+    /** The village's grass blades and meadow blossoms. */
+    grassAndBlossoms: () =>
+      detailParts
+        .map(({ mesh }) => mesh)
+        .filter((mesh) => GRASS_AND_BLOSSOMS.some((name) => mesh.name.startsWith(name))),
   };
 }

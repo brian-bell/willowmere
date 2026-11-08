@@ -139,7 +139,7 @@ const fill = new THREE.DirectionalLight("#dae9ec", 0.6);
 fill.position.set(15, 14, -20);
 scene.add(fill);
 const world = createWorld(THREE, scene),
-  life = createLife(THREE, scene, world.terrainHeight),
+  life = createLife(THREE, scene, world.terrainHeight, world.water),
   audio = createAudio();
 // The doe and fawn roam beyond the village, so they stream in like it.
 const deer = createDeer(THREE, {

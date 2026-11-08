@@ -624,12 +624,20 @@ test("zoomed out to the cap, the overview drops small detail and keeps the villa
       { timeout: 600000, polling: 1000 },
     );
   };
-  // Which small things show, and what the view submits, over a few frames.
+  // Which small things show, and what the view submits, over enough frames
+  // that every pool in view has taken its turn to capture a reflection: the
+  // pools take turns, and the dearest one's frame is the one that counts.
   const sample = () =>
     page.evaluate(async (small) => {
       for (let i = 0; i < 2; i++) await new Promise(requestAnimationFrame);
-      const values = [];
-      for (let i = 0; i < 4; i++) {
+      const reflections = () => window.__willowmere.getWater().bodies.map((b) => b.reflections);
+      const start = reflections(),
+        values = [];
+      const allCaptured = () =>
+        window.__willowmere
+          .getWater()
+          .bodies.every((body, i) => !body.inView || body.reflections > start[i]);
+      while (values.length < 4 || (!allCaptured() && values.length < 60)) {
         await new Promise(requestAnimationFrame);
         values.push(window.__willowmere.getDiagnostics());
       }
@@ -640,18 +648,23 @@ test("zoomed out to the cap, the overview drops small detail and keeps the villa
       return {
         drawCalls: Math.max(...values.map((s) => s.drawCalls)),
         triangles: Math.max(...values.map((s) => s.triangles)),
+        everyReflection: allCaptured(),
         small: meshes.length,
         smallShown: meshes.filter((mesh) => mesh.visible).length,
       };
     }, SMALL);
   await zoomTo("#zoom-out", 39);
   const far = await sample();
+  expect(far.everyReflection).toBe(true);
   expect(far.small).toBeGreaterThan(30);
   expect(far.smallShown).toBe(0);
   // The village zoomed out as far as it went before the map grew counted
   // up to 1,104 draws and 2.41M triangles. With the regions around it, this
   // view counts about 1,020 draws and 2.54M triangles with zoom detail, and
-  // about 3.0M triangles without.
+  // about 3.0M triangles without. Its dearest frame is the river's
+  // reflection: 1,076 draws and 2.63M triangles until the reflections left
+  // out figures, grass and the fountain's jets this far out, about 920 and
+  // 2.51M since (frame-locked, in the cloud container).
   expect(far.drawCalls).toBeLessThan(1100);
   expect(far.triangles).toBeLessThan(2.65e6);
   // Back at height 27, every pebble and fallen leaf is back.
