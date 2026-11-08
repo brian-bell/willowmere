@@ -130,7 +130,7 @@ test("the tea room opens, rings you in, and its fittings answer", async ({ page 
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
   await openRoom(page);
-  await expect(page.locator(".bakery-heading h1")).toHaveText("The Copper Kettle");
+  await expect(page.locator("#bakery-view")).toHaveAttribute("aria-label", "Inside the Copper Kettle tea room");
   await expect(page.locator("#bakery-note span")).toHaveText("A BELL OVER THE DOOR");
   // Nothing delivered yet, so no loaf on the board.
   expect((await inside(page)).loaf).toBe(false);

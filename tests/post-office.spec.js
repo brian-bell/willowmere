@@ -144,7 +144,7 @@ test("the room opens, greets you, and its fittings answer", async ({ page }) => 
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
   await openRoom(page);
-  await expect(page.locator(".bakery-heading h1")).toHaveText("The Post Office");
+  await expect(page.locator("#bakery-view")).toHaveAttribute("aria-label", "Inside the post office");
   // Nothing has been delivered yet, so there is no loaf to look at.
   expect((await inside(page)).loaf).toBe(false);
   // The bell on its spring says you've come in.

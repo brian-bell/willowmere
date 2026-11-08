@@ -99,7 +99,7 @@ test("Rosewood's front door opens your cottage, Bark greets you, and the door le
   await page.keyboard.press("e");
   await page.waitForFunction(() => window.__willowmere.getInterior().active);
   await expect(page).toHaveURL(/interior=rosewood/);
-  await expect(page.locator(".bakery-heading h1")).toHaveText("Rosewood");
+  await expect(page.locator("#bakery-view")).toHaveAttribute("aria-label", "Inside Rosewood");
   await expect(page.locator("#bakery-note")).toContainText("Bark");
   await stand(page, 0, 5.1, 0, 6.2, 0);
   await expect(page.locator("#bakery-interact")).toContainText("Step out");

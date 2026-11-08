@@ -13,12 +13,6 @@
   inset: 0;
   pointer-events: none;
   color: #f4e8d0;
-  background: linear-gradient(
-    #10241c55,
-    transparent 19%,
-    transparent 82%,
-    #10241c55
-  );
 }
 #bakery-view[hidden],
 #bakery-view [hidden] {
@@ -28,26 +22,11 @@
 #bakery-view dialog {
   pointer-events: auto;
 }
-.bakery-heading {
-  position: absolute;
-  left: 32px;
-  top: 27px;
-  text-shadow: 0 2px 15px #10251eaa;
-}
-.bakery-heading > span,
 .bakery-eyebrow {
   font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.24em;
   color: #ead8ad;
-}
-.bakery-heading h1 {
-  font:
-    400 25px/1.2 "Lora",
-    Georgia,
-    serif;
-  letter-spacing: -0.6px;
-  margin: 6px 0 0;
 }
 .bakery-actions {
   position: absolute;
@@ -151,30 +130,6 @@
   margin: 10px 0 0;
   color: #e1e5d3;
 }
-.bakery-help {
-  position: absolute;
-  bottom: 26px;
-  left: 32px;
-  right: 30px;
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  color: #e0e3cc;
-  text-shadow: 0 1px 8px #173522;
-}
-.bakery-help b {
-  font-weight: 600;
-  color: #f7efd9;
-}
-.bakery-help i {
-  font-style: normal;
-  padding: 0 9px;
-  opacity: 0.6;
-}
-.bakery-help > span:last-child {
-  font-family: "Lora", Georgia, serif;
-  font-style: italic;
-}
 .bakery-photo-return {
   position: absolute;
   bottom: 22px;
@@ -183,9 +138,6 @@
 }
 .bakery-photo-return:hover {
   transform: translateX(-50%);
-}
-#bakery-view.is-photo {
-  background: none;
 }
 .is-photo > :not(.bakery-photo-return):not(dialog) {
   display: none;
@@ -282,12 +234,6 @@
   .bakery-touch button:active {
     background: #719064dd;
   }
-  .bakery-help > span:last-child {
-    display: none;
-  }
-  .bakery-help {
-    font-size: 9px;
-  }
   #bakery-interact {
     bottom: 198px;
     max-width: calc(100% - 32px);
@@ -304,13 +250,6 @@
   }
 }
 @media (max-width: 600px) {
-  .bakery-heading {
-    left: 20px;
-    top: 21px;
-  }
-  .bakery-heading h1 {
-    font-size: 21px;
-  }
   .bakery-actions {
     top: 23px;
     right: 16px;
@@ -324,10 +263,6 @@
   }
   .bakery-actions kbd {
     display: none;
-  }
-  .bakery-help {
-    left: 22px;
-    bottom: 25px;
   }
 }
 @media (max-height: 500px) and (pointer: coarse) {

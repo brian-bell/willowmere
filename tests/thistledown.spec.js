@@ -176,7 +176,7 @@ test("the cottage is Thistledown outside, its door opens the B&B, and the door l
   await page.keyboard.press("e");
   await page.waitForFunction(() => window.__willowmere.getInterior().active, null, { timeout: 120000 });
   await expect(page).toHaveURL(/interior=thistledown/);
-  await expect(page.locator(".bakery-heading h1")).toHaveText("Thistledown");
+  await expect(page.locator("#bakery-view")).toHaveAttribute("aria-label", "Inside Thistledown, the village bed and breakfast");
   await stand(page, 0, 4.1, 0, 5.2, 0);
   await expect(page.locator("#bakery-interact")).toContainText("Step out");
   await page.keyboard.press("e");

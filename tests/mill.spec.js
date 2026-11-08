@@ -133,7 +133,7 @@ test("the mill opens, its stones turn, and its fittings answer", async ({ page }
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
   await openRoom(page);
-  await expect(page.locator(".bakery-heading h1")).toHaveText("Willow Mill");
+  await expect(page.locator("#bakery-view")).toHaveAttribute("aria-label", "Inside Willow Mill");
   await expect(page.locator("#bakery-note span")).toHaveText("WILLOW MILL");
   expect((await inside(page)).turning).toBe(true);
   // A scoop of wheat goes in the hopper.
