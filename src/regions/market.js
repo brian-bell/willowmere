@@ -1,6 +1,6 @@
 // The market lane east of the village: its gravel lane and paths, the market
 // square's four stalls under striped awnings and bunting, the Copper Kettle
-// tea room, the post office, a footbridge over the brook, lamps, a signpost
+// tea room, the post office (post-office.js), a footbridge over the brook, lamps, a signpost
 // and a cart where the lane leaves the map, and its two residents. Loaded with
 // import() once the village is on screen and built by the streamer a piece at
 // a time. Its shape and colliders live in market-layout.js, which loads with
@@ -20,6 +20,7 @@ import {
   stallFront,
 } from "./market-layout.js";
 import { MARKET_RESIDENTS } from "../content/market.js";
+import { postOfficeKits, postSignAt } from "./post-office.js";
 
 const TAU = Math.PI * 2;
 
@@ -84,14 +85,20 @@ export function marketJobs(T, world, { life } = {}) {
       "market post office",
       M.postOffice.x,
       M.postOffice.z,
-      () => finish("Market post office", postOffice(T), [sign(T, "POST OFFICE", postSignAt())]),
+      () => {
+        const { main, fine } = postOfficeKits(T),
+          detail = fine.mesh("Market post office detail", material);
+        fine.dispose();
+        return [...finish("Market post office", main, [sign(T, "POST OFFICE", postSignAt())]), detail];
+      },
       (meshes) => {
-        added(meshes);
+        // Its small things, and its planting's leaves and flowers, hide zoomed far out.
+        for (const mesh of meshes) world.addStreamed(mesh, { far: mesh.name === "Market post office detail" });
         world.interactables.push(
           {
             id: "post-office",
             name: "Post office",
-            x: M.postOffice.x + POST_DOOR_X,
+            x: M.postOffice.x + M.postOffice.door,
             z: M.postOffice.z + M.postOffice.d / 2 + 0.6,
             radius: 1.2,
           },
@@ -335,47 +342,6 @@ function footbridge(T) {
 }
 
 // --- Buildings ------------------------------------------------------------------
-
-// Walls with corner posts and a base course, a gabled roof whose ridge runs
-// along x, and front windows. Built about the footprint's centre at the ground.
-function cottage(k, { w, d, h, wall, base, timber, roof, ridge, pitch = 1.25 }) {
-  k.box(base, 0, 0.18, 0, w + 0.08, 0.36, d + 0.08);
-  k.box(wall, 0, h / 2 + 0.18, 0, w, h - 0.36, d);
-  for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) k.box(timber, (sx * w) / 2, h / 2, (sz * d) / 2, 0.16, h, 0.16);
-  k.box(timber, 0, h - 0.02, d / 2, w + 0.04, 0.14, 0.1);
-  k.box(timber, 0, h - 0.02, -d / 2, w + 0.04, 0.14, 0.1);
-  // The roof's two slopes, overhanging the walls, and the gables under them.
-  const run = d / 2 + 0.38,
-    angle = Math.atan2(pitch, d / 2),
-    slope = Math.hypot(run, (run / (d / 2)) * pitch);
-  for (const side of [-1, 1])
-    k.box(
-      roof,
-      0,
-      h + pitch / 2 + 0.02 - ((run - d / 2) / (d / 2)) * pitch * 0.5,
-      (side * run) / 2,
-      w + 0.5,
-      0.13,
-      slope,
-      0,
-      side * angle,
-    );
-  k.box(ridge, 0, h + pitch + 0.06, 0, w + 0.56, 0.12, 0.2);
-  for (const side of [-1, 1])
-    k.gable(
-      wall,
-      side < 0 ? -w / 2 : w / 2 - 0.06,
-      h - 0.08,
-      0,
-      [
-        [-d / 2, 0],
-        [d / 2, 0],
-        [0, pitch],
-      ],
-      0.06,
-    );
-}
 
 /** A window in the front (+z) wall at (x, y): glass, frame, mullions and sill. */
 function frontWindow(k, x, y, z, w, h, frame) {
@@ -726,67 +692,6 @@ function teaSides(k, t) {
   for (let i = 0; i < 4; i++) k.ball("#5f8546", rx + 0.27 + (i % 2) * 0.06, 1.34 + i * 0.02, rz - 0.1, 0.06);
 }
 
-// The door stands east of the middle, as it does from inside (src/post-office/).
-const POST_DOOR_X = 0.7;
-const postSignAt = () => ({
-  x: M.postOffice.x,
-  y: M.postOffice.h - 0.3,
-  z: M.postOffice.z + M.postOffice.d / 2 + 0.11,
-  width: 2,
-});
-
-// The post office: red brick under a slate roof, a green door, a bench for
-// waiting, parcels stacked by the wall, and a pillar box at the lane.
-function postOffice(T) {
-  const k = createKit(T),
-    p = M.postOffice,
-    front = p.d / 2,
-    trim = "#e6dcc4";
-  k.placed(p.x, 0, p.z, 0, () => {
-    cottage(k, {
-      w: p.w,
-      d: p.d,
-      h: p.h,
-      wall: "#b97a5e",
-      base: "#8e8a7e",
-      timber: trim,
-      roof: "#6d7a80",
-      ridge: "#56626a",
-      pitch: 1.1,
-    });
-    k.box("#a8705a", -1.3, p.h + 1.05, -0.5, 0.45, 1.2, 0.45);
-    k.box("#4f6b56", POST_DOOR_X, 0.98, front + 0.02, 0.9, 1.6, 0.08);
-    k.box(trim, POST_DOOR_X, 1.84, front + 0.04, 1.1, 0.1, 0.1);
-    k.box("#d8b25a", POST_DOOR_X + 0.25, 0.98, front + 0.08, 0.06, 0.06, 0.04);
-    k.box("#a8a294", POST_DOOR_X, 0.08, front + 0.3, 1.2, 0.12, 0.45);
-    frontWindow(k, -1.0, 1.35, front, 1.3, 0.9, trim);
-    k.box("#6c8f5c", -1.0, 0.8, front + 0.2, 1.35, 0.18, 0.22);
-    for (let i = 0; i < 5; i++) k.ball(["#e6c35a", "#e7a2a2", "#f1ece0"][i % 3], -1.5 + i * 0.25, 0.94, front + 0.22, 0.07);
-    for (const x of [-p.w / 2, p.w / 2])
-      k.glazed(() => k.box("#ffcf73", x + (x < 0 ? -0.02 : 0.02), 1.35, 0, 0.05, 0.7, 0.75));
-    // The back room's window, in the rear wall.
-    k.glazed(() => k.box("#ffcf73", 1.3, 1.4, -front - 0.02, 0.85, 0.7, 0.05));
-    k.box(trim, 1.3, 1.8, -front - 0.05, 1.01, 0.08, 0.08);
-    k.box(trim, 1.3, 0.99, -front - 0.08, 1.09, 0.07, 0.16);
-    for (const x of [0.83, 1.77]) k.box(trim, x, 1.4, -front - 0.05, 0.08, 0.78, 0.08);
-    // A bench under the window, and parcels by the door.
-    k.box("#7f6145", -1.0, 0.44, front + 0.62, 1.5, 0.06, 0.36);
-    k.box("#7f6145", -1.0, 0.7, front + 0.46, 1.5, 0.3, 0.05);
-    for (const x of [-1.6, -0.4]) k.box("#65513e", x, 0.22, front + 0.62, 0.06, 0.44, 0.3);
-    k.box("#c9a676", 1.75, 0.2, front + 0.35, 0.5, 0.4, 0.4, 0.2);
-    k.box("#d6b689", 1.7, 0.52, front + 0.33, 0.36, 0.26, 0.3, -0.15);
-    k.box("#b8915f", 1.8, 0.11, front + 0.85, 0.36, 0.22, 0.3, 0.5);
-  });
-  // The pillar box.
-  const b = M.postBox;
-  k.cyl("#b3392f", b.x, 0.62, b.z, 0.22, 1.2);
-  k.ball("#b3392f", b.x, 1.22, b.z, 0.235, 0.12, 0.235);
-  k.cyl("#3d3a36", b.x, 0.04, b.z, 0.26, 0.08);
-  k.box("#2f2a26", b.x, 1.0, b.z + 0.21, 0.22, 0.04, 0.04);
-  k.box("#e6c35a", b.x, 0.78, b.z + 0.215, 0.14, 0.1, 0.02);
-  return k;
-}
-
 // --- Stalls, bunting and lamps -------------------------------------------------
 
 const AWNINGS = {
@@ -975,10 +880,11 @@ function stalls(T, range) {
     }
   }
   for (const l of M.lamps) lamp(k, l.x, l.z);
-  // Flowering shrubs by the buildings and the square.
+  // Flowering shrubs by the tea room and the square (the post office's own
+  // planting is built with it, in post-office.js).
   const leaves = ["#5f8546", "#6b9150", "#577d42"],
     blossoms = ["#e4a3b8", "#f3e3a2", "#b7a6d6", "#f2ead5"];
-  M.shrubs.forEach(([x, z], i) => {
+  M.shrubs.forEach(([x, z, i]) => {
     for (let n = 0; n < 4; n++) {
       const a = n * 1.9 + i,
         r = n ? 0.22 : 0;
