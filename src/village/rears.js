@@ -41,7 +41,7 @@ export const rearsAllowGrass = (x, z) =>
 /** Builds every house's back; returns the fine meshes for world.js to register. */
 export function buildRears(kit, { contact }) {
   const { T, scene, box, cyl, beam, mesh, mat, colliders, ivory, stone, darkStone, wood, darkWood, trim, glass, roofBlue, roofRust } = kit;
-  const metal = mat("#5f6b68", 0.6),
+  const metal = mat("#5f6b68"),
     butt = mat("#56705f"),
     shutterGreen = mat("#5e7d66"),
     shutterBlue = mat("#6f8fa3");
@@ -136,6 +136,7 @@ export function buildRears(kit, { contact }) {
     for (const wx of back.windows ?? []) backWindow(p, wx, 1.75, rz - 0.04, 0.72, 0.95, shutter);
     fine.at(x, z, 0, () => {
       if (back.door != null) backDoor(p, back.door, rz - 0.04, back.lantern, tiles, fine);
+      if (id === "home") homeSide(p, fine, w);
       if (id === "bakery") bakeryBack(p, fine, x, z, w, rz);
       if (id === "mill") millBack(fine, w, rz);
       if (id === "thistledown") thistledownBack(fine, w, rz);
@@ -150,6 +151,26 @@ export function buildRears(kit, { contact }) {
     if (detail) fines.push(detail);
   }
 
+  // A filled sack standing (or lying) on y, tied at the neck.
+  function sack(k, x, z, y, s, hex, turn = 0, lying = false) {
+    if (lying) {
+      k.box(hex, x, y + 0.12 * s, z, 0.5 * s, 0.24 * s, 0.34 * s, turn);
+      k.ball(hex, x, y + 0.16 * s, z, 0.24 * s, 0.13 * s, 0.17 * s);
+      return;
+    }
+    k.box(hex, x, y + 0.2 * s, z, 0.36 * s, 0.4 * s, 0.26 * s, turn);
+    k.ball(hex, x, y + 0.4 * s, z, 0.18 * s, 0.1 * s, 0.13 * s);
+    k.cyl("#a08a62", x, y + 0.5 * s, z, 0.04 * s, 0.08 * s);
+  }
+  // Rosewood's west wall, over the water barrels: the living room's window.
+  function homeSide(p, fine, w) {
+    const west = new T.Group();
+    west.position.set(-w / 2, 0, 0.45);
+    west.rotation.y = Math.PI / 2;
+    p.add(west);
+    backWindow(west, 0, 1.85, -0.04, 0.76, 0.95, shutterGreen);
+    fine.at(-w / 2, 1.55, Math.PI / 2, () => fine.climber(0, -0.03, 0.4, 2.3, "rose"));
+  }
   // The bakery: a covered store of oven logs and flour sacks by the door; on
   // its west side, the wall Rosewood looks at, a window with a box of herbs
   // and a climbing rose.
@@ -169,14 +190,9 @@ export function buildRears(kit, { contact }) {
         for (const end of [-0.285, 0.285]) k.cyl("#cfae7c", xx, 0.2 + row * 0.19, lz + end, 0.075, 0.01, Math.PI / 2);
       }
     // Flour sacks slumped by the door.
-    for (const [sx, sz, s] of [
-      [-0.42, -0.4, 1],
-      [-0.2, -0.72, 0.9],
-      [-0.5, -0.78, 0.85],
-    ]) {
-      k.ball("#ddd0ad", sx, 0.3 * s, rz + sz, 0.22 * s, 0.3 * s, 0.2 * s);
-      k.box("#b9a57d", sx, 0.6 * s, rz + sz, 0.08, 0.06, 0.08);
-    }
+    sack(k, -0.42, rz - 0.4, 0, 1, "#ddd0ad");
+    sack(k, -0.2, rz - 0.74, 0, 0.9, "#ddd0ad", 0.4);
+    sack(k, -0.55, rz - 0.8, 0, 0.85, "#e3d8b8", -0.3);
     colliders.push({ x: x - 0.37, z: z + rz - 0.6, r: 0.38 });
     // The west wall: a window, a box of herbs beneath it and a rose by the back corner.
     const west = new T.Group();
@@ -198,15 +214,10 @@ export function buildRears(kit, { contact }) {
   function millBack(fine, w, rz) {
     const { k } = fine;
     k.box("#7a5c3f", 0, 0.06, rz - 0.45, 0.8, 0.1, 0.7);
-    for (const [sx, sz, sy, s] of [
-      [-0.18, -0.3, 0.38, 1],
-      [0.2, -0.32, 0.38, 1],
-      [0.0, -0.62, 0.36, 0.95],
-      [0.02, -0.42, 0.78, 0.9],
-    ]) {
-      k.ball("#d8c9a0", sx, sy * s, rz + sz, 0.24 * s, 0.26 * s, 0.2 * s);
-      k.box("#a08a62", sx, sy * s + 0.25 * s, rz + sz, 0.07, 0.06, 0.07);
-    }
+    sack(k, -0.18, rz - 0.3, 0.11, 1, "#d8c9a0", 0.1);
+    sack(k, 0.2, rz - 0.32, 0.11, 1, "#cfc096", -0.2);
+    sack(k, 0.0, rz - 0.66, 0.11, 0.95, "#d8c9a0", 0.3);
+    sack(k, 0.02, rz - 0.4, 0.56, 0.85, "#e0d3ad", 1.4, true);
     // The millstone: a thick stone disc with an eye, leaning on the wall.
     k.cyl("#9a958a", -1.6, 0.62, rz - 0.22, 0.6, 0.18, -0.22 + Math.PI / 2);
     k.cyl("#5a564f", -1.6, 0.62, rz - 0.32, 0.12, 0.05, -0.22 + Math.PI / 2);

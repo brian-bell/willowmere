@@ -135,6 +135,7 @@ export function createWorld(T, scene) {
     if (field) detail.addField(mesh);
   }
   for (const mesh of fine) addStreamed(mesh, { far: true });
+  water.excludeFromCaptures(...fine);
   let clock = 0;
   // The walking surface: the bridge deck's hump, a region's decks (the
   // millpond's footbridge and jetty), otherwise the terrain's grass.

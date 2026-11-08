@@ -66,7 +66,7 @@ export function buildRosewoodYard(kit, { fence, contact }) {
   }
   // A gutter along the roof's low edge, its downpipe running to a water butt
   // by the washing line.
-  const metal = mat("#5f6b68", 0.6),
+  const metal = mat("#5f6b68"),
     lowZ = roofZ - (roofDepth / 2) * Math.cos(slope) - 0.02,
     lowY = roofY + (roofDepth / 2) * Math.sin(slope) - 0.08;
   box(metal, cx, lowY, lowZ, w + 0.5, 0.08, 0.1);
@@ -236,16 +236,11 @@ export function buildRosewoodYard(kit, { fence, contact }) {
   }
   const arc = (a) => [archX, archY + Math.sin(a) * archR, archZ + Math.cos(a) * archR];
   for (let i = 0; i < 6; i++) k.beam(white, arc((i / 6) * Math.PI), arc(((i + 1) / 6) * Math.PI), 0.06);
-  for (let i = 0; i < 11; i++) {
-    const f = i / 10,
-      [x, y, z] =
-        f < 0.3
-          ? [archX, 0.3 + (f / 0.3) * (archY - 0.3), archZ + archR]
-          : f > 0.7
-            ? [archX, 0.3 + ((1 - f) / 0.3) * (archY - 0.3), archZ - archR]
-            : arc(((f - 0.3) / 0.4) * Math.PI);
-    plant("geranium", i % 3 ? "rose" : "blush", x + Math.sin(i * 2.1) * 0.05, y - 0.08, z, 0.15);
-  }
+  // The rose climbs both posts and meets over the top.
+  const stem = [[archX, 0.15, archZ + archR], [archX, archY, archZ + archR]];
+  for (let i = 1; i <= 6; i++) stem.push(arc((i / 6) * Math.PI));
+  stem.push([archX, 0.6, archZ - archR]);
+  fine.rambler(stem.map(([x, y, z], i) => [x + (i % 2 ? 0.05 : -0.05), y, z]), "rose", 5);
   // Borders along the back fence: foxgloves at the back, cottage flowers in front.
   for (const b of ROSEWOOD_YARD.borders) {
     const length = b.maxX - b.minX,
@@ -255,7 +250,7 @@ export function buildRosewoodYard(kit, { fence, contact }) {
     planters.bed(mx, mz, length, depth);
     const spires = Math.max(1, Math.round(length / 0.45));
     for (let i = 0; i < spires; i++)
-      plant("spires", ["rose", "lilac", "blush"][i % 3], b.minX + ((i + 0.5) / spires) * length, 0.12, mz - depth * 0.22, 0.2, 1.0 + 0.2 * Math.sin(i * 1.9) ** 2);
+      plant("spires", ["rose", "lilac", "blush"][i % 3], b.minX + ((i + 0.5) / spires) * length, 0.12, mz - depth * 0.22, 0.17, 0.75 + 0.2 * Math.sin(i * 1.9) ** 2);
     const fronts = Math.max(1, Math.round(length / 0.32));
     for (let i = 0; i < fronts; i++)
       plant(["daisies", "geranium", "lavender"][i % 3], ["white", "coral", "lavender"][i % 3], b.minX + ((i + 0.5) / fronts) * length, 0.12, mz + depth * 0.2, 0.16);
