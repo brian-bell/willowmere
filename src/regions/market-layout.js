@@ -23,7 +23,9 @@ export const MARKET = {
   bridge: { minX: 9, maxX: 15, minZ: 9.85, maxZ: 11.35, base: 0.14, rise: 0.34 },
   // Buildings face south, onto the lane: { x, z } is the footprint's centre.
   teaRoom: { x: 27.2, z: -7.2, w: 5, d: 4.2, h: 2.9 },
-  postOffice: { x: 41.4, z: -6, w: 4.4, d: 3.6, h: 2.7 },
+  // The post office's door stands `door` east of its middle, as it does
+  // inside (src/post-office/layout.js).
+  postOffice: { x: 41.4, z: -6, w: 4.4, d: 3.6, h: 2.7, door: 0.7 },
   postBox: { x: 43.5, z: -3.3 },
   // The tea room's terrace tables.
   tables: [
@@ -54,18 +56,28 @@ export const MARKET = {
   signpost: { x: 45.4, z: -1.1 },
   cart: { x: 43.6, z: 3.6, w: 1.5, d: 2.4 },
   // Hedgerows where the lane runs off the map, and flowering shrubs by the
-  // buildings: [x, z] of each clump.
+  // tea room and the square: [x, z, look] of each clump, where `look` picks
+  // its blossom and the turn of its leaves.
   hedges: [
     { from: [44, -1.95], to: [47.5, -2.05] },
     { from: [44.9, 2.75], to: [47.5, 2.6] },
   ],
   shrubs: [
-    [24.4, -5.6],
-    [30.1, -6.2],
-    [38.6, -4.6],
-    [44.1, -6.8],
-    [23.9, 9.2],
-    [38.5, 9.9],
+    [24.4, -5.6, 0],
+    [30.1, -6.2, 1],
+    [23.9, 9.2, 4],
+    [38.5, 9.9, 5],
+  ],
+  // The post office's planting: a bed along its west wall (a hydrangea at the
+  // front corner, two lavenders, a laurel at the back) and a rose and a
+  // clipped box by its east wall. `r` and `h` are each plant's spread and height.
+  postGarden: [
+    { kind: "hydrangea", x: 38.55, z: -4.6, r: 0.6, h: 1.0 },
+    { kind: "lavender", x: 38.72, z: -5.5, r: 0.4, h: 0.58 },
+    { kind: "lavender", x: 38.76, z: -6.25, r: 0.36, h: 0.52 },
+    { kind: "laurel", x: 38.55, z: -7.3, r: 0.6, h: 1.45 },
+    { kind: "rose", x: 44.1, z: -6.8, r: 0.5, h: 0.95 },
+    { kind: "box", x: 44.02, z: -7.62, r: 0.34, h: 0.62 },
   ],
   // Where the residents stand.
   residents: {
@@ -120,9 +132,9 @@ export const PATHS = [
     [M.teaRoom.x + 0.2, 1.8],
   ]),
   curve([
-    [M.postOffice.x, M.postOffice.z + M.postOffice.d / 2],
-    [M.postOffice.x - 0.1, -2],
-    [M.postOffice.x - 0.2, 0.9],
+    [M.postOffice.x + M.postOffice.door, M.postOffice.z + M.postOffice.d / 2],
+    [M.postOffice.x + M.postOffice.door - 0.15, -2],
+    [M.postOffice.x + M.postOffice.door - 0.4, 0.9],
   ]),
 ];
 
@@ -209,6 +221,7 @@ export function marketColliders() {
     // The player walks through the hedgerows and shrubs (see collides()).
     ...hedgeClumps().map(([x, z]) => ({ x, z, r: 0.42, passable: true })),
     ...M.shrubs.map(([x, z]) => ({ x, z, r: 0.4, passable: true })),
+    ...M.postGarden.map(({ x, z, r }) => ({ x, z, r: Math.min(r, 0.4), passable: true })),
     box((b.minX + b.maxX) / 2, b.minZ, span, 0.16),
     box((b.minX + b.maxX) / 2, b.maxZ, span, 0.16),
   ];

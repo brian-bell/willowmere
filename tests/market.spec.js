@@ -54,8 +54,19 @@ test("the lane runs from the mill road to the map's edge, flat and clear", { tag
   expect(regionAt(MARKET.square.x, MARKET.square.z).name).toBe("The market lane");
   // Its shrubs and hedgerow clumps are walked through; nothing else is.
   const soft = colliders.filter((c) => c.passable);
-  expect(soft.length).toBe(MARKET.shrubs.length + hedgeClumps().length);
+  expect(soft.length).toBe(MARKET.shrubs.length + MARKET.postGarden.length + hedgeClumps().length);
   expect(soft.every((c) => c.r <= 0.42)).toBe(true);
+  // The post office's planting grows beside its walls, off the gravel, and
+  // leaves its door and the path to it clear.
+  const po = MARKET.postOffice,
+    door = { x: po.x + po.door, z: po.z + po.d / 2 + 0.6 };
+  for (const plant of MARKET.postGarden) {
+    expect(Math.abs(plant.x - po.x) < po.w / 2 && Math.abs(plant.z - po.z) < po.d / 2, plant.kind).toBe(false);
+    expect(onGravel(plant.x, plant.z, plant.r * 0.5), plant.kind).toBe(false);
+    expect(marketGrass(plant.x, plant.z), plant.kind).toBe(false);
+    expect(Math.hypot(plant.x - door.x, plant.z - door.z), plant.kind).toBeGreaterThan(2);
+  }
+  expect(collides(colliders, door.x, door.z, 0.3)).toBe(false);
 });
 
 test("the footbridge carries walkers over the brook, humped in the middle", { tag: "@logic" }, () => {
@@ -172,6 +183,8 @@ test("the market lane streams in, and its residents take Finn's bread", async ({
     "Market tea room detail",
     "Market post office",
     "Market stalls and bunting",
+    "Market stalls detail",
+    "Market stall boards",
     "Market signpost and cart",
     "Market sign: THE COPPER KETTLE",
   ])
