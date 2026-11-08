@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { millSails } from "../windmill/sails.js";
+import { millWheel } from "../mill/wheel.js";
 
 // window.__willowmere: the hooks Playwright tests and the benchmark scripts
 // drive and read. Normal play never calls them. `tune` applies the
@@ -123,6 +124,13 @@ export function createDebugApi(g) {
       pointerLocked: document.pointerLockElement === g.canvas,
     }),
     getInterior: () => g.interior?.diagnostics() ?? { active: false },
+    // Willow Mill's sluice and wheel, and the outdoor wheel's pose.
+    getMillWheel: () => ({
+      shut: millWheel.shut,
+      turning: millWheel.turning,
+      turn: millWheel.turn,
+      outside: g.scene.getObjectByName("Mill wheel")?.quaternion.toArray() ?? null,
+    }),
     // The windmill's brake and sails, and the outdoor sails' pose.
     getWindmillSails: () => ({
       braked: millSails.braked,

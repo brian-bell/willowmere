@@ -3,6 +3,8 @@
 // with its hoist and turning wheel.
 
 import { createPlanters } from "../planters.js";
+import { MILL } from "../mill/layout.js";
+import { millWheel } from "../mill/wheel.js";
 
 export function buildBuildings(kit, { contact }) {
   const {
@@ -337,6 +339,15 @@ export function buildBuildings(kit, { contact }) {
     windowAt(-w * 0.3, 1.9, dz, 0.76, 1, p, scheme);
     windowAt(w * 0.3, 1.9, dz, 0.76, 1, p, scheme);
     windowAt(0, h + 0.94, dz, 0.67, 0.65, p);
+    // The mill looks onto its wheel from a small west window, where the room
+    // inside has it (src/mill/layout.js).
+    if (id === "mill") {
+      const west = new T.Group();
+      west.position.set(-w / 2 - 0.05, 0, (MILL.westWindow.z[0] + MILL.westWindow.z[1]) / 2 / MILL.scale);
+      west.rotation.y = -Math.PI / 2;
+      p.add(west);
+      windowAt(0, 1.8, 0, (MILL.westWindow.z[1] - MILL.westWindow.z[0]) / MILL.scale, 0.8, west);
+    }
     // Right wall window visible to camera.
     const win = new T.Group();
     win.position.set(w / 2 + 0.05, 0, 0);
@@ -461,6 +472,7 @@ export function buildBuildings(kit, { contact }) {
   for (let x of [2.7, 5.1]) box(wood, x, 1.2, -3.72, 0.07, 2.3, 0.07);
   // Working mill wheel, clean concentric rings and wooden paddles.
   const wheel = new T.Group();
+  wheel.name = "Mill wheel";
   wheel.userData.dynamic = true;
   wheel.position.set(14.12, 1.43, -6.5);
   scene.add(wheel);
@@ -493,15 +505,16 @@ export function buildBuildings(kit, { contact }) {
   }
   cyl(darkWood, 0, 0, 0, 0.18, 1.2, wheel);
   // Turn around the local axle after the wheel has been mounted vertically.
-  // The angle follows the world's animation clock, so pausing the wheel while
-  // its chunk is out of view does not fall behind.
+  // The wheel is shared with the mill's inside (src/mill/wheel.js): the sluice
+  // lever in there stills it out here. Out of view it simply waits.
   const wheelMount = wheel.quaternion.clone(),
     wheelTurn = new T.Quaternion(),
     wheelAxle = new T.Vector3(0, 1, 0);
-  animate(wheel.position.x, wheel.position.z, (dt, t, clock) =>
+  animate(wheel.position.x, wheel.position.z, (dt) => {
+    millWheel.step(dt);
     wheel.quaternion
       .copy(wheelMount)
-      .multiply(wheelTurn.setFromAxisAngle(wheelAxle, clock * 0.18)),
-  );
+      .multiply(wheelTurn.setFromAxisAngle(wheelAxle, millWheel.turn));
+  });
   return { flowerMats };
 }
