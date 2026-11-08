@@ -106,7 +106,6 @@ export function createInterior({
   panel.id = "bakery-view";
   panel.setAttribute("aria-label", "Inside The Daily Loaf");
   panel.innerHTML = `
-    <header class="bakery-heading"><span>WILLOWMERE</span><h1></h1></header>
     <nav class="bakery-actions" aria-label="Room controls">
       <button id="bakery-look" aria-pressed="false">Free look <span aria-hidden="true">⌖</span></button>
       <button id="bakery-menu" aria-label="Pause your visit">Pause <kbd>Esc</kbd></button>
@@ -114,7 +113,6 @@ export function createInterior({
     <div class="bakery-crosshair" aria-hidden="true"><i></i></div>
     <button id="bakery-interact" hidden><kbd>E</kbd><span></span></button>
     <div id="bakery-note" role="status" hidden><span></span><p></p></div>
-    <footer class="bakery-help"><span class="desktop-only"><b>WASD</b> walk <i>·</i> <b>Drag</b> look <i>·</i> <b>E</b> interact</span><span class="touch-only"><b>Left thumb</b> walk <i>·</i> <b>Drag</b> look</span><span>Make yourself at home.</span></footer>
     <div class="bakery-touch" role="group">
       <button data-walk="forward" aria-label="Walk forward">↑</button>
       <button data-walk="left" aria-label="Step left">←</button>
@@ -360,7 +358,6 @@ export function createInterior({
     enter(id = "bakery") {
       openRoom(id);
       night = !!room.night;
-      $(".bakery-heading h1").textContent = room.title;
       panel.setAttribute("aria-label", room.ariaLabel);
       $(".bakery-touch").setAttribute("aria-label", room.touchLabel);
       $("#bakery-menu").setAttribute("aria-label", room.pauseLabel);

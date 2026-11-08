@@ -160,7 +160,7 @@ test("pause, photo, free look and returning visits do not leave stuck movement",
   await page.getByRole("button", { name: "Photo", exact: false }).click();
   await expect(page.locator("#bakery-pause")).toBeHidden();
   await expect(page.locator(".bakery-photo-return")).toBeVisible();
-  await expect(page.locator(".bakery-heading")).toBeHidden();
+  await expect(page.locator(".bakery-actions")).toBeHidden();
   await page.keyboard.press("Escape");
   expect(
     await page.evaluate(() => window.__willowmere.getInterior().active),
