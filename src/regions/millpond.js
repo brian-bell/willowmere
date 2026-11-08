@@ -253,8 +253,13 @@ function structures(T, range) {
 
   // The weir, its wing walls and hatch (millpond-weir.js); its dressed
   // stones and fittings go to a mesh of their own, hidden from far off.
-  const fine = k.layer();
-  buildWeir(T, k, fine, range);
+  // It draws from its own random stream. The old weir took 63 numbers from
+  // the pond's; skipping them keeps every other piece (planks, stones,
+  // lilies, reeds) where it has always been.
+  const fine = k.layer(),
+    weirRandom = chunkRandom(1, -2, 7);
+  buildWeir(T, k, fine, (a, b) => a + (b - a) * weirRandom());
+  for (let i = 0; i < 63; i++) range();
 
   // The footbridge: planks over a humped pair of stringers, posts and rails.
   const fb = M.footbridge,
