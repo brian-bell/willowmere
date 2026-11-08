@@ -431,7 +431,7 @@ function treeBuilder(T, world, kind, trees, harvest) {
     woodMesh.name = `${name} trees' bark and limbs`;
     // Shells: shade inside the crowns, so a modest number of leaves reads
     // as a full canopy. The leaves cast the crown's shadow.
-    const shellMesh = crownShells(shells, 1, materials.crown, new T.IcosahedronGeometry(1, 1));
+    const shellMesh = crownShells(shells, 1, materials.shade, new T.IcosahedronGeometry(1, 1));
     shellMesh.name = `${name} trees' canopy shade`;
     shellMesh.visible = true;
     shellMesh.castShadow = false;

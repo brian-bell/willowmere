@@ -633,7 +633,7 @@ function treeBuilder(T, world, stand, leafMaterials) {
     woodMesh.name = `${name}: bark and limbs`;
     // Shells: the crowns' leafy mass, so a modest number of leaves reads as
     // a full canopy. The leaves cast the crown's shadow, dappled.
-    const shellMesh = new T.Mesh(merged(shellParts), materials.crown);
+    const shellMesh = new T.Mesh(merged(shellParts), materials.shade);
     shellMesh.name = `${name}: canopy shade`;
     shellMesh.castShadow = false;
     // Every fourth leaf first, then the rest of the even ones, then the odd:

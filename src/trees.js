@@ -1,5 +1,6 @@
 import * as T from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { crownMaterial as leafyCrowns, shadeMaterial as leafyShade } from "./crown-material.js";
 
 const TAU = Math.PI * 2;
 const LEAF_AXIS = new T.Vector3(0, 0, 1);
@@ -222,11 +223,11 @@ export function createTrees(placements, groundHeight = () => 0) {
   leafMaterial.customProgramCacheKey = () => "willowmere-leaf-wind-v1";
   depthMaterial.customProgramCacheKey = () => "willowmere-leaf-depth-v1";
   // Distant crowns in first person: a few lumpy shells where the leaf
-  // clusters are, in the canopy's colours, casting ordinary shadows.
-  const crownMaterial = new T.MeshStandardMaterial({
-    vertexColors: true,
-    roughness: 0.9,
-  });
+  // clusters are, in the canopy's colours, casting ordinary shadows. The
+  // regions' shade shells inside their crowns have a material of their own;
+  // both shaders break the shells into leaves (see crown-material.js).
+  const crownMaterial = leafyCrowns(),
+    shadeMaterial = leafyShade();
   const crownGeometry = new T.IcosahedronGeometry(1, 1);
 
   function detail(geometry, position, scale, color, quaternion = null) {
@@ -951,6 +952,7 @@ export function createTrees(placements, groundHeight = () => 0) {
       wood: woodMaterial,
       detail: detailMaterial,
       crown: crownMaterial,
+      shade: shadeMaterial,
       time,
       /**
        * Leaf materials for trees on raised ground: their geometry carries a
@@ -1002,12 +1004,9 @@ export function crownShells(clusters, stretch, material, shell, rough = 0) {
           0.12 * Math.sin(x * 5.1 + center.x) * Math.sin(y * 4.3 + z * 3.7 + center.z) +
           rough * Math.sin(x * 3.3 - z * 4.1 + center.z * 2.3) * Math.sin(y * 3.9 + x * 2.2 + center.x * 1.9),
         down = y < 0 ? stretch : 1;
-      if (rough) {
-        // A rough shell faces mostly up, so it takes the light evenly instead
-        // of shading round like a ball.
-        const n = Math.hypot(x * 0.35, y * 0.35 + 1, z * 0.35);
-        normal.setXYZ(i, (x * 0.35) / n, (y * 0.35 + 1) / n, (z * 0.35) / n);
-      } else normal.setXYZ(i, x, y, z);
+      // The outward direction: the material finds the silhouette with it,
+      // and turns each leaf toward the sky itself.
+      normal.setXYZ(i, x, y, z);
       position.setXYZ(
         i,
         center.x + x * radius * lump * 1.05,
