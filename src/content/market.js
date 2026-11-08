@@ -108,6 +108,14 @@ export const STALL_LINES = {
   ],
 };
 
+// The painted boards over each stall's awning.
+export const STALL_BOARDS = {
+  seeds: "SEEDS & BULBS",
+  lanterns: "PAPER LANTERNS",
+  hats: "THE MILLINER",
+  produce: "FRESH PRODUCE",
+};
+
 // The prompt at each stall while it trades.
 export const STALL_PROMPTS = {
   seeds: (price) => `Buy 3 seeds · ${price} petals`,
