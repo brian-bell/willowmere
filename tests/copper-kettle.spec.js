@@ -259,8 +259,8 @@ test("the Copper Kettle keeps the rooms' budget, with its shadow map cached", as
     await place(page, pose);
     const samples = await sample(),
       draws = samples.map((s) => s.drawCalls).sort((a, b) => a - b);
-    expect(draws[Math.floor(draws.length / 2)]).toBeLessThan(330);
-    expect(Math.max(...samples.map((s) => s.triangles))).toBeLessThan(0.6e6);
+    expect(draws[Math.floor(draws.length / 2)]).toBeLessThan(200);
+    expect(Math.max(...samples.map((s) => s.triangles))).toBeLessThan(0.5e6);
     expect(samples.at(-1).render.shadowAutoUpdate).toBe(false);
   }
   await page.evaluate(() => {
@@ -271,5 +271,5 @@ test("the Copper Kettle keeps the rooms' budget, with its shadow map cached", as
   await place(page, { x: 0.15, z: 3.95, yaw: 0.3, pitch: -0.08 });
   const samples = await sample(),
     draws = samples.map((s) => s.drawCalls).sort((a, b) => a - b);
-  expect(draws[Math.floor(draws.length / 2)]).toBeLessThan(200);
+  expect(draws[Math.floor(draws.length / 2)]).toBeLessThan(110);
 });

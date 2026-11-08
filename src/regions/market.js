@@ -672,10 +672,11 @@ function teaFront(k, t, front) {
   const ax = 1.45,
     az = front + 0.95;
   for (const side of [-1, 1]) {
-    k.box("#6a5442", ax, 0.42, az + side * 0.11, 0.56, 0.82, 0.04, 0, side * 0.26);
-    k.box("#2c3230", ax, 0.44, az + side * 0.125, 0.46, 0.66, 0.02, 0, side * 0.26);
+    // The two boards lean together at the top, like a tent.
+    k.box("#6a5442", ax, 0.42, az + side * 0.11, 0.56, 0.82, 0.04, 0, -side * 0.26);
+    k.box("#2c3230", ax, 0.44, az + side * 0.125, 0.46, 0.66, 0.02, 0, -side * 0.26);
     for (let i = 0; i < 4; i++)
-      k.box("#f3efe2", ax + (i % 2 ? 0.04 : -0.03), 0.66 - i * 0.13, az + side * (0.14 - i * 0.034), 0.3 - (i % 2) * 0.1, 0.025, 0.012, 0, side * 0.26);
+      k.box("#f3efe2", ax + (i % 2 ? 0.04 : -0.03), 0.66 - i * 0.13, az + side * (0.082 + i * 0.035), 0.3 - (i % 2) * 0.1, 0.025, 0.012, 0, -side * 0.26);
   }
   // Flower tubs by the door.
   flowerTub(k, -0.85, front + 0.45, ["#e4a3b8", "#f3e3a2", "#d98b8b"]);

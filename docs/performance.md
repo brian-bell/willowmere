@@ -258,6 +258,15 @@ Thistledown (`src/thistledown/room.js`) goes through the same chain and settings
 
 `node scripts/benchmark-interior.mjs <label>` measures it with `BENCHMARK_ROOM=thistledown`. Counted on high at 1280 × 800 CSS pixels: 398 draws and 0.45M triangles at the front door looking down the hall, its costliest view; 184 to 233 draws in the breakfast room, kitchen and sitting room; 315 on the stairs; 122 to 271 upstairs.
 
+### The Copper Kettle
+
+The Copper Kettle (`src/copper-kettle/`) goes through the same chain and settings, and is built the post office's way from its parts kit: sharp boxes for small things, every label, card and photograph on one 2048 sheet, moving groups merged with `mergeGroup`, flat colours folded into vertex-coloured materials with `paintFlat`, and every pane in one transparent mesh. The sun is its only shadow caster, drawn once on opening and after a resize or quality change (`staticShadows`). Its lights are a fixed pool: five pendants, the fire and three window fills, so lighting the lamps changes intensities and compiles nothing. Two things are its own:
+
+- **The cake re-merges.** The sponge is eight wedges merged into one mesh, rebuilt when a slice comes off, so it stays one draw at any count.
+- **One steam cloud.** The range kettle, the urn when it is drawn and a freshly poured cup share one `Points` cloud of 18 puffs, so steam is one draw however many things are steaming.
+
+Counted in the cloud container on SwiftShader at 1000 × 625 CSS pixels: 124 draws and 0.33M triangles on high from the door, its costliest view after the kitchen's 134 looking out through the doorway; 118 from the fireside looking back at the counter; 60 draws and 0.17M triangles from the door on performance.
+
 ## Regression budgets
 
 These tests assert rendering work and behaviour instead of a machine-dependent FPS threshold. The village diagnostics expose `drawCalls`, `triangles`, `geometries`, `textures`, and `shadow` (`mapSize` and light-space `bounds`); water diagnostics include each pool's `reflectionSize`.
@@ -279,10 +288,27 @@ These tests assert rendering work and behaviour instead of a machine-dependent F
 - **The Drowsy Heron.** `tests/pub.spec.js` holds each of the study's views under 450 draws and 1.8M triangles and checks that blue hour compiles no new program. In the game it holds the inn's forecourt under 1,000 draws and 2.5M triangles at the default height and zoomed out, and its room at a median under 420 draws with its shadow maps cached.
 - **The old windmill.** `tests/windmill.spec.js` holds the room at a median under 120 draws and under 0.6M triangles looking up the well and out of the top window, and checks that its sun map stays cached and that evening compiles no new program.
 - **Thistledown.** `tests/thistledown.spec.js` holds its front door at a median under 420 draws and 0.5M triangles on high and under 250 draws on performance, with its shadow maps cached and a 2048 sun map on high, and checks that a room out of sight stops drawing.
+- **The Copper Kettle.** `tests/copper-kettle.spec.js` holds the views from the door, from the fireside back to the counter and from the kitchen out through its doorway to a median under 200 draws and 0.5M triangles on high, with its shadow map cached, and the door's view under 110 draws on performance.
 
 ## Change history
 
 Measurements recorded as each change landed, newest first, each against the `main` it was merged into. Several were taken while other benchmarks shared the GPU and say so; use them for the shape of each change and for its draw and triangle deltas, and use [Where the time goes](#where-the-time-goes-2026-10-30) for the combined baseline. Entries counted in the cloud container ran on SwiftShader, so they give draw calls and triangles but no timings.
+
+### The Copper Kettle (2026-11-08)
+
+Hazel's tea room on the market lane now opens a walkable room: the tea room, the space behind its counter and the kitchen. How it stays cheap is under [The Copper Kettle](#the-copper-kettle). Outdoors, `teaRoom()` in `src/regions/market.js` was rebuilt in more detail: a coursed roof with ridge tiles, finials, bargeboards, gutters and downpipes, a stack with pots and a copper cowl, a glazed bay under a scalloped awning, a half-glazed door with a fanlight, a climbing rose, a window box, shuttered side windows, the kitchen's rear window, a hanging copper kettle on an iron bracket, an A-board and laid terrace tables. It is all still the region kit's one vertex-coloured mesh and its glazed layer, so it adds no draw.
+
+Counted in the cloud container on SwiftShader at 1200 × 750, high quality, `?resolution=fixed`, with the frame-locked probe and every region streamed in, against `main` (`9707714`):
+
+| View | `main` draws / triangles | The Copper Kettle draws / triangles |
+| --- | --- | --- |
+| First person on the lane, facing the front | 293 / 1.256M | 293 / 1.290M |
+| First person at the terrace's corner | 555 / 1.848M | 555 / 1.881M |
+| First person behind, facing the rear and side | 337 / 1.333M | 338 / 1.368M |
+| Overview over the tea room, zoomed in | 363 / 1.208M | 363 / 1.241M |
+| Room, inside the door, high | | 124 / 0.333M |
+| Room, the kitchen looking out, high | | 134 / 0.340M |
+| Room, inside the door, performance | | 60 / 0.167M |
 
 ### Stone quarry (2026-11-07)
 
