@@ -1,9 +1,10 @@
 // The backs of the village's houses, which used to be bare plaster with the
 // roof's gable left open: a closed rear gable with its timbers and a small
 // window, gutters and a downpipe into a water butt, and for each house a back
-// door, windows and what its trade leaves out the back. The big parts bake
-// with the village; the small ones (climbing roses, beds, knobs, logs, sacks)
-// go into one fine mesh per house that hides zoomed far out (fine.js).
+// door, windows and what its trade leaves out the back. Only the gable and
+// the glass bake with the village; everything else goes into one fine mesh
+// per house that hides zoomed far out (fine.js), where the backs, facing away
+// from the overview's camera, are barely seen.
 // Nothing here draws from the village's random stream, so it moves nothing
 // else. Rosewood's back is its kitchen extension (rosewood-yard.js), so it
 // gains only the gable and gutters here.
@@ -107,7 +108,7 @@ export function buildRears(kit, { contact }) {
     shape.lineTo(0, h * 0.69);
     shape.lineTo(w / 2, 0);
     shape.closePath();
-    mesh(new T.ExtrudeGeometry(shape, { depth: 0.055, bevelEnabled: false }), ivory, 0, h + 0.4, rz - 0.07, 1, 1, 1, p);
+    const gable = mesh(new T.ExtrudeGeometry(shape, { depth: 0.055, bevelEnabled: false }), ivory, 0, h + 0.4, rz - 0.07, 1, 1, 1, p);
     for (const side of [-1, 1])
       beam(darkWood, [side * (w / 2 + 0.12), h + 0.42, rz - 0.11], [0, h * 1.69 + 0.45, rz - 0.11], 0.15, p);
     box(darkWood, 0, h + 0.42, rz - 0.05, w + 0.3, 0.18, 0.19, p);
@@ -147,6 +148,9 @@ export function buildRears(kit, { contact }) {
     }
     if (id === "mill") colliders.push({ x: x - 1.6, z: z + rz - 0.25, w: 1.2, d: 0.45 }, { x, z: z + rz - 0.45, r: 0.45 });
     if (id === "thistledown") colliders.push({ x: x - 0.85, z: z + rz - 0.3, w: 1.5, d: 0.46 }, { x: x + 1.68, z: z + rz - 0.44, r: 0.35 });
+    // Only the gable (which closes the roof) and the glass stay in the bake;
+    // the backs face away from the overview, so the rest hides with the detail.
+    fine.fold(p, kit, new Set([gable]));
     const detail = fine.finish(`Village house back detail (${id})`, scene);
     if (detail) fines.push(detail);
   }

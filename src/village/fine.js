@@ -93,6 +93,30 @@ export function createFine(T, seed) {
       this.rambler(points, bloom);
       settle();
     },
+    /**
+     * Moves the village-kit meshes under `group` into this detail, painted
+     * their own colours (`village` is the village's kit, whose textured
+     * materials are white over their painted maps), so they hide zoomed far
+     * out too. Glass stays where it is, to glow at blue hour, and so does any
+     * mesh in `keep`.
+     */
+    fold(group, village, keep = new Set()) {
+      const painted = new Map([
+        [village.ivory, "#e7d6ac"],
+        [village.wood, "#866547"],
+        [village.darkWood, "#65513e"],
+        [village.roofBlue, "#78939c"],
+        [village.roofRust, "#b66e4e"],
+      ]);
+      settle();
+      group.updateMatrixWorld(true);
+      const meshes = [];
+      group.traverse((node) => node.isMesh && node.material !== village.glass && !keep.has(node) && meshes.push(node));
+      for (const mesh of meshes) {
+        k.piece(mesh.geometry.clone().applyMatrix4(mesh.matrixWorld), painted.get(mesh.material) ?? `#${mesh.material.color.getHexString()}`);
+        mesh.removeFromParent();
+      }
+    },
     /** Everything built, as one mesh added to `scene`, or null when nothing was. */
     finish(name, scene) {
       settle();

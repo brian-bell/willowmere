@@ -64,21 +64,25 @@ export function buildRosewoodYard(kit, { fence, contact }) {
       tile.rotation.x = slope;
     }
   }
+  // The parts added since the garden was first built hide zoomed far out
+  // with its detail (fine.js).
+  const extra = new T.Group();
+  kit.scene.add(extra);
   // A gutter along the roof's low edge, its downpipe running to a water butt
   // by the washing line.
   const metal = mat("#5f6b68"),
     lowZ = roofZ - (roofDepth / 2) * Math.cos(slope) - 0.02,
     lowY = roofY + (roofDepth / 2) * Math.sin(slope) - 0.08;
-  box(metal, cx, lowY, lowZ, w + 0.5, 0.08, 0.1);
-  for (const x of [ext.minX - 0.25, ext.maxX + 0.25]) box(metal, x, lowY, lowZ, 0.04, 0.11, 0.13);
+  box(metal, cx, lowY, lowZ, w + 0.5, 0.08, 0.1, extra);
+  for (const x of [ext.minX - 0.25, ext.maxX + 0.25]) box(metal, x, lowY, lowZ, 0.04, 0.11, 0.13, extra);
   const pipeX = ext.minX + 0.12,
     pipeZ = ext.minZ - 0.08;
-  beam(metal, [pipeX, lowY - 0.02, lowZ], [pipeX, lowY - 0.3, pipeZ], 0.07);
-  cyl(metal, pipeX, (lowY - 0.3 + 1.05) / 2, pipeZ, 0.04, lowY - 0.3 - 1.05);
-  beam(metal, [pipeX, 1.07, pipeZ], [-9.02, 0.95, -10.1], 0.07);
-  cyl(mat("#56705f"), -9.0, 0.45, -10.16, 0.26, 0.8);
-  for (const y of [0.16, 0.72]) cyl(kit.darkStone, -9.0, y, -10.16, 0.275, 0.04);
-  cyl(darkWood, -9.0, 0.87, -10.16, 0.28, 0.04);
+  beam(metal, [pipeX, lowY - 0.02, lowZ], [pipeX, lowY - 0.3, pipeZ], 0.07, extra);
+  cyl(metal, pipeX, (lowY - 0.3 + 1.05) / 2, pipeZ, 0.04, lowY - 0.3 - 1.05, extra);
+  beam(metal, [pipeX, 1.07, pipeZ], [-9.02, 0.95, -10.1], 0.07, extra);
+  cyl(mat("#56705f"), -9.0, 0.45, -10.16, 0.26, 0.8, extra);
+  for (const y of [0.16, 0.72]) cyl(kit.darkStone, -9.0, y, -10.16, 0.275, 0.04, extra);
+  cyl(darkWood, -9.0, 0.87, -10.16, 0.28, 0.04, extra);
   colliders.push({ x: -9.0, z: -10.16, r: 0.3 });
   // The range's stovepipe, puffing a little.
   cyl(darkWood, -8.8, 3.4, -9.0, 0.11, 1.0);
@@ -103,17 +107,17 @@ export function buildRosewoodYard(kit, { fence, contact }) {
   box(mat("#5e7d66"), doorX, 0.95, face - 0.03, 0.74, 0.95, 0.05);
   box(mat("#2b2724"), doorX, 1.88, face - 0.01, 0.72, 0.7, 0.04);
   box(stone, doorX, 0.12, face - 0.35, 1.1, 0.22, 0.55);
-  box(darkWood, doorX, 2.3, face - 0.03, 1.1, 0.12, 0.12);
+  box(darkWood, doorX, 2.3, face - 0.03, 1.1, 0.12, 0.12, extra);
   k.box("#2f2a26", doorX - 0.2, 0.62, face - 0.06, 0.32, 0.04, 0.012);
   k.box("#2f2a26", doorX - 0.2, 1.3, face - 0.06, 0.32, 0.04, 0.012);
   k.ball("#c9a65a", doorX + 0.27, 1.05, face - 0.07, 0.035);
   k.box("#3a3430", doorX + 0.27, 0.82, face - 0.065, 0.06, 0.1, 0.012);
   // A lantern by the door, lit at blue hour.
   const lanternX = doorX + 0.68;
-  box(darkWood, lanternX, 2.02, face - 0.08, 0.05, 0.05, 0.18);
-  box(darkWood, lanternX, 1.88, face - 0.2, 0.17, 0.03, 0.17);
+  box(darkWood, lanternX, 2.02, face - 0.08, 0.05, 0.05, 0.18, extra);
+  box(darkWood, lanternX, 1.88, face - 0.2, 0.17, 0.03, 0.17, extra);
   box(glass, lanternX, 1.78, face - 0.2, 0.12, 0.17, 0.12);
-  box(darkWood, lanternX, 1.68, face - 0.2, 0.17, 0.03, 0.17);
+  box(darkWood, lanternX, 1.68, face - 0.2, 0.17, 0.03, 0.17, extra);
   const windowX = -7.9;
   box(darkWood, windowX, 1.75, face, 0.9, 0.72, 0.06);
   box(glass, windowX, 1.75, face - 0.03, 0.74, 0.56, 0.02);
@@ -126,12 +130,12 @@ export function buildRosewoodYard(kit, { fence, contact }) {
   // Shutters either side of the kitchen window.
   for (const side of [-1, 1]) {
     const sx = windowX + side * 0.62;
-    box(mat("#5e7d66"), sx, 1.75, face - 0.02, 0.3, 0.74, 0.05);
-    for (const yy of [-0.24, 0.24]) box(darkWood, sx, 1.75 + yy, face - 0.055, 0.26, 0.045, 0.02);
+    box(mat("#5e7d66"), sx, 1.75, face - 0.02, 0.3, 0.74, 0.05, extra);
+    for (const yy of [-0.24, 0.24]) box(darkWood, sx, 1.75 + yy, face - 0.055, 0.26, 0.045, 0.02, extra);
   }
   // A herb trough on legs below it.
-  box(wood, windowX, 0.62, face - 0.3, 0.9, 0.22, 0.3);
-  for (const dx of [-0.38, 0.38]) box(darkWood, windowX + dx, 0.26, face - 0.3, 0.05, 0.52, 0.05);
+  box(wood, windowX, 0.62, face - 0.3, 0.9, 0.22, 0.3, extra);
+  for (const dx of [-0.38, 0.38]) box(darkWood, windowX + dx, 0.26, face - 0.3, 0.05, 0.52, 0.05, extra);
   colliders.push({ x: windowX, z: face - 0.3, w: 0.95, d: 0.35 });
   for (let i = 0; i < 4; i++)
     plant(["daisies", "lavender", "geranium", "lavender"][i], ["white", "lavender", "scarlet", "lilac"][i], windowX - 0.33 + i * 0.22, 0.71, face - 0.3, 0.11);
@@ -265,5 +269,6 @@ export function buildRosewoodYard(kit, { fence, contact }) {
     plant(recipe, bloom, x, soil - 0.02, z, s * 0.5);
     colliders.push({ x, z, r: s * 0.5 });
   }
+  fine.fold(extra, kit);
   return [fine.finish("Rosewood garden detail", kit.scene)].filter(Boolean);
 }
