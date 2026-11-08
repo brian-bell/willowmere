@@ -20,7 +20,7 @@ const TAU = Math.PI * 2;
 const C = {
   brick: "#b97a5e",
   brickDark: "#985c46",
-  bricks: ["#a86a50", "#c4876a", "#9e6249", "#b5745a", "#cf9173", "#a5654d"],
+  bricks: ["#a86a50", "#c4876a", "#9e6249", "#b5745a", "#a5654d"],
   plinth: "#8e8a7e",
   plinthCap: "#a6a194",
   stone: "#ddd3bb",
@@ -171,14 +171,16 @@ function shell({ m, f, rand }, p) {
     f.cyl(C.terracotta, sx + px, h + 1.86, sz, 0.075, 0.3 - i * 0.06);
     f.cyl(C.terracottaDark, sx + px, h + 2.0 - i * 0.06, sz, 0.09, 0.04);
   }
-  // A gutter's downpipe at each corner, with its shoe at the foot.
+  // A downpipe down each corner of the side walls, a swan neck out to the
+  // gutter at the top and a shoe at the foot.
   for (const sz2 of [-1, 1])
     for (const sx2 of [-1, 1]) {
-      const x = sx2 * (w / 2 + 0.14),
-        z = sz2 * (front + 0.13);
-      f.post(C.iron, x, z, 0.06, h - 0.15, 0.032);
-      f.rod(C.iron, [x, h - 0.15, z], [x, h - 0.02, sz2 * (front + 0.4)], 0.032);
-      f.box(C.iron, x, 0.07, z + sz2 * 0.06, 0.09, 0.06, 0.14);
+      const x = sx2 * (w / 2 + 0.05),
+        z = sz2 * (front - 0.07),
+        top = h - 0.3;
+      f.post(C.iron, x, z, 0.08, top, 0.03);
+      f.rod(C.iron, [x, top, z], [sx2 * (w / 2 + 0.1), h - 0.1, sz2 * (front + 0.36)], 0.03);
+      f.box(C.iron, x + sx2 * 0.03, 0.08, z, 0.12, 0.06, 0.08);
     }
 }
 
@@ -479,7 +481,7 @@ function foliage({ f, rand, shapes }, { x, y, z, rx, ry, rz, count, size, colors
       k = depth[0] + (depth[1] - depth[0]) * rand(),
       length = size * (0.75 + rand() * 0.5),
       shade = Math.min(colors.length - 1, Math.floor(((dy + 1) / 2) * colors.length * 0.75 + rand() * colors.length * 0.5));
-    f.add(
+    const leaf = f.add(
       shapes.leaf,
       colors[shade],
       x + dx * rx * k,
@@ -492,6 +494,22 @@ function foliage({ f, rand, shapes }, { x, y, z, rx, ry, rz, count, size, colors
       Math.atan2(dx, dz) + (rand() - 0.5) * 0.9,
       (rand() - 0.5) * 0.7,
     );
+    outward(leaf, dx / rx, dy / ry, dz / rz);
+  }
+}
+
+// Turns a leaf's normals most of the way to the plant's outward normal, so
+// the bush shades as one soft mass and its leaves show in their outline and
+// colour rather than as facets.
+function outward(geometry, nx, ny, nz) {
+  const n = geometry.attributes.normal,
+    length = Math.hypot(nx, ny, nz);
+  for (let i = 0; i < n.count; i++) {
+    const x = (nx / length) * 0.8 + n.getX(i) * 0.2,
+      y = (ny / length) * 0.8 + n.getY(i) * 0.2,
+      z = (nz / length) * 0.8 + n.getZ(i) * 0.2,
+      l = Math.hypot(x, y, z) || 1;
+    n.setXYZ(i, x / l, y / l, z / l);
   }
 }
 
@@ -522,7 +540,7 @@ const PLANTS = {
       ry = h * 0.52;
     bed(m, x, z, Math.min(r, 0.4) + 0.24);
     m.ball("#46703f", x, cy, z, r * 0.9, ry * 0.92, r * 0.9);
-    foliage(b, { x, y: cy, z, rx: r, ry, rz: r, count: 150, size: 0.14, colors: ["#3f6a3a", "#4a7741", "#568548", "#649352"] });
+    foliage(b, { x, y: cy, z, rx: r, ry, rz: r, count: 210, size: 0.11, colors: ["#3f6a3a", "#4a7741", "#568548", "#649352"] });
     const heads = ["#8fa8dc", "#a99ad6", "#7f9fd0", "#b8a8e0"],
       florets = ["#c3d0f0", "#d3c8ee", "#aebfe8"];
     for (let i = 0; i < 9; i++) {
@@ -532,11 +550,15 @@ const PLANTS = {
         hx = x + Math.cos(u) * s * r * 0.98,
         hy = cy + dy * ry * 0.98,
         hz = z + Math.sin(u) * s * r * 0.98;
-      f.ball(heads[i % heads.length], hx, hy, hz, 0.12, 0.1, 0.12);
-      for (let j = 0; j < 6; j++) {
+      f.ball(heads[i % heads.length], hx, hy, hz, 0.09, 0.075, 0.09);
+      for (let j = 0; j < 7; j++) {
         const a = rand() * TAU,
-          e = rand() * 0.9;
-        f.add(shapes.leaf, florets[j % florets.length], hx + Math.cos(a) * 0.1 * Math.cos(e), hy + Math.sin(e) * 0.09, hz + Math.sin(a) * 0.1 * Math.cos(e), 0.035, 0.012, 0.035, rand() * 3, rand() * 3);
+          e = rand() * 1.2,
+          ox = Math.cos(a) * Math.cos(e),
+          oy = Math.sin(e),
+          oz = Math.sin(a) * Math.cos(e);
+        const floret = f.add(shapes.leaf, florets[j % florets.length], hx + ox * 0.085, hy + oy * 0.07, hz + oz * 0.085, 0.032, 0.01, 0.032, rand() * 3, rand() * 3);
+        outward(floret, ox, oy, oz);
       }
     }
   },
@@ -567,7 +589,7 @@ const PLANTS = {
       ry = h * 0.52;
     bed(m, x, z, Math.min(r, 0.4) + 0.24);
     m.ball("#2f5232", x, cy, z, r * 0.88, ry * 0.9, r * 0.88);
-    foliage(b, { x, y: cy, z, rx: r, ry, rz: r, count: 170, size: 0.17, colors: ["#2d4f30", "#36603a", "#447046", "#55804f"], floor: -0.45 });
+    foliage(b, { x, y: cy, z, rx: r, ry, rz: r, count: 240, size: 0.14, colors: ["#2d4f30", "#36603a", "#447046", "#55804f"], floor: -0.45 });
   },
   // A shrub rose: small dark leaves and pink roses.
   rose(b, { x, z, r, h }) {
