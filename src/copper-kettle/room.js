@@ -334,8 +334,8 @@ export function createCopperKettle({ state }) {
       cups,
       playing,
       purring: timers.purr > 0,
-      ovenOpen: ovenOpen > 0.5,
-      drawerOut: drawerOut > 0.5,
+      ovenOpen: timers.oven > 0,
+      drawerOut: timers.till > 0,
       loaf: tea.loaf.visible,
     }),
   };
