@@ -599,11 +599,13 @@ test("the village school keeps the same budget as the wood", async ({ page }) =>
   // zoomed out to height 30, where the market lane and the marsh join it.
   // Standing there first streams the school in before the rest of the map.
   await page.evaluate(() => window.__willowmere.moveTo(36.6, 27));
+  // The children are not chunk meshes: they cull and swap detail themselves.
   await page.waitForFunction(
     () => {
       const names = window.__willowmere.getChunks().flatMap((chunk) => chunk.meshes.map((mesh) => mesh.name));
-      return ["School grounds", "Schoolroom", "Schoolhouse and playground", "Schoolchildren"].every((name) =>
-        names.some((n) => n.startsWith(name)),
+      return (
+        ["School grounds", "Schoolroom", "Schoolhouse and playground"].every((name) => names.includes(name)) &&
+        window.__willowmere.getSchool().match?.inScene
       );
     },
     null,
