@@ -25,8 +25,9 @@ All art and audio are generated in code. `vite.config.js` splits Three.js into i
 | `navigation.js` | collision and route finding |
 | `save.js` | the visit's progress in browser storage: a versioned save, merged field by field into the defaults, with migrations for changed fields |
 | `hud.js` | toasts, the quest card, conversations and the journal |
-| `activities.js` | quests, flowers, fishing, the orchard harvest, the market's deliveries and stalls, birdwatching at the marsh's hide, pressing the old wood's flowers, the allotment beds, the quarry's fossils |
+| `activities.js` | quests, flowers, fishing, the orchard harvest, the market's deliveries and stalls, birdwatching at the marsh's hide, pressing the old wood's flowers, the allotment beds, the quarry's fossils, the line Miss Juniper's pupils shout when the player scores |
 | `market.js`, `marsh.js`, `wood.js`, `allotments.js`, `quarry.js` | the market's trade, the hide's birdwatching, the wood's flower pressing, the allotment beds' renting, sowing, growing and harvesting rules, and the quarry's fossil hunting with Agnes's hammer, as pure decisions on the save's state |
+| `school.js` | the school's football match: eight children, a ball and two goals stepped as a pure simulation, with the player able to kick the ball |
 | `rosewood.js` | Rosewood's treasures (what Bark digs up), the jigsaw, and the footstep trail Bark follows, as pure decisions |
 | `interactions.js` | the prompt and what E does |
 | `touch.js`, `touch-controls.js` | touch mode, which iPhones, iPads and other finger-first devices get instead of the mouse and keyboard: which devices get it (pure, in `touch.js`), the village view's tap, drag, pinch, twist and two-finger tilt, and the thumbstick that walks in first person and in the rooms |
@@ -58,7 +59,7 @@ In touch mode `touch-controls.js` reads the canvas instead of `main.js`'s mouse 
 
 ## Regions
 
-Each area beyond the village (the millpond, the orchard hill, the inn, the market lane, the willow marsh, the old wood, the allotments, the stone quarry, the old barrows either side of the millpond, and the open fields around them) is an entry in the registry, `src/regions/index.js`. The terrain field, the location label, the open country's grass and soil, walking and click heights, planting, colliders and streaming all loop that list, so a new region adds one line there instead of edits to the core files. The fields an entry may set are documented at the top of that file.
+Each area beyond the village (the millpond, the orchard hill, the inn, the market lane, the willow marsh, the old wood, the allotments, the stone quarry, the village school, the old barrows either side of the millpond, and the open fields around them) is an entry in the registry, `src/regions/index.js`. The terrain field, the location label, the open country's grass and soil, walking and click heights, planting, colliders and streaming all loop that list, so a new region adds one line there instead of edits to the core files. The fields an entry may set are documented at the top of that file.
 
 A region has two halves:
 
@@ -78,6 +79,12 @@ An interactable may carry `y`, the ground it stands on; it then answers only to 
 The map's south-west corner, south of the old wood and west of the allotments. `src/regions/quarry-layout.js` raises an L-shaped ridge along the west rim and the wood's south edge and cuts its inner corner away in two lifts: a bench 1.7 m above the floor, and the ridge's grassy top above that. Each lift drops at a straight face along a line of the ground mesh's 0.4 m grid, which is what makes the faces sheer: `liftAt(x, z)` says which lift a point is on, and the ground there is the ridge cut down to that lift's level (`liftHeight`), so the ground jumps at a face line instead of sloping. `FACES` samples each face's ground above and below every grid step; the builder fills that drop with a vertical backing and stands bedded blocks in front of it, and the walking collider is one shape that keeps walkers clear of every stretch taller than a stride, from above and below. Where the ridge tapers away, its faces shrink to a step and the bench's east end runs down into the flank, which is how walkers reach the bench and the top. The floor is level with the lawn and runs out into the fields.
 
 `src/regions/quarry.js` streams in the ground (each grid cell on its own lift's heights), the faces, the cart track from the allotments' west gate and the footpath from the wood's south trail, the works (a derrick crane whose load sways, the mason's lean-to with a lantern, the banker, block stacks, a split block, the spoil heap, a stone cart, the board, ladders and a fence along the brow), rubble, gorse and Agnes, the mason. `src/game/quarry.js` holds the fossil rules: Agnes lends her hammer the first time you talk to her, and each of six fossils turns up once at its own spot on the floor, the bench or the ridge's top. Its words are in `src/content/quarry.js`.
+
+### The village school
+
+The map's south-east corner, south of the market lane and east of the marsh, on the open country's flat grass. `src/regions/school-layout.js` places the schoolroom (a tall stone room with a cross gable, a bellcote and a porch), the two-storey schoolhouse against its east gable, the tarmac playground in front, the football pitch beyond, the railings round the lot with the gate in their north side, and the path from the market's footpath to the gate; its colliders, grass and planting masks load with the village.
+
+`src/regions/school.js` streams in four jobs: the grounds (pitch stripes and lines, tarmac, chalked hopscotch and the gravel path), the schoolroom with its sign and Miss Juniper, the schoolhouse with the fences, swings, goals and the rest, and the children. `src/regions/school-kids.js` builds the eleven children a child per slice: each one's people-kit parts are bound rigidly to bones of one shared skeleton, so all of them draw as one skinned mesh up close and one coarser skinned mesh far out (`world.farDetail()` says which), with their contact shadows in one instanced mesh. Eight play the match in `src/game/school.js` (each side a keeper and three runners); the others are on a swing, with a skipping rope and at hopscotch. The match only moves while the pitch is in view. The player kicks the ball by walking into it, and a goal they score earns a line from `src/content/school.js`.
 
 ## The Drowsy Heron
 
@@ -153,7 +160,7 @@ It adds no save state: the sluice, like the windmill's brake, is let go on a rel
 
 `npm test` runs every Playwright spec in `tests/` against a Vite server it starts on port 5174. Tests tagged `@logic` import pure modules and never open a page; `npm run test:logic` runs only those, in parallel, in seconds. `npm run typecheck` runs TypeScript over the JavaScript files that start with `// @ts-check`: the pure modules, where JSDoc types such as `SaveState` (`src/game/save.js`) and `Region` (`src/regions/index.js`) catch a misspelled field before it ships. Other files are not checked; add the line when a module is pure. CI (`.github/workflows/ci.yml`) builds, type-checks, runs the logic tier, and runs the one `@smoke` test in `tests/smoke.spec.js`, which suits software WebGL. Playwright uses `CHROME_PATH` when set, installed Chrome on macOS, or Playwright's Chromium (`npx playwright install chromium`).
 
-Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.js`). It reads state (`getState`, `getPlayer`, `getView`, `getDeer`, `getFishing`, `getOrchard`, `getMarket`, `getMarsh`, `getWood`, `getAllotments`, `getQuarry`, `getChunks`, `getStreaming`, `getWater`, `getInterior`), moves the player (`moveTo`, `findPath`, `blocked`, and `placeInterior` indoors), reports rendering work (`getDiagnostics`), and overrides rendering for measurements (`tune`, `tuneInterior`, `setAdaptiveResolution`). `getSceneFingerprint()` hashes every object's transform, geometry, material and instances, so a refactor that must not change the world can compare it before and after, with frame-locked screenshots.
+Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.js`). It reads state (`getState`, `getPlayer`, `getView`, `getDeer`, `getFishing`, `getOrchard`, `getMarket`, `getMarsh`, `getWood`, `getAllotments`, `getQuarry`, `getSchool`, `getChunks`, `getStreaming`, `getWater`, `getInterior`), moves the player (`moveTo`, `findPath`, `blocked`, and `placeInterior` indoors) and the school's ball (`placeSchoolBall`), reports rendering work (`getDiagnostics`), and overrides rendering for measurements (`tune`, `tuneInterior`, `setAdaptiveResolution`). `getSceneFingerprint()` hashes every object's transform, geometry, material and instances, so a refactor that must not change the world can compare it before and after, with frame-locked screenshots.
 
 | Spec | Covers |
 | --- | --- |
@@ -163,7 +170,7 @@ Browser tests drive the game through `window.__willowmere` (`src/game/debug-api.
 | `camera`, `first-person`, `mobile` | the overview camera, first person, and the phone HUD and touch mode's gestures and thumbstick |
 | `navigation`, `routing` | collision and route finding; click-to-walk across the map and the lantern light pool |
 | `world-layout`, `chunks`, `streaming` | the map's bounds, regions and terrain; the chunk bake; streaming and first person's distance limits |
-| `millpond`, `orchard`, `market`, `marsh`, `wood`, `allotments`, `quarry` | each region's layout, crossings, routes and activities |
+| `millpond`, `orchard`, `market`, `marsh`, `wood`, `allotments`, `quarry`, `school` | each region's layout, crossings, routes and activities |
 | `cats`, `puppy`, `trees` | wildlife, Lily and Pip, and tree geometry, culling and detail levels |
 | `deer` | the doe and fawn's range, roaming, fleeing and following (logic), and their skinned models standing on the ground |
 | `people` | that residents batch tightly wherever they come from, feet stay on the ground standing and walking, and each resident's far copy keeps their shape |

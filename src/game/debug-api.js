@@ -98,6 +98,18 @@ export function createDebugApi(g) {
       coins: g.state.coins,
       agnes: g.life.npcs.some((n) => n.id === "agnes"),
     }),
+    // The school's match: the score, the ball and where each footballer is.
+    getSchool: () => ({
+      juniper: g.life.npcs.some((n) => n.id === "juniper"),
+      match: g.activities.school?.kids?.describe() ?? null,
+    }),
+    // Stands the school's ball at (x, z), still, for a test to kick.
+    placeSchoolBall(x, z) {
+      const ball = g.activities.school?.match?.ball;
+      if (!ball) return false;
+      Object.assign(ball, { x, z, y: 0, vx: 0, vz: 0, vy: 0, heldBy: null, inNet: -1 });
+      return true;
+    },
     getAllotments: () => ({
       plots: structuredClone(g.state.plots),
       basket: { ...g.state.basket },

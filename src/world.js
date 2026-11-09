@@ -138,7 +138,8 @@ export function createWorld(T, scene) {
   water.excludeFromCaptures(...fine, ...contacts);
   // Zoomed far out, the meadow's grass and blossoms reflect as a pixel or two.
   water.excludeFromFarCaptures(...detail.grassAndBlossoms());
-  let clock = 0;
+  let clock = 0,
+    farView = false;
   // The walking surface: the bridge deck's hump, a region's decks (the
   // millpond's footbridge and jetty), otherwise the terrain's grass.
   const getGroundHeight = (x, z) =>
@@ -173,6 +174,7 @@ export function createWorld(T, scene) {
     showFields: detail.showFields,
     /** First person: hides small detail more than DETAIL_RANGE (bake.js) from (x, z). */
     setDetailFocus(x, z) {
+      farView = false;
       water.setFarCaptures(false);
       detail.setDetailFocus(x, z);
     },
@@ -181,9 +183,15 @@ export function createWorld(T, scene) {
      * smallest things out of reflections, when zoomed far out.
      */
     setOverviewDetail(near) {
+      farView = !near;
       water.setFarCaptures(!near);
       detail.setOverviewDetail(near);
     },
+    /**
+     * Whether the overview is zoomed far out, where small detail hides: for
+     * streamed pieces that swap in a coarser copy of themselves there.
+     */
+    farDetail: () => farView,
     getGroundHeight,
     surfaceHeight,
     isPlantable,
