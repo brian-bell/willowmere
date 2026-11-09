@@ -1,6 +1,6 @@
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { createCat } from "./cats.js";
-import { animatePerson, createPeople } from "./people/index.js";
+import { animatePerson, coarseShape, createPeople } from "./people/index.js";
 
 /**
  * Hand-built inhabitants and wildlife. Coordinates are in the village's X/Z
@@ -727,44 +727,6 @@ export function createLife(THREE, scene, groundHeight = () => 0, water = null) {
   const farFigures = [],
     farMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86 }),
     farPartScale = new THREE.Vector3();
-  function coarsePart(geometry, size) {
-    const p = geometry.parameters,
-      small = size < 0.12;
-    if (geometry.type === "LatheGeometry") {
-      const rows = p.points.length,
-        points = p.points.filter(
-          (_, i) => rows < 6 || i % 2 === 0 || i === rows - 1,
-        );
-      return new THREE.LatheGeometry(
-        points,
-        Math.min(p.segments, 8),
-        p.phiStart,
-        p.phiLength,
-      );
-    }
-    if (geometry.type === "SphereGeometry")
-      return new THREE.SphereGeometry(
-        p.radius,
-        Math.min(p.widthSegments, small ? 6 : 8),
-        Math.min(p.heightSegments, small ? 4 : 5),
-        p.phiStart,
-        p.phiLength,
-        p.thetaStart,
-        p.thetaLength,
-      );
-    if (geometry.type === "CylinderGeometry")
-      return new THREE.CylinderGeometry(
-        p.radiusTop,
-        p.radiusBottom,
-        p.height,
-        Math.min(p.radialSegments, small ? 6 : 8),
-        1,
-        p.openEnded,
-        p.thetaStart,
-        p.thetaLength,
-      );
-    return new THREE.BufferGeometry().copy(geometry);
-  }
   function farFigure(figure) {
     const { body } = figure,
       parts = [],
@@ -783,7 +745,7 @@ export function createLife(THREE, scene, groundHeight = () => 0, water = null) {
         const { min, max } = o.geometry.boundingBox;
         if ((max.y - min.y) * farPartScale.y < 0.09) return;
       }
-      const part = coarsePart(o.geometry, size).applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, o.matrixWorld));
+      const part = coarseShape(THREE, o.geometry, size).applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, o.matrixWorld));
       for (const name of Object.keys(part.attributes))
         if (!["position", "normal", "color"].includes(name)) part.deleteAttribute(name);
       if (!part.attributes.color) {

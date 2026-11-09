@@ -33,8 +33,8 @@ import { agnesTopic, fossilById, lendHammer as lendInSave, splitStone as splitIn
 // flowers, fishing from the millpond's jetty, the orchard's fruit and honey,
 // which Finn buys, the market lane's bread deliveries and stalls,
 // birdwatching from the marsh's hide, pressing the old wood's flowers, the
-// allotment beds, whose vegetables Finn buys too, and the stone quarry's
-// fossils.
+// allotment beds, whose vegetables Finn buys too, the stone quarry's
+// fossils, and a goal kicked in at the school.
 // Each changes the save, then updates the HUD, saves and chimes.
 
 // Wildflower bouquets to gather, by index into the save's `gathered` list.
@@ -383,6 +383,9 @@ export function createActivities({
     return STALL_LINES.bought[id];
   }
 
+  // The school, once its builder has loaded.
+  let school = null;
+
   // Birdwatching from the marsh's hide.
   const oneOf = (list) => list[Math.floor(Math.random() * list.length)];
   /** A watch from the hide: returns the hide's lines, the sighting saved and paid. */
@@ -553,6 +556,10 @@ export function createActivities({
     splitStone,
     agnesLine,
     lendHammer,
+    /** The school's children and their match, once they have streamed in. */
+    get school() {
+      return school;
+    },
     get orchardReady() {
       return !!orchard;
     },
@@ -568,6 +575,13 @@ export function createActivities({
       allotments(loaded) {
         beds = loaded.beds;
         updateAllotments();
+      },
+      // The children cheer a goal the visitor kicks in.
+      school(loaded) {
+        school = loaded.school;
+        school.onGoal = (team, scorer) => {
+          if (scorer === "walker") toast(oneOf(school.goalLines));
+        };
       },
     },
   };

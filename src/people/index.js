@@ -192,3 +192,47 @@ export function animatePerson(figure, phase, blend, time) {
   if (figure.scarf)
     figure.scarf.rotation.x = Math.sin(phase + 0.4) * 0.11 * blend;
 }
+
+/**
+ * A part's shape cut with fewer segments for a figure's far copy, where it
+ * is a few pixels tall: round parts keep at most 8 segments, small ones (under
+ * `size` 0.12) fewer. Other shapes are copied as they are.
+ */
+export function coarseShape(THREE, geometry, size) {
+  const p = geometry.parameters,
+    small = size < 0.12;
+  if (geometry.type === "LatheGeometry") {
+    const rows = p.points.length,
+      points = p.points.filter(
+        (_, i) => rows < 6 || i % 2 === 0 || i === rows - 1,
+      );
+    return new THREE.LatheGeometry(
+      points,
+      Math.min(p.segments, 8),
+      p.phiStart,
+      p.phiLength,
+    );
+  }
+  if (geometry.type === "SphereGeometry")
+    return new THREE.SphereGeometry(
+      p.radius,
+      Math.min(p.widthSegments, small ? 6 : 8),
+      Math.min(p.heightSegments, small ? 4 : 5),
+      p.phiStart,
+      p.phiLength,
+      p.thetaStart,
+      p.thetaLength,
+    );
+  if (geometry.type === "CylinderGeometry")
+    return new THREE.CylinderGeometry(
+      p.radiusTop,
+      p.radiusBottom,
+      p.height,
+      Math.min(p.radialSegments, small ? 6 : 8),
+      1,
+      p.openEnded,
+      p.thetaStart,
+      p.thetaLength,
+    );
+  return new THREE.BufferGeometry().copy(geometry);
+}

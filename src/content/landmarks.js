@@ -92,6 +92,27 @@ export const LANDMARK_LINES = {
     "Mallets, chisels and claw tools hang in a neat row, each in its place. The grindstone’s trough is still wet.",
     "Wooden templates lean in the corner: the curve of a window head, a step’s nosing, a coping stone.",
   ],
+  "school-door": [
+    "The porch smells of wet coats and pencil shavings. A row of small pegs, each with a name chalked over it.",
+    "Through the door, rows of desks with lids, a globe on the windowsill and the alphabet marching round the walls.",
+    "A note pinned inside the porch: “Nature table. Please bring one interesting thing. Not frogs.”",
+  ],
+  "school-board": [
+    "“Willowmere School. Head Teacher: Miss J. Juniper. Visitors welcome at break.”",
+    "Below, a poster in crayon: “SPORTS DAY. Egg and spoon. Sack race. Bring a spoon.”",
+  ],
+  "school-swings": [
+    "The swings creak in time. A chalked sign on the frame says “TEN GOES THEN SWAP”. Nobody is counting.",
+    "The seats are worn smooth and dipped in the middle by a hundred years of sitting.",
+  ],
+  schoolhouse: [
+    "The teacher’s house shares a wall with the schoolroom. A tabby sleeps on the warm doorstep and does not move for anyone.",
+    "Geraniums on the step, a bicycle with a basket, and exercise books stacked in the front window waiting to be marked.",
+  ],
+  "school-goal": [
+    "The net has been darned in three colours of string. The posts are chipped where a lot of shots have nearly gone in.",
+    "Someone has chalked the score on the post. Someone else has rubbed it out and chalked a different one.",
+  ],
   "quarry-board": [
     "“Willowmere Quarry. Building stone, walling and garden ornaments. Mind the edge. Ask for Agnes.”",
     "Below, in chalk: “Fossil hunters welcome. Hammers lent on request.”",

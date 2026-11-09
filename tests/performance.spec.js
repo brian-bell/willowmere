@@ -153,6 +153,7 @@ test("the village's edges keep its budget with every region streamed in beside t
     "west, by the old wood": [-21, 2],
     "south-west, by the allotments": [-12, 18],
     "south-west corner, by the quarry": [-21, 18],
+    "south-east corner, by the school": [21, 18],
   };
   for (const [edge, [x, z]] of Object.entries(edges)) {
     await page.evaluate(([x, z]) => window.__willowmere.moveTo(x, z), [x, z]);
@@ -547,6 +548,65 @@ test("the stone quarry keeps the same budget as the wood", async ({ page }) => {
         "Quarry rubble",
         "Quarry gorse",
       ].every((name) => names.has(name));
+    },
+    null,
+    { timeout: 600000, polling: 2000 },
+  );
+  const sample = () =>
+    page.evaluate(async () => {
+      const values = [];
+      for (let i = 0; i < 4; i++) await new Promise(requestAnimationFrame);
+      for (let i = 0; i < 6; i++) {
+        await new Promise(requestAnimationFrame);
+        values.push(window.__willowmere.getDiagnostics());
+      }
+      return values;
+    });
+  const samples = await sample();
+  expect(Math.max(...samples.map((s) => s.drawCalls))).toBeLessThan(1000);
+  expect(Math.max(...samples.map((s) => s.triangles))).toBeLessThan(2.5e6);
+  await page.evaluate(() => {
+    for (let i = 0; i < 4; i++) document.querySelector("#zoom-out").click();
+  });
+  const far = await sample();
+  expect(Math.max(...far.map((s) => s.drawCalls))).toBeLessThan(1000);
+  expect(Math.max(...far.map((s) => s.triangles))).toBeLessThan(2.5e6);
+  expect(errors).toEqual([]);
+});
+
+test("the village school keeps the same budget as the wood", async ({ page }) => {
+  test.setTimeout(900000);
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "willowmere.save.v1",
+      JSON.stringify({
+        started: true,
+        quests: { mabel: false, flower: false, plant: false },
+        plants: [],
+      }),
+    );
+  });
+  await page.goto("/?resolution=fixed");
+  await page.waitForFunction(() => window.__willowmere?.getWater().frame > 2);
+  // The benchmark's viewpoint: the playground's edge by Miss Juniper, the
+  // pitch and its eleven children in view, at the default height, then
+  // zoomed out to height 30, where the market lane and the marsh join it.
+  // Standing there first streams the school in before the rest of the map.
+  await page.evaluate(() => window.__willowmere.moveTo(36.6, 27));
+  // The children are not chunk meshes: they cull and swap detail themselves.
+  await page.waitForFunction(
+    () => {
+      const names = window.__willowmere.getChunks().flatMap((chunk) => chunk.meshes.map((mesh) => mesh.name));
+      return (
+        ["School grounds", "Schoolroom", "Schoolhouse and playground"].every((name) => names.includes(name)) &&
+        window.__willowmere.getSchool().match?.inScene
+      );
     },
     null,
     { timeout: 600000, polling: 2000 },

@@ -53,13 +53,20 @@ test("regions name the same village places as always, and the fields beyond", { 
     for (let z = -21; z <= 21; z += 0.5)
       expect(regionAt(x, z).name).toBe(legacy(x, z));
   for (const [x, z] of [
-    [36, 25],
     [44, -25],
     [0, -24],
-    [30, 30],
-    [47, 41],
+    [25.5, 19],
   ])
     expect(regionAt(x, z).name).toBe("The open fields");
+  // South of the market lane and east of the marsh, the village school
+  // fills the map's south-east corner.
+  for (const [x, z] of [
+    [36, 25],
+    [30, 30],
+    [47, 41],
+    [27.5, 17.5],
+  ])
+    expect(regionAt(x, z).name).toBe("The village school");
   // Either side of the millpond, the old barrows.
   for (const [x, z] of [
     [-1, -33],
